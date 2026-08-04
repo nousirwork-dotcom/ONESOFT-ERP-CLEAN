@@ -36,6 +36,7 @@ import { useWorkspaceEl } from "@/core/contexts/WorkspaceContext";
 import { useModalAttention } from "@/modules/settings/pages/useModalAttention";
 import { UnifiedBottomToolbar } from "@/components/unified-toolbar/UnifiedBottomToolbar";
 import type { ToolbarActionMap, ToolbarToolItem } from "@/components/unified-toolbar/toolbar.types";
+import { TASKBAR_H } from "@/shared/components/WindowTaskbar";
 import { toast } from "sonner";
 
 // =============================================
@@ -1464,7 +1465,7 @@ export default function Products() {
     } else {
       preMaxRef.current = { x: winPos.x, y: winPos.y, w: winSize.w, h: winSize.h };
       const ww = workspaceEl?.offsetWidth ?? 900;
-      const wh = workspaceEl?.offsetHeight ?? 600;
+      const wh = Math.max(0, (workspaceEl?.clientHeight ?? 600) - TASKBAR_H);
       setWinPos({ x: 0, y: 0 });
       setWinSize({ w: ww, h: wh });
       setIsMaximized(true);
@@ -1481,7 +1482,7 @@ export default function Products() {
     }
     if (workspaceEl && !hasPositioned.current) {
       const ww = workspaceEl.offsetWidth;
-      const wh = workspaceEl.offsetHeight;
+      const wh = Math.max(0, workspaceEl.clientHeight - TASKBAR_H);
       const boundedW = Math.min(winSize.w, Math.max(640, ww - 36));
       const boundedH = Math.min(winSize.h, Math.max(420, wh - 36));
       const x = Math.max(18, Math.floor(ww - boundedW - 18));
@@ -2520,45 +2521,57 @@ export default function Products() {
       {/* ===== نافذة الصنف — قابلة للسحب والتكبير (react-rnd) ===== */}
       {isOpen && workspaceEl && createPortal(
         <>
-          {/* طبقة الحجب — النقر خارج النافذة لا يغلقها؛ يلفت الانتباه بنفس نمط دفاتر المستندات */}
+          {/* مساحة النافذة تنتهي قبل شريط النوافذ السفلي؛ لا التظليل ولا النافذة يغطيانه. */}
           <div
             style={{
-              position: "absolute", inset: 0, zIndex: 9998,
-              background: "rgba(226,217,202,0.84)",
-              backdropFilter: "blur(1.5px) saturate(0.5)",
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: TASKBAR_H,
+              overflow: "hidden",
+              zIndex: 9998,
             }}
-            onMouseDown={handleProductBackdropMouseDown}
-          />
-
-          <Rnd
-            position={{ x: winPos.x, y: winPos.y }}
-            size={{ width: winSize.w, height: winSize.h }}
-            onDragStop={(_, d) => {
-              if (!isMaximized) {
-                setWinPos({ x: d.x, y: d.y });
-                saveWinBounds(d.x, d.y, winSize.w, winSize.h);
-              }
-            }}
-            onResizeStop={(_, __, ref, ___, pos) => {
-              if (!isMaximized) {
-                const w = ref.offsetWidth;
-                const h = ref.offsetHeight;
-                setWinSize({ w, h });
-                setWinPos({ x: pos.x, y: pos.y });
-                saveWinBounds(pos.x, pos.y, w, h);
-              }
-            }}
-            dragHandleClassName="erp-drag-handle"
-            minWidth={640}
-            minHeight={420}
-            bounds="parent"
-            disableDragging={isMaximized}
-            enableResizing={isMaximized ? false : {
-              top: true, bottom: true, left: true, right: true,
-              topLeft: true, topRight: true, bottomLeft: true, bottomRight: true,
-            }}
-            style={{ zIndex: 9999 }}
           >
+            {/* طبقة الحجب — النقر خارج النافذة لا يغلقها؛ يلفت الانتباه بنفس نمط دفاتر المستندات */}
+            <div
+              style={{
+                position: "absolute", inset: 0, zIndex: 0,
+                background: "rgba(226,217,202,0.84)",
+                backdropFilter: "blur(1.5px) saturate(0.5)",
+              }}
+              onMouseDown={handleProductBackdropMouseDown}
+            />
+
+            <Rnd
+              position={{ x: winPos.x, y: winPos.y }}
+              size={{ width: winSize.w, height: winSize.h }}
+              onDragStop={(_, d) => {
+                if (!isMaximized) {
+                  setWinPos({ x: d.x, y: d.y });
+                  saveWinBounds(d.x, d.y, winSize.w, winSize.h);
+                }
+              }}
+              onResizeStop={(_, __, ref, ___, pos) => {
+                if (!isMaximized) {
+                  const w = ref.offsetWidth;
+                  const h = ref.offsetHeight;
+                  setWinSize({ w, h });
+                  setWinPos({ x: pos.x, y: pos.y });
+                  saveWinBounds(pos.x, pos.y, w, h);
+                }
+              }}
+              dragHandleClassName="erp-drag-handle"
+              minWidth={640}
+              minHeight={420}
+              bounds="parent"
+              disableDragging={isMaximized}
+              enableResizing={isMaximized ? false : {
+                top: true, bottom: true, left: true, right: true,
+                topLeft: true, topRight: true, bottomLeft: true, bottomRight: true,
+              }}
+              style={{ zIndex: 1 }}
+            >
             {/* الحاوية الداخلية */}
             <div
               ref={(node) => {
@@ -2830,7 +2843,8 @@ export default function Products() {
                 />
               </div>
             </div>
-          </Rnd>
+            </Rnd>
+          </div>
         </>,
         workspaceEl
       )}
