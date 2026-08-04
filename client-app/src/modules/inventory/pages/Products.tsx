@@ -2810,7 +2810,6 @@ export default function Products() {
               <UnifiedBottomToolbar
                 actions={toolbarActions}
                 tools={toolbarTools}
-                className="product-card-toolbar"
               />
             </div>
           </Rnd>
