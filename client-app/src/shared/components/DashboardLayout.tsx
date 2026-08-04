@@ -68,6 +68,7 @@ import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import ChatWidget from "./ChatWidget";
 import WindowTaskbar from "./WindowTaskbar";
 import ElectronTitleBar from "./ElectronTitleBar";
+import TabBar from "./TabBar";
 import { useTabManager } from "@/core/contexts/TabManagerContext";
 import { WorkspaceContext } from "@/core/contexts/WorkspaceContext";
 import { useLang } from "@/core/contexts/LanguageContext";
@@ -598,6 +599,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </header>
 
+        {/* شريط تبويبات الشاشات المفتوحة — يبقى خارج مساحة العمل حتى لا تغطيه النوافذ الداخلية */}
+        <TabBar />
+
         {/* Main Content — desktop area */}
         <WorkspaceContext.Provider value={workspaceEl}>
           <main
@@ -656,6 +660,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <HorizontalNav user={user} />
           </div>
         </header>
+
+        {/* شريط تبويبات الشاشات المفتوحة — يبقى خارج مساحة العمل حتى لا تغطيه النوافذ الداخلية */}
+        <TabBar />
 
         {/* Main Content — desktop area */}
         <WorkspaceContext.Provider value={workspaceEl}>
@@ -786,6 +793,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             />
           </div>
         </header>
+
+        {/* شريط تبويبات الشاشات المفتوحة — يبقى خارج مساحة العمل حتى لا تغطيه النوافذ الداخلية */}
+        <TabBar />
 
         {/* Main Content — desktop area */}
         <WorkspaceContext.Provider value={workspaceEl}>
