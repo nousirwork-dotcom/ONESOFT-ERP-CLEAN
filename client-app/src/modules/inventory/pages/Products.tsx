@@ -525,11 +525,11 @@ export function ProductCard({
               padding: "6px 12px 5px",
               fontSize: 10,
               fontWeight: activeTab === tab.id ? 700 : 500,
-              background: activeTab === tab.id ? "#FCFAF5" : "transparent",
+              background: activeTab === tab.id ? "#F2F0EC" : "transparent",
               color: activeTab === tab.id ? "#315f88" : "#62676c",
               border: "none",
               borderLeft: "1px solid #D8D3C8",
-              borderBottom: activeTab === tab.id ? "2px solid #FCFAF5" : "2px solid transparent",
+              borderBottom: activeTab === tab.id ? "2px solid #F2F0EC" : "2px solid transparent",
               marginBottom: -1,
               cursor: "pointer",
             }}
@@ -2784,7 +2784,7 @@ export default function Products() {
               {/* شريط الحالة الثابت — نفس تنسيق دفاتر المستندات */}
               <div style={{
                 minHeight: 29, padding: "3px 10px", color: "#68727b", fontSize: 10,
-                background: "#f4f3f0", borderBottom: "1px solid #c7c8c8",
+                 background: "#F2F0EC", borderBottom: "1px solid #c7c8c8",
                 display: "flex", justifyContent: "space-between", alignItems: "center",
               }}>
                 <b>{editId ? "تعديل بيانات الصنف" : "إضافة صنف جديد"}</b>
@@ -2792,7 +2792,7 @@ export default function Products() {
               </div>
 
               {/* محتوى الكارت */}
-              <div style={{ flex: 1, overflow: "hidden", minHeight: 0, background: "#FFFFFF" }}>
+              <div style={{ flex: 1, overflow: "hidden", minHeight: 0, background: "#F2F0EC" }}>
                 <ProductCard
                   key={editId ?? "new"}
                   form={form}

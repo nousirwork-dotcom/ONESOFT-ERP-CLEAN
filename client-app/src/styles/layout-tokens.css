@@ -183,13 +183,13 @@
 
 /* Product form palette: matches the warm document-journal workspace. */
 .product-card-classic {
-  background: #FCFAF5;
+  background: #F2F0EC;
   color: #475569;
 }
 
 .product-card-classic .product-card-body,
 .product-card-classic .product-card-content {
-  background: #FCFAF5;
+  background: #F2F0EC;
 }
 
 .product-card-classic input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
@@ -212,7 +212,7 @@
 .product-card-classic [class*="bg-blue-50"],
 .product-card-classic [class*="bg-purple-100"],
 .product-card-classic [class*="bg-emerald-50"] {
-  background-color: #F5F0E8 !important;
+  background-color: #F2F0EC !important;
 }
 
 .product-card-classic [class*="border-slate-100"],
@@ -223,5 +223,19 @@
 
 .product-card-classic [class*="bg-slate-800"],
 .product-card-classic [class*="bg-slate-700"] {
-  background-color: #EBE7DE !important;
+  background-color: #F2F0EC !important;
+}
+
+.product-card-classic [class*="bg-[#EBE7DF]"],
+.product-card-classic [class*="bg-[#EDE7DF]"],
+.product-card-classic [class*="bg-[#F0EDE8]"],
+.product-card-classic [class*="bg-[#F5F0E8]"] {
+  background-color: #F2F0EC !important;
+}
+
+.product-card-classic [style*="background: #FFFFFF"],
+.product-card-classic [style*="background:#FFFFFF"],
+.product-card-classic [style*="background: #fff"],
+.product-card-classic [style*="background:#fff"] {
+  background-color: #F2F0EC !important;
 }
