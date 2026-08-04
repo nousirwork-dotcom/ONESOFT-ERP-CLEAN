@@ -509,11 +509,11 @@ export function ProductCard({
   const groupName = groups?.find(g => g.id === Number(form.groupId))?.name;
 
   return (
-    <div className="flex flex-col h-full" dir="rtl">
+    <div className="product-card-classic flex flex-col h-full" dir="rtl">
       {/* شريط التبويبات — نفس ألوان نافذة دفاتر المستندات */}
       <div
         className="flex flex-wrap flex-shrink-0 overflow-x-auto"
-        style={{ background: "#e5e4e1", borderBottom: "1px solid #9da3a8", paddingRight: 7 }}
+        style={{ background: "#F2F0EC", borderBottom: "1px solid #D8D3C8", paddingRight: 7 }}
       >
         {tabs.map((tab) => (
           <button
@@ -525,11 +525,11 @@ export function ProductCard({
               padding: "6px 12px 5px",
               fontSize: 10,
               fontWeight: activeTab === tab.id ? 700 : 500,
-              background: activeTab === tab.id ? "#f7f6f3" : "transparent",
+              background: activeTab === tab.id ? "#FCFAF5" : "transparent",
               color: activeTab === tab.id ? "#315f88" : "#62676c",
               border: "none",
-              borderLeft: "1px solid #c9cacc",
-              borderBottom: activeTab === tab.id ? "2px solid #f7f6f3" : "2px solid transparent",
+              borderLeft: "1px solid #D8D3C8",
+              borderBottom: activeTab === tab.id ? "2px solid #FCFAF5" : "2px solid transparent",
               marginBottom: -1,
               cursor: "pointer",
             }}
@@ -541,7 +541,7 @@ export function ProductCard({
 
       <fieldset
         disabled={readOnly}
-        className="flex-1 min-h-0 overflow-auto min-w-0 border-0 p-0 m-0"
+        className="product-card-body flex-1 min-h-0 overflow-auto min-w-0 border-0 p-0 m-0"
       >
 
       {/* شريط المعلومات الثابت */}
@@ -678,7 +678,7 @@ export function ProductCard({
       </div>
 
       {/* محتوى التبويبات */}
-      <div className="flex-1 overflow-y-auto p-4">
+        <div className="product-card-content flex-1 overflow-y-auto p-4">
 
         {/* ===== التبويب 1: النافذة الرئيسية ===== */}
         {activeTab === "main" && (

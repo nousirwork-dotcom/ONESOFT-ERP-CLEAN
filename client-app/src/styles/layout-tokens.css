@@ -180,3 +180,48 @@
 .product-modal-window-shake {
   animation: product-modal-shake 320ms ease-in-out;
 }
+
+/* Product form palette: matches the warm document-journal workspace. */
+.product-card-classic {
+  background: #FCFAF5;
+  color: #475569;
+}
+
+.product-card-classic .product-card-body,
+.product-card-classic .product-card-content {
+  background: #FCFAF5;
+}
+
+.product-card-classic input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.product-card-classic select,
+.product-card-classic textarea,
+.product-card-classic [role="combobox"] {
+  background-color: #FCFAF5 !important;
+  border-color: #D8D3C8 !important;
+  color: #475569 !important;
+}
+
+.product-card-classic input::placeholder,
+.product-card-classic textarea::placeholder {
+  color: #A6A096 !important;
+}
+
+.product-card-classic [class*="bg-slate-50"],
+.product-card-classic [class*="bg-slate-100"],
+.product-card-classic [class*="bg-slate-200"],
+.product-card-classic [class*="bg-blue-50"],
+.product-card-classic [class*="bg-purple-100"],
+.product-card-classic [class*="bg-emerald-50"] {
+  background-color: #F5F0E8 !important;
+}
+
+.product-card-classic [class*="border-slate-100"],
+.product-card-classic [class*="border-slate-200"],
+.product-card-classic [class*="border-slate-300"] {
+  border-color: #D8D3C8 !important;
+}
+
+.product-card-classic [class*="bg-slate-800"],
+.product-card-classic [class*="bg-slate-700"] {
+  background-color: #EBE7DE !important;
+}
