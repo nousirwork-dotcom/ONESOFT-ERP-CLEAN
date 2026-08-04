@@ -1471,22 +1471,29 @@ export default function Products() {
     }
   };
 
-  // توسيط النافذة عند أول فتح (إذا لم يكن هناك موضع محفوظ)
-  const hasCentered = useRef(false);
+  // فتح النافذة أعلى اليمين داخل مساحة العمل. Rnd يستخدم x من اليسار،
+  // لذلك نحسب موضعًا مكافئًا لـ right: 18px بدل التوسيط.
+  const hasPositioned = useRef(false);
   useEffect(() => {
-    if (isOpen && workspaceEl && !hasCentered.current) {
-      const saved = localStorage.getItem("pdlg-pos");
-      if (!saved) {
-        const ww = workspaceEl.offsetWidth;
-        const wh = workspaceEl.offsetHeight;
-        setWinPos({
-          x: Math.max(20, Math.floor((ww - winSize.w) / 2)),
-          y: Math.max(10, Math.floor((wh - winSize.h) / 4)),
-        });
-      }
-      hasCentered.current = true;
+    if (!isOpen) {
+      hasPositioned.current = false;
+      return;
     }
-  }, [isOpen, workspaceEl]);
+    if (workspaceEl && !hasPositioned.current) {
+      const ww = workspaceEl.offsetWidth;
+      const wh = workspaceEl.offsetHeight;
+      const boundedW = Math.min(winSize.w, Math.max(640, ww - 36));
+      const boundedH = Math.min(winSize.h, Math.max(420, wh - 36));
+      const x = Math.max(18, Math.floor(ww - boundedW - 18));
+      const y = 18;
+
+      if (boundedW !== winSize.w || boundedH !== winSize.h) {
+        setWinSize({ w: boundedW, h: boundedH });
+      }
+      setWinPos({ x, y });
+      hasPositioned.current = true;
+    }
+  }, [isOpen, workspaceEl, winSize.w, winSize.h]);
 
   const [toolsOpen, setToolsOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
