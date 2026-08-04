@@ -275,13 +275,13 @@
 .product-card-classic .product-card-body select,
 .product-card-classic .product-card-body textarea,
 .product-card-classic .product-card-body [role="combobox"] {
-  min-height: 34px !important;
-  height: 34px !important;
-  padding: 5px 10px !important;
+  min-height: 30px !important;
+  height: 30px !important;
+  padding: 3px 9px !important;
   border: 1px solid #D8DDE5 !important;
   border-radius: 6px !important;
   font-size: 13px !important;
-  line-height: 20px !important;
+  line-height: 18px !important;
   color: #334155 !important;
   background-color: #FFFFFF !important;
   transition: border-color 120ms ease, box-shadow 120ms ease, background-color 120ms ease;
@@ -289,7 +289,7 @@
 
 .product-card-classic .product-card-body textarea {
   height: auto !important;
-  min-height: 34px !important;
+  min-height: 30px !important;
 }
 
 .product-card-classic .product-card-body input:focus,
@@ -323,26 +323,26 @@
 }
 
 .product-card-classic .product-card-body thead tr {
-  height: 31px !important;
+  height: 28px !important;
 }
 
 .product-card-classic .product-card-body tbody tr {
-  height: 38px !important;
+  height: 30px !important;
 }
 
 .product-card-classic .product-card-body th {
-  height: 31px !important;
-  padding-top: 2px !important;
-  padding-bottom: 2px !important;
+  height: 28px !important;
+  padding-top: 1px !important;
+  padding-bottom: 1px !important;
   font-size: 13px !important;
-  line-height: 18px !important;
+  line-height: 16px !important;
 }
 
 .product-card-classic .product-card-body td {
-  padding-top: 2px !important;
-  padding-bottom: 2px !important;
+  padding-top: 1px !important;
+  padding-bottom: 1px !important;
   font-size: 13px !important;
-  line-height: 18px !important;
+  line-height: 16px !important;
 }
 
 .product-card-classic .product-card-body span.text-xs.font-semibold,
@@ -378,8 +378,8 @@
   .product-card-classic .product-card-body select,
   .product-card-classic .product-card-body textarea,
   .product-card-classic .product-card-body [role="combobox"] {
-    min-height: 34px !important;
-    height: 34px !important;
+    min-height: 30px !important;
+    height: 30px !important;
     padding-inline: 8px !important;
   }
 
