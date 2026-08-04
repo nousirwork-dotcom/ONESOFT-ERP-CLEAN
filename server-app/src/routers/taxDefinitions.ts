@@ -9,6 +9,7 @@ const taxInput = z.object({
   name: z.string().trim().min(1, 'يرجى إدخال اسم الضريبة أو الرسم'),
   code: z.string().trim().min(1, 'يرجى إدخال كود الضريبة أو الرسم').max(50),
   category: z.enum(['tax', 'withholding', 'fee']).default('tax'),
+  applicationScope: z.enum(['products_sales', 'other']).default('products_sales'),
   // Fixed values are not supported by the invoice calculation engine yet.
   valueType: z.literal('percentage').default('percentage'),
   value: z.string().trim().regex(/^\d+(\.\d{1,4})?$/, 'أدخل قيمة رقمية صحيحة'),
@@ -67,11 +68,13 @@ export const taxDefinitionsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const code = input.code.toUpperCase();
       await assertCodeAvailable(ctx.user.orgId, code);
+      const applicationScope = input.category === 'tax' ? input.applicationScope : 'other';
       const [row] = await db.insert(taxDefinitions).values({
         orgId: ctx.user.orgId,
         name: input.name,
         code,
         category: input.category,
+        applicationScope,
         valueType: input.valueType,
         value: input.value,
         isActive: input.isActive,
@@ -90,10 +93,12 @@ export const taxDefinitionsRouter = router({
       if (!existing) throw new TRPCError({ code: 'NOT_FOUND', message: 'الضريبة أو الرسم غير موجود' });
       const code = input.code.toUpperCase();
       await assertCodeAvailable(ctx.user.orgId, code, input.id);
+      const applicationScope = input.category === 'tax' ? input.applicationScope : 'other';
       const [row] = await db.update(taxDefinitions).set({
         name: input.name,
         code,
         category: input.category,
+        applicationScope,
         valueType: input.valueType,
         value: input.value,
         isActive: input.isActive,

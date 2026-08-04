@@ -307,7 +307,7 @@ export function ProductCard({
   setForm: React.Dispatch<React.SetStateAction<ProductForm>>;
   categories: Array<{ id: number; name: string }> | undefined;
   groups: Array<{ id: number; groupCode?: string | null; name: string; groupType?: string | null; parentId?: number | null; autoNumbering?: boolean | null; codeDigits?: number | null }> | undefined;
-  activeTaxes?: Array<{ id: number; name: string; code: string; category: string; valueType: string; value: string }>;
+  activeTaxes?: Array<{ id: number; name: string; code: string; category: string; applicationScope: string; valueType: string; value: string }>;
   productId?: number | null;
   skuRef?: React.RefObject<HTMLInputElement | null>;
   nameRef?: React.RefObject<HTMLInputElement | null>;
@@ -318,7 +318,7 @@ export function ProductCard({
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const isEdit = !!productId;
   const supportedTaxes = activeTaxes.filter(
-    tax => tax.valueType === "percentage" && tax.category === "tax",
+    tax => tax.valueType === "percentage" && tax.category === "tax" && tax.applicationScope === "products_sales",
   );
 
   // ── Imperative auto-code generation on group select ──────────────────────
@@ -1496,7 +1496,7 @@ export default function Products() {
     { staleTime: 60000 },
   );
   const supportedTaxes = activeTaxes.filter(
-    tax => tax.valueType === "percentage" && tax.category === "tax",
+    tax => tax.valueType === "percentage" && tax.category === "tax" && tax.applicationScope === "products_sales",
   );
 
   const leafGroups = useMemo(() => {

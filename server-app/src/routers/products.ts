@@ -42,7 +42,7 @@ async function assertProductTaxSupported(taxId: number | null | undefined, orgId
   if (!tax.isActive) {
     throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن ربط الصنف بضريبة موقوفة؛ اختر ضريبة فعّالة أو بدون ضريبة.' });
   }
-  if (tax.valueType !== 'percentage' || tax.category !== 'tax') {
+  if (tax.valueType !== 'percentage' || tax.category !== 'tax' || tax.applicationScope !== 'products_sales') {
     throw new TRPCError({ code: 'BAD_REQUEST', message: 'اختيار الصنف يدعم الضرائب النسبية الفعّالة فقط حاليًا.' });
   }
 }

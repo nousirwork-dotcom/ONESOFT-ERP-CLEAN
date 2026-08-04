@@ -352,6 +352,7 @@ CREATE TABLE IF NOT EXISTS "tax_definitions" (
     "name" VARCHAR(255) NOT NULL,
     "code" VARCHAR(50) NOT NULL,
     "category" VARCHAR(30) NOT NULL DEFAULT 'tax',
+    "application_scope" VARCHAR(40) NOT NULL DEFAULT 'products_sales',
     "value_type" VARCHAR(20) NOT NULL DEFAULT 'percentage',
     "value" NUMERIC(18, 4) NOT NULL DEFAULT '0',
     "is_active" BOOLEAN NOT NULL DEFAULT true,

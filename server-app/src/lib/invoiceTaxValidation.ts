@@ -73,10 +73,10 @@ export async function resolveInvoiceTaxItems<T extends InvoiceTaxItem>(
           message: `القيمة الثابتة للضريبة "${definition.name}" غير مدعومة في حساب الفواتير حاليًا`,
         });
       }
-      if (definition.category !== 'tax') {
+      if (definition.category !== 'tax' || definition.applicationScope !== 'products_sales') {
         throw new TRPCError({
           code: 'BAD_REQUEST',
-          message: `تصنيف "${definition.category === 'withholding' ? 'الاستقطاع' : 'الرسم'}" معلوماتي حاليًا ولا يُحسب تلقائيًا في الفواتير؛ استخدم ضريبة قيمة مضافة مدعومة`,
+          message: `الضريبة "${definition.name}" غير مخصصة تلقائيًا للأصناف والمبيعات؛ حدّث كارت الصنف واختر ضريبة فعّالة مخصصة للأصناف والمبيعات`,
         });
       }
       taxPercent = Number(definition.value);

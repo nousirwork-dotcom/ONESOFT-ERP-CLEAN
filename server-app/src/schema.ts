@@ -233,6 +233,7 @@ export const taxDefinitions = pgTable('tax_definitions', {
   name: varchar('name', { length: 255 }).notNull(),
   code: varchar('code', { length: 50 }).notNull(),
   category: varchar('category', { length: 30 }).notNull().default('tax'),
+  applicationScope: varchar('application_scope', { length: 40 }).notNull().default('products_sales'),
   valueType: varchar('value_type', { length: 20 }).notNull().default('percentage'),
   value: decimal('value', { precision: 18, scale: 4 }).notNull().default('0'),
   isActive: boolean('is_active').notNull().default(true),

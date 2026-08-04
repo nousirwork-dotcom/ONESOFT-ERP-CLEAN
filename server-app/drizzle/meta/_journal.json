@@ -540,6 +540,13 @@
       "when": 1786319600000,
       "tag": "0076_tax_definitions",
       "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1786319700000,
+      "tag": "0077_tax_application_scope",
+      "breakpoints": true
     }
   ]
 }

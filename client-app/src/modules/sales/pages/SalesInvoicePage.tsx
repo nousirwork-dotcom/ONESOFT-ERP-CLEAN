@@ -928,7 +928,13 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
         l.unit = found.unit ?? "";
         l.unitPrice = found.salePrice ? String(found.salePrice) : "";
         const tax = activeTaxes.find(t => t.id === found.taxId);
-        l.taxPct = tax?.valueType === "percentage" && tax.category === "tax" ? String(tax.value) : "0";
+        const isApplicableTax = tax?.valueType === "percentage"
+          && tax.category === "tax"
+          && tax.applicationScope === "products_sales";
+        if (found.taxId && !isApplicableTax) {
+          toast.warning(`الضريبة المرتبطة بالصنف "${found.name}" غير مخصصة للأصناف والمبيعات؛ حدّث كارت الصنف قبل حفظ الفاتورة`);
+        }
+        l.taxPct = isApplicableTax ? String(tax.value) : "0";
         l.total = calcLineTotal(l);
         updated[idx] = l;
         return updated;
@@ -960,7 +966,13 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
         unitPrice: product.salePrice ? String(product.salePrice) : "",
         taxPct: (() => {
           const tax = activeTaxes.find(t => t.id === (product as any).taxId);
-          return tax?.valueType === "percentage" && tax.category === "tax" ? String(tax.value) : "0";
+          const isApplicableTax = tax?.valueType === "percentage"
+            && tax.category === "tax"
+            && tax.applicationScope === "products_sales";
+          if ((product as any).taxId && !isApplicableTax) {
+            toast.warning(`الضريبة المرتبطة بالصنف "${product.name}" غير مخصصة للأصناف والمبيعات؛ حدّث كارت الصنف قبل حفظ الفاتورة`);
+          }
+          return isApplicableTax ? String(tax.value) : "0";
         })(),
       };
       line.total = calcLineTotal(line);
@@ -2313,9 +2325,13 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
                       setLines(prev => {
                         const updated = [...prev];
                          const definition = activeTaxes.find(t => t.id === taxId);
-                         const taxPct = definition?.valueType === "percentage" && definition.category === "tax"
-                           ? String(definition.value)
-                           : "0";
+                          const isApplicableTax = definition?.valueType === "percentage"
+                            && definition.category === "tax"
+                            && definition.applicationScope === "products_sales";
+                          if (taxId && !isApplicableTax) {
+                            toast.warning(`الضريبة المرتبطة بالصنف "${name}" غير مخصصة للأصناف والمبيعات؛ حدّث كارت الصنف قبل حفظ الفاتورة`);
+                          }
+                          const taxPct = isApplicableTax ? String(definition.value) : "0";
                          const l = { ...updated[rowIdx], productName: name, productCode: code, productId: id, taxId, unit, unitPrice: price, taxPct, isStockItem: itemType !== "service" };
                         l.total = calcLineTotal(l);
                         updated[rowIdx] = l;

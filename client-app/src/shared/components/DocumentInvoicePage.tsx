@@ -761,7 +761,13 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
         l.unit        = found.unit ?? "";
         l.unitPrice   = found.salePrice ? String(found.salePrice) : "";
         const tax = activeTaxes.find(t => t.id === found.taxId);
-        l.taxPct      = tax?.valueType === "percentage" && tax.category === "tax" ? String(tax.value) : "0";
+        const isApplicableTax = tax?.valueType === "percentage"
+          && tax.category === "tax"
+          && tax.applicationScope === "products_sales";
+        if (found.taxId && !isApplicableTax) {
+          toast.warning(`الضريبة المرتبطة بالصنف "${found.name}" غير مخصصة للأصناف والمبيعات؛ حدّث كارت الصنف قبل حفظ المستند`);
+        }
+        l.taxPct      = isApplicableTax ? String(tax.value) : "0";
         l.total       = calcLineTotal(l);
         u[idx] = l;
         return u;
@@ -1869,9 +1875,13 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
                       setLines(prev => {
                         const u = [...prev];
                          const definition = activeTaxes.find(t => t.id === taxId);
-                         const taxPct = definition?.valueType === "percentage" && definition.category === "tax"
-                           ? String(definition.value)
-                           : "0";
+                          const isApplicableTax = definition?.valueType === "percentage"
+                            && definition.category === "tax"
+                            && definition.applicationScope === "products_sales";
+                          if (taxId && !isApplicableTax) {
+                            toast.warning(`الضريبة المرتبطة بالصنف "${name}" غير مخصصة للأصناف والمبيعات؛ حدّث كارت الصنف قبل حفظ المستند`);
+                          }
+                          const taxPct = isApplicableTax ? String(definition.value) : "0";
                          const l = { ...u[rowIdx], productName: name, productCode: code, productId: id, taxId, unit, unitPrice: price, taxPct };
                         l.total = calcLineTotal(l); u[rowIdx] = l; return u;
                       });

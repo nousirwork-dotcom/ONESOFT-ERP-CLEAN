@@ -738,6 +738,7 @@ function TaxesPage() {
     name: string;
     code: string;
     category: string;
+    applicationScope: string;
     valueType: string;
     value: string;
     isActive: boolean;
@@ -752,11 +753,12 @@ function TaxesPage() {
   const [editing, setEditing] = useState<TaxRow | null>(null);
   const [form, setForm] = useState({
     name: "", code: "", category: "tax" as "tax" | "withholding" | "fee",
+    applicationScope: "products_sales" as "products_sales" | "other",
     valueType: "percentage" as const, value: "0",
     isActive: true, notes: "", effectiveFrom: "",
   });
   const resetForm = () => setForm({
-    name: "", code: "", category: "tax", valueType: "percentage", value: "0",
+    name: "", code: "", category: "tax", applicationScope: "products_sales", valueType: "percentage", value: "0",
     isActive: true, notes: "", effectiveFrom: "",
   });
   const openCreate = () => { setEditing(null); resetForm(); setDialogOpen(true); };
@@ -764,6 +766,7 @@ function TaxesPage() {
     setEditing(tax);
     setForm({
       name: tax.name, code: tax.code, category: tax.category as "tax" | "withholding" | "fee",
+      applicationScope: tax.applicationScope as "products_sales" | "other",
       valueType: "percentage", value: String(tax.value ?? "0"),
       isActive: tax.isActive, notes: tax.notes ?? "",
       effectiveFrom: tax.effectiveFrom ? new Date(tax.effectiveFrom).toISOString().slice(0, 10) : "",
@@ -806,20 +809,22 @@ function TaxesPage() {
               <TableHead className="text-xs">الكود</TableHead>
               <TableHead className="text-xs text-center">النسبة %</TableHead>
               <TableHead className="text-xs">النوع</TableHead>
+              <TableHead className="text-xs">مجال التطبيق</TableHead>
               <TableHead className="text-xs text-center">الاستخدام</TableHead>
               <TableHead className="text-xs text-center">الحالة</TableHead>
               <TableHead className="text-xs">الإجراءات</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {isLoading && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">جارٍ التحميل...</TableCell></TableRow>}
-            {!isLoading && taxes.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">لا توجد ضرائب أو رسوم</TableCell></TableRow>}
+            {isLoading && <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground">جارٍ التحميل...</TableCell></TableRow>}
+            {!isLoading && taxes.length === 0 && <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground">لا توجد ضرائب أو رسوم</TableCell></TableRow>}
             {taxes.map(t => (
               <TableRow key={t.id}>
                 <TableCell className="text-xs font-medium">{t.name}{t.isSystem && <Badge variant="outline" className="mr-2 text-[10px]">نظامية</Badge>}</TableCell>
                 <TableCell className="text-xs font-mono">{t.code}</TableCell>
                 <TableCell className="text-xs text-center">{t.valueType === "percentage" ? `${t.value}%` : t.value}</TableCell>
                 <TableCell className="text-xs">{t.category === "withholding" ? "استقطاع" : t.category === "fee" ? "رسم" : "ضريبة"}</TableCell>
+                <TableCell className="text-xs">{t.applicationScope === "products_sales" ? "الأصناف والمبيعات" : "غير مخصصة تلقائيًا"}</TableCell>
                 <TableCell className="text-xs text-center">{(t.usage.products + t.usage.salesInvoices + t.usage.purchaseInvoices) || "—"}</TableCell>
                 <TableCell className="text-center">
                   <div className="flex items-center justify-center gap-2">
@@ -893,12 +898,32 @@ function TaxesPage() {
                     </div>
                     <div className="space-y-1.5">
                       <Label>التصنيف</Label>
-                      <Select value={form.category} onValueChange={v => setForm(f => ({ ...f, category: v as typeof f.category }))}>
+                      <Select
+                        value={form.category}
+                        onValueChange={v => setForm(f => ({
+                          ...f,
+                          category: v as typeof f.category,
+                          applicationScope: v === "tax" ? "products_sales" : "other",
+                        }))}
+                      >
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="tax">ضريبة</SelectItem>
                           <SelectItem value="withholding">استقطاع</SelectItem>
                           <SelectItem value="fee">رسم</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>مجال التطبيق</Label>
+                      <Select
+                        value={form.applicationScope}
+                        onValueChange={v => setForm(f => ({ ...f, applicationScope: v as typeof f.applicationScope }))}
+                      >
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="products_sales" disabled={form.category !== "tax"}>الأصناف والمبيعات</SelectItem>
+                          <SelectItem value="other">غير مخصصة تلقائيًا</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
