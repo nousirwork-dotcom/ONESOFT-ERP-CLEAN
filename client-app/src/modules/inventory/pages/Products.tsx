@@ -33,6 +33,8 @@ import { useState, useMemo, useEffect, useRef, useCallback, forwardRef } from "r
 import { useUnsavedChangesGuard } from "@/core/hooks/useUnsavedChangesGuard";
 import { UnsavedChangesDialog } from "@/shared/components/UnsavedChangesDialog";
 import { useWorkspaceEl } from "@/core/contexts/WorkspaceContext";
+import { UnifiedBottomToolbar } from "@/components/unified-toolbar/UnifiedBottomToolbar";
+import type { ToolbarActionMap, ToolbarToolItem } from "@/components/unified-toolbar/toolbar.types";
 import { toast } from "sonner";
 
 // =============================================
@@ -1893,10 +1895,90 @@ export default function Products() {
   }, [products, groupFilter, sortField, sortDir]);
 
   const currentNavIdx = editId ? sortedProducts.findIndex((p: any) => p.id === editId) : -1;
-  const navFirst  = () => requestClose(() => { if (sortedProducts.length) navigateTo(sortedProducts[0]); });
-  const navLast   = () => requestClose(() => { if (sortedProducts.length) navigateTo(sortedProducts[sortedProducts.length - 1]); });
-  const navPrev   = () => requestClose(() => { if (currentNavIdx > 0) navigateTo(sortedProducts[currentNavIdx - 1]); });
-  const navNext   = () => requestClose(() => { if (currentNavIdx < sortedProducts.length - 1) navigateTo(sortedProducts[currentNavIdx + 1]); });
+  const navFirst = () => {
+    requestClose(() => { if (sortedProducts.length) navigateTo(sortedProducts[0]); });
+  };
+  const navLast = () => {
+    requestClose(() => { if (sortedProducts.length) navigateTo(sortedProducts[sortedProducts.length - 1]); });
+  };
+  const navPrev = () => {
+    requestClose(() => { if (currentNavIdx > 0) navigateTo(sortedProducts[currentNavIdx - 1]); });
+  };
+  const navNext = () => {
+    requestClose(() => { if (currentNavIdx < sortedProducts.length - 1) navigateTo(sortedProducts[currentNavIdx + 1]); });
+  };
+
+  const toolbarTools = useMemo<ToolbarToolItem[]>(() => [
+    { id: "activity", label: "نشاط المستخدمين", onClick: () => { toast.info("نشاط المستخدمين"); } },
+    { id: "suspend", label: "توقيف الاستخدام", onClick: () => { toast.info("توقيف الاستخدام"); } },
+    { id: "permissions", label: "قصر المطالعة على", separatorBefore: true, onClick: () => { toast.info("قصر المطالعة على"); } },
+  ], []);
+
+  const toolbarActions = useMemo<ToolbarActionMap>(() => ({
+    save: {
+      supported: true,
+      loading: createProduct.isPending || updateProduct.isPending,
+      onClick: () => { void handleSubmit().catch(() => {}); },
+    },
+    draft: { supported: false, disabledReason: "الأصناف لا تُحفظ كمسودات" },
+    new: { supported: true, onClick: () => { requestClose(openCreate); } },
+    duplicate: {
+      supported: true,
+      stateEnabled: !!editId,
+      disabledReason: "افتح صنفًا محفوظًا أولًا لعمل نسخة",
+      onClick: () => {
+        if (!editId) return;
+        setEditId(null);
+        setForm(current => ({ ...current, sku: "", barcode: "", barcode2: "", barcode3: "" }));
+        setIsDirty(true);
+        toast.info("تم إنشاء نسخة — عدّل الرقم واحفظ");
+      },
+    },
+    tools: { supported: true, stateEnabled: true },
+    edit: {
+      supported: true,
+      stateEnabled: !!editId && !isDirty,
+      disabledReason: "الصنف مفتوح للتحرير بالفعل",
+      onClick: () => { toast.info("الصنف مفتوح للتحرير"); },
+    },
+    delete: {
+      supported: true,
+      stateEnabled: !!editId,
+      disabledReason: "لا يمكن حذف صنف جديد غير محفوظ",
+      onClick: () => {
+        if (!editId) return;
+        if (confirm("هل أنت متأكد من حذف هذا الصنف؟ لا يمكن التراجع.")) {
+          deleteProduct.mutate({ id: editId });
+          setIsOpen(false);
+        }
+      },
+    },
+    first: { supported: true, stateEnabled: !!editId && currentNavIdx > 0, onClick: navFirst },
+    previous: { supported: true, stateEnabled: !!editId && currentNavIdx > 0, onClick: navPrev },
+    next: { supported: true, stateEnabled: !!editId && currentNavIdx >= 0 && currentNavIdx < sortedProducts.length - 1, onClick: navNext },
+    last: { supported: true, stateEnabled: !!editId && currentNavIdx >= 0 && currentNavIdx < sortedProducts.length - 1, onClick: navLast },
+    approve: { supported: false, disabledReason: "اعتماد الأصناف غير مستخدم في هذه الشاشة" },
+    cancel: { supported: false, disabledReason: "إلغاء الترحيل غير مستخدم في هذه الشاشة" },
+    preview: { supported: false, disabledReason: "معاينة الصنف غير مستخدمة في هذه الشاشة" },
+    send: { supported: false, disabledReason: "إرسال الصنف غير مستخدم في هذه الشاشة" },
+    print: { supported: false, disabledReason: "طباعة الصنف غير مستخدمة في هذه الشاشة" },
+    exit: { supported: true, onClick: () => { requestClose(() => setIsOpen(false)); } },
+  }), [
+    createProduct.isPending,
+    updateProduct.isPending,
+    editId,
+    isDirty,
+    currentNavIdx,
+    sortedProducts.length,
+    requestClose,
+    openCreate,
+    handleSubmit,
+    navFirst,
+    navPrev,
+    navNext,
+    navLast,
+    deleteProduct,
+  ]);
 
   return (
     <div className="space-y-4" dir="rtl">
@@ -2455,7 +2537,7 @@ export default function Products() {
                 boxShadow: "0 0 0 1px rgba(59,130,246,0.15),0 20px 60px -10px rgba(59,130,246,0.35),0 8px 32px rgba(0,0,0,0.18)",
               }}
             >
-              {/* ── شريط الأدوات الرئيسي — Enterprise ERP Action Bar ── */}
+              {/* ── رأس النافذة: العنوان والتحكم بالنافذة فقط ── */}
               <div
                 dir="rtl"
                 style={{
@@ -2498,8 +2580,8 @@ export default function Products() {
                 {/* فاصل رأسي */}
                 <div style={{ width: 1, height: 24, background: "#DDE3EC", margin: "0 2px", flexShrink: 0 }} />
 
-                {/* ② أزرار العمليات */}
-                <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                {/* الأوامر انتقلت إلى الشريط الموحد السفلي */}
+                <div style={{ display: "none", alignItems: "center", gap: 4, flexShrink: 0 }}>
                   <BotBtn
                     icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>}
                     label="حفظ" variant="primary"
@@ -2579,10 +2661,10 @@ export default function Products() {
                 </div>
 
                 {/* فاصل رأسي */}
-                <div style={{ width: 1, height: 24, background: "#DDE3EC", margin: "0 2px", flexShrink: 0 }} />
+                <div style={{ display: "none", width: 1, height: 24, background: "#DDE3EC", margin: "0 2px", flexShrink: 0 }} />
 
                 {/* ③ أسهم التنقل */}
-                <div style={{ display: "flex", alignItems: "center", gap: 3, flexShrink: 0 }}>
+                <div style={{ display: "none", alignItems: "center", gap: 3, flexShrink: 0 }}>
                   <NavBtn title="أول سجل" disabled={!editId || currentNavIdx <= 0} onClick={navFirst}>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                       <polyline points="11 17 6 12 11 7"/><polyline points="18 17 13 12 18 7"/>
@@ -2635,7 +2717,7 @@ export default function Products() {
                 />
 
                 {/* فاصل رأسي */}
-                <div style={{ width: 1, height: 24, background: "#DDE3EC", margin: "0 2px", flexShrink: 0 }} />
+                <div style={{ display: "none", width: 1, height: 24, background: "#DDE3EC", margin: "0 2px", flexShrink: 0 }} />
 
                 {/* ④ تكبير + إغلاق */}
                 <div style={{ display: "flex", alignItems: "center", gap: 3, flexShrink: 0 }}>
@@ -2709,6 +2791,11 @@ export default function Products() {
                   fieldErrors={fieldErrors}
                 />
               </div>
+
+              <UnifiedBottomToolbar
+                actions={toolbarActions}
+                tools={toolbarTools}
+              />
             </div>
           </Rnd>
         </>,
