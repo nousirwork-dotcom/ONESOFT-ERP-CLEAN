@@ -72,7 +72,6 @@ export type ProductForm = {
   itemSize: string;
   // ضريبة
   taxType: string;
-  prevTaxType: string;
   taxable: boolean;
   taxId: string;
   vatRate: string;
@@ -134,7 +133,7 @@ const emptyForm: ProductForm = {
   category1: "", category2: "", category3: "",
   unitsJson: "", catsJson: "",
   distinguishNo: "", weight: "", size: "", colorCode: "", itemSize: "",
-  taxType: "", prevTaxType: "", taxable: true, taxId: "", vatRate: "15",
+  taxType: "", taxable: true, taxId: "", vatRate: "15",
   nameEn: "", brand: "", model: "", description: "",
   purchaseUnit: "", saleUnit: "", minStock: "0", maxStock: "0", reorderPoint: "0",
   trackBatch: false, trackSerial: false, hasBOM: false,
@@ -182,7 +181,6 @@ export function productToForm(p: any): ProductForm {
     colorCode: p?.colorCode ?? "",
     itemSize: p?.itemSize ?? "",
     taxType: p?.taxType ?? "",
-    prevTaxType: p?.prevTaxType ?? "",
     taxable: p?.taxable ?? true,
     taxId: p?.taxId ? String(p.taxId) : "",
     vatRate: p?.vatRate ?? p?.taxRate ?? "15",
@@ -903,14 +901,6 @@ export function ProductCard({
             <div className="flex">
               <div className="flex-1 border-l border-slate-300 dark:border-slate-600 flex">
                 <div className="w-36 shrink-0 bg-[#F0EDE8] dark:bg-slate-800 px-2 flex items-center border-l border-[#BEBEBE] dark:border-slate-700">
-                  <span className="text-xs text-slate-600 dark:text-slate-400">نوع الضريبة السابقة</span>
-                </div>
-                <div className="flex-1 px-1 py-0.5">
-                  <CInput value={form.prevTaxType} onChange={(v) => set("prevTaxType", v)} placeholder="" className="w-full" />
-                </div>
-              </div>
-              <div className="w-72 shrink-0 flex">
-                <div className="w-28 shrink-0 bg-[#F0EDE8] dark:bg-slate-800 px-2 flex items-center border-l border-[#BEBEBE] dark:border-slate-700">
                   <span className="text-xs text-slate-600 dark:text-slate-400">نوع الضريبة</span>
                 </div>
                 <div className="flex-1 px-1 py-0.5">
@@ -1756,7 +1746,6 @@ export default function Products() {
       colorCode: p.colorCode ?? "",
       itemSize: p.itemSize ?? "",
       taxType: p.taxType ?? "",
-      prevTaxType: p.prevTaxType ?? "",
       taxable: p.taxable ?? true,
       taxId: p.taxId ? String(p.taxId) : "",
       vatRate: p.vatRate ?? "15",
