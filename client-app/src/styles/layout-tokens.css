@@ -196,7 +196,7 @@
 .product-card-classic select,
 .product-card-classic textarea,
 .product-card-classic [role="combobox"] {
-  background-color: #FCFAF5 !important;
+  background-color: #FFFFFF !important;
   border-color: #D8D3C8 !important;
   color: #475569 !important;
 }
@@ -254,6 +254,23 @@
   font-size: 13px !important;
 }
 
+.product-window-content-host {
+  flex: 1 1 0%;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.product-window-toolbar-host {
+  flex: 0 0 auto;
+  min-height: 0;
+  width: 100%;
+  position: relative;
+  z-index: 2;
+  visibility: visible !important;
+  overflow: visible;
+}
+
 .product-card-classic .product-card-body input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
 .product-card-classic .product-card-body select,
 .product-card-classic .product-card-body textarea,
@@ -266,7 +283,7 @@
   font-size: 13px !important;
   line-height: 20px !important;
   color: #334155 !important;
-  background-color: #FCFAF5 !important;
+  background-color: #FFFFFF !important;
   transition: border-color 120ms ease, box-shadow 120ms ease, background-color 120ms ease;
 }
 

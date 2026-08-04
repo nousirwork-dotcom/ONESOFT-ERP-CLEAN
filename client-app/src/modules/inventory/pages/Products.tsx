@@ -2799,7 +2799,16 @@ export default function Products() {
               </div>
 
               {/* محتوى الكارت */}
-              <div style={{ flex: 1, overflow: "hidden", minHeight: 0, background: "#F2F0EC" }}>
+              <div
+                className="product-window-content-host"
+                style={{
+                  flex: "1 1 0%",
+                  minHeight: 0,
+                  minWidth: 0,
+                  overflow: "hidden",
+                  background: "#F2F0EC",
+                }}
+              >
                 <ProductCard
                   key={editId ?? "new"}
                   form={form}
@@ -2814,10 +2823,12 @@ export default function Products() {
                 />
               </div>
 
-              <UnifiedBottomToolbar
-                actions={toolbarActions}
-                tools={toolbarTools}
-              />
+              <div className="product-window-toolbar-host">
+                <UnifiedBottomToolbar
+                  actions={toolbarActions}
+                  tools={toolbarTools}
+                />
+              </div>
             </div>
           </Rnd>
         </>,
