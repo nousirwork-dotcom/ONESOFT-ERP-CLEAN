@@ -33,6 +33,7 @@ import { useState, useMemo, useEffect, useRef, useCallback, forwardRef } from "r
 import { useUnsavedChangesGuard } from "@/core/hooks/useUnsavedChangesGuard";
 import { UnsavedChangesDialog } from "@/shared/components/UnsavedChangesDialog";
 import { useWorkspaceEl } from "@/core/contexts/WorkspaceContext";
+import { useModalAttention } from "@/modules/settings/pages/useModalAttention";
 import { UnifiedBottomToolbar } from "@/components/unified-toolbar/UnifiedBottomToolbar";
 import type { ToolbarActionMap, ToolbarToolItem } from "@/components/unified-toolbar/toolbar.types";
 import { toast } from "sonner";
@@ -509,18 +510,29 @@ export function ProductCard({
 
   return (
     <div className="flex flex-col h-full" dir="rtl">
-      {/* شريط التبويبات — مربعات منفصلة بحدود */}
-      <div className="flex flex-wrap gap-1 px-2 py-1 bg-white dark:bg-slate-800 border-b border-[#BEBEBE] dark:border-slate-600 flex-shrink-0">
+      {/* شريط التبويبات — نفس ألوان نافذة دفاتر المستندات */}
+      <div
+        className="flex flex-wrap flex-shrink-0 overflow-x-auto"
+        style={{ background: "#e5e4e1", borderBottom: "1px solid #9da3a8", paddingRight: 7 }}
+      >
         {tabs.map((tab) => (
           <button
             key={tab.id}
             type="button"
             onClick={() => setActiveTab(tab.id)}
-            className={`px-3 py-2 text-xs font-bold border rounded transition-colors whitespace-nowrap
-              ${activeTab === tab.id
-                ? "bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-400 border-[#BEBEBE] dark:border-blue-500 shadow-sm"
-                : "bg-[#F5F0E8] dark:bg-slate-700 text-[#555] dark:text-slate-300 border-[#BEBEBE] dark:border-slate-600 hover:bg-white dark:hover:bg-slate-600 hover:border-[#BEBEBE]"
-              }`}
+            className="whitespace-nowrap transition-colors"
+            style={{
+              padding: "6px 12px 5px",
+              fontSize: 10,
+              fontWeight: activeTab === tab.id ? 700 : 500,
+              background: activeTab === tab.id ? "#f7f6f3" : "transparent",
+              color: activeTab === tab.id ? "#315f88" : "#62676c",
+              border: "none",
+              borderLeft: "1px solid #c9cacc",
+              borderBottom: activeTab === tab.id ? "2px solid #f7f6f3" : "2px solid transparent",
+              marginBottom: -1,
+              cursor: "pointer",
+            }}
           >
             {tab.label}
           </button>
@@ -1414,6 +1426,11 @@ export default function Products() {
   const [fieldErrors, setFieldErrors] = useState<{ sku?: boolean; name?: boolean }>({});
   const skuRef = useRef<HTMLInputElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
+  const productWindowRef = useRef<HTMLDivElement>(null);
+  const { contentRef: attentionRef, attractAttention } = useModalAttention({
+    message: "يرجى إكمال أو إلغاء نافذة الصنف الحالية أولاً",
+  });
+  const [isShaking, setIsShaking] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   const skipFormRef = useRef(false);
   const [sortField, setSortField] = useState<string>("name");
@@ -1629,6 +1646,14 @@ export default function Products() {
 
   const { confirmOpen, requestClose, confirmSave, confirmDiscard, confirmCancel } =
     useUnsavedChangesGuard({ isDirty });
+
+  const handleProductBackdropMouseDown = useCallback(() => {
+    if (isShaking) return;
+    setIsShaking(true);
+    window.setTimeout(() => setIsShaking(false), 400);
+    attractAttention();
+    productWindowRef.current?.focus();
+  }, [attractAttention, isShaking]);
 
   // Track dirty when user edits form fields (skip right after load/navigate)
   useEffect(() => {
@@ -2488,10 +2513,14 @@ export default function Products() {
       {/* ===== نافذة الصنف — قابلة للسحب والتكبير (react-rnd) ===== */}
       {isOpen && workspaceEl && createPortal(
         <>
-          {/* طبقة الخلفية — داخل منطقة العمل فقط */}
+          {/* طبقة الحجب — النقر خارج النافذة لا يغلقها؛ يلفت الانتباه بنفس نمط دفاتر المستندات */}
           <div
-            style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.38)", zIndex: 9998 }}
-            onClick={() => requestClose(() => setIsOpen(false))}
+            style={{
+              position: "absolute", inset: 0, zIndex: 9998,
+              background: "rgba(226,217,202,0.84)",
+              backdropFilter: "blur(1.5px) saturate(0.5)",
+            }}
+            onMouseDown={handleProductBackdropMouseDown}
           />
 
           <Rnd
@@ -2525,60 +2554,57 @@ export default function Products() {
           >
             {/* الحاوية الداخلية */}
             <div
+              ref={(node) => {
+                productWindowRef.current = node;
+                attentionRef.current = node;
+              }}
               dir="rtl"
-              onClick={e => e.stopPropagation()}
+              tabIndex={-1}
+              onMouseDown={e => e.stopPropagation()}
+              className={isShaking ? "product-modal-window-shake" : undefined}
               style={{
                 display: "flex", flexDirection: "column",
                 width: "100%", height: "100%",
-                background: "#fff",
-                borderRadius: isMaximized ? 4 : 8,
+                background: "#E6DED2",
+                borderRadius: isMaximized ? 5 : 8,
                 overflow: "hidden",
-                border: "2px solid rgba(59,130,246,0.7)",
-                boxShadow: "0 0 0 1px rgba(59,130,246,0.15),0 20px 60px -10px rgba(59,130,246,0.35),0 8px 32px rgba(0,0,0,0.18)",
+                border: "6px solid #BAC6D0",
+                outline: "1px solid #6B4A2D",
+                outlineOffset: -1,
+                boxShadow: "0 12px 30px rgba(0,0,0,0.20), 0 3px 9px rgba(0,0,0,0.10), inset 0 0 0 1px rgba(255,255,255,0.70)",
               }}
             >
-              {/* ── رأس النافذة: العنوان والتحكم بالنافذة فقط ── */}
+              {/* ── رأس النافذة — نفس تنسيق دفاتر المستندات ── */}
               <div
                 dir="rtl"
+                className="erp-drag-handle"
+                onDoubleClick={toggleMaximize}
                 style={{
                   flexShrink: 0,
                   display: "flex", flexDirection: "row", alignItems: "center",
                   justifyContent: "space-between",
-                  borderBottom: "1px solid #DDE3EC",
-                  background: "#FFFFFF",
-                  padding: "6px 10px",
-                  gap: 6,
+                  height: 42,
+                  background: "#2F5F8F",
+                  borderBottom: "1px solid #D2C9BC",
+                  padding: "0 12px",
                   userSelect: "none",
-                  minHeight: 48,
+                  cursor: isMaximized ? "default" : "move",
                 }}
               >
-                {/* ① العنوان — منطقة السحب */}
-                <div
-                  className="erp-drag-handle"
-                  onDoubleClick={toggleMaximize}
+                <span
                   style={{
-                    display: "flex", alignItems: "center", gap: 7,
-                    fontSize: 13, fontWeight: 600,
+                    flex: 1,
+                    fontSize: 13,
+                    fontWeight: 700,
                     fontFamily: "'Cairo', Tahoma, sans-serif",
-                    color: "#1E293B", whiteSpace: "nowrap", flexShrink: 0,
-                    cursor: isMaximized ? "default" : "move",
-                    paddingLeft: 2,
+                    color: "#fff",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
                   }}
                 >
-                  <div style={{
-                    width: 26, height: 26, borderRadius: 6,
-                    background: "#EFF6FF", border: "1px solid #BFDBFE",
-                    display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-                  }}>
-                    <Package style={{ width: 13, height: 13, color: "#2563EB", pointerEvents: "none" }} />
-                  </div>
-                  <span style={{ color: "#CA8A04", fontWeight: 700, fontSize: 15.5 }}>
-                    {editId ? "تعديل بيانات الصنف" : "إضافة صنف"}
-                  </span>
-                </div>
-
-                {/* فاصل رأسي */}
-                <div style={{ width: 1, height: 24, background: "#DDE3EC", margin: "0 2px", flexShrink: 0 }} />
+                  {editId ? "تعديل بيانات الصنف" : "إضافة صنف"}
+                </span>
 
                 {/* الأوامر انتقلت إلى الشريط الموحد السفلي */}
                 <div style={{ display: "none", alignItems: "center", gap: 4, flexShrink: 0 }}>
@@ -2660,9 +2686,6 @@ export default function Products() {
                   />
                 </div>
 
-                {/* فاصل رأسي */}
-                <div style={{ display: "none", width: 1, height: 24, background: "#DDE3EC", margin: "0 2px", flexShrink: 0 }} />
-
                 {/* ③ أسهم التنقل */}
                 <div style={{ display: "none", alignItems: "center", gap: 3, flexShrink: 0 }}>
                   <NavBtn title="أول سجل" disabled={!editId || currentNavIdx <= 0} onClick={navFirst}>
@@ -2709,38 +2732,25 @@ export default function Products() {
                   </NavBtn>
                 </div>
 
-                {/* spacer — منطقة السحب الثانية */}
-                <div
-                  className="erp-drag-handle"
-                  onDoubleClick={toggleMaximize}
-                  style={{ flex: 1, cursor: isMaximized ? "default" : "move", minWidth: 16 }}
-                />
-
-                {/* فاصل رأسي */}
-                <div style={{ display: "none", width: 1, height: 24, background: "#DDE3EC", margin: "0 2px", flexShrink: 0 }} />
-
                 {/* ④ تكبير + إغلاق */}
-                <div style={{ display: "flex", alignItems: "center", gap: 3, flexShrink: 0 }}>
+                <div data-winctrl style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
                   <button
+                    onMouseDown={e => e.stopPropagation()}
                     onClick={toggleMaximize}
                     title={isMaximized ? "استعادة الحجم" : "تكبير النافذة"}
                     style={{
                       display: "flex", alignItems: "center", justifyContent: "center",
-                      width: 32, height: 32,
-                      background: "#FFFFFF", border: "1px solid #D6DCE5",
-                      borderRadius: 6, cursor: "pointer", color: "#6B7280",
-                      transition: "background 0.15s ease, border-color 0.15s ease",
+                      width: 40, height: 42,
+                      background: "transparent", border: "none",
+                      borderRadius: 0, cursor: "pointer", color: "rgba(255,255,255,0.9)",
+                      transition: "background 0.1s",
                       flexShrink: 0,
                     }}
                     onMouseEnter={e => {
-                      e.currentTarget.style.background = "#F5F8FC";
-                      e.currentTarget.style.borderColor = "#B8C7DA";
-                      e.currentTarget.style.color = "#374151";
+                      e.currentTarget.style.background = "rgba(255,255,255,0.15)";
                     }}
                     onMouseLeave={e => {
-                      e.currentTarget.style.background = "#FFFFFF";
-                      e.currentTarget.style.borderColor = "#D6DCE5";
-                      e.currentTarget.style.color = "#6B7280";
+                      e.currentTarget.style.background = "transparent";
                     }}
                   >
                     {isMaximized
@@ -2748,36 +2758,41 @@ export default function Products() {
                       : <Maximize2 style={{ width: 13, height: 13, pointerEvents: "none" }} />}
                   </button>
                   <button
+                    onMouseDown={e => e.stopPropagation()}
                     onClick={() => requestClose(() => setIsOpen(false))}
                     title="إغلاق"
                     style={{
-                      display: "flex", alignItems: "center", gap: 5,
-                      padding: "0 12px", height: 32,
-                      background: "#FFFFFF", border: "1px solid #D6DCE5",
-                      borderRadius: 6, cursor: "pointer",
-                      fontFamily: "'Cairo', Tahoma, sans-serif", fontSize: 12, fontWeight: 500,
-                      color: "#6B7280", whiteSpace: "nowrap", flexShrink: 0,
-                      transition: "background 0.15s ease, border-color 0.15s ease, color 0.15s ease",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      width: 40, height: 42,
+                      background: "transparent", border: "none",
+                      borderRadius: 0, cursor: "pointer",
+                      color: "rgba(255,255,255,0.9)", flexShrink: 0,
+                      transition: "background 0.1s",
                     }}
                     onMouseEnter={e => {
-                      e.currentTarget.style.background = "#FEF2F2";
-                      e.currentTarget.style.borderColor = "#FECACA";
-                      (e.currentTarget.style as any).color = "#DC2626";
+                      e.currentTarget.style.background = "#c42b1c";
                     }}
                     onMouseLeave={e => {
-                      e.currentTarget.style.background = "#FFFFFF";
-                      e.currentTarget.style.borderColor = "#D6DCE5";
-                      e.currentTarget.style.color = "#6B7280";
+                      e.currentTarget.style.background = "transparent";
                     }}
                   >
-                    <X style={{ width: 12, height: 12, pointerEvents: "none" }} />
-                    إغلاق
+                    <X style={{ width: 13, height: 13, pointerEvents: "none" }} />
                   </button>
                 </div>
               </div>
 
+              {/* شريط الحالة الثابت — نفس تنسيق دفاتر المستندات */}
+              <div style={{
+                minHeight: 29, padding: "3px 10px", color: "#68727b", fontSize: 10,
+                background: "#f4f3f0", borderBottom: "1px solid #c7c8c8",
+                display: "flex", justifyContent: "space-between", alignItems: "center",
+              }}>
+                <b>{editId ? "تعديل بيانات الصنف" : "إضافة صنف جديد"}</b>
+                <span>{editId ? `رقم السجل: ${editId}` : "سجل جديد"} • {isDirty ? "تعديلات غير محفوظة" : "جاهز"}</span>
+              </div>
+
               {/* محتوى الكارت */}
-              <div style={{ flex: 1, overflow: "hidden", minHeight: 0 }}>
+              <div style={{ flex: 1, overflow: "hidden", minHeight: 0, background: "#FFFFFF" }}>
                 <ProductCard
                   key={editId ?? "new"}
                   form={form}
