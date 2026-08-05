@@ -214,7 +214,7 @@ function SettingsMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id:
 
   return (
     <nav className={`${collapsed ? "w-12" : "w-56"} h-full min-h-0 shrink-0 border-l border-[#D8D3C8] bg-[#F2F0EC] overflow-hidden flex flex-col transition-[width] duration-200`}>
-      <div className={`${collapsed ? "px-1" : "px-3"} py-3 border-b border-border/30`}>
+      <div className={`${collapsed ? "px-1" : "px-3"} py-3 border-b border-[#D8D3C8]`}>
         <div className={`flex items-center ${collapsed ? "justify-center" : "justify-between"} gap-2`}>
           {!collapsed && (
             <button onClick={() => onSelect("overview")}
@@ -228,7 +228,7 @@ function SettingsMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id:
             onClick={() => setCollapsed(value => !value)}
             title={collapsed ? "توسيع قائمة الإعدادات" : "طي قائمة الإعدادات"}
             aria-label={collapsed ? "توسيع قائمة الإعدادات" : "طي قائمة الإعدادات"}
-            className="p-1 rounded text-muted-foreground hover:text-white hover:bg-white/10"
+            className="p-1 rounded text-[#64748B] hover:text-[#334155] hover:bg-black/5"
           >
             {collapsed ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
           </button>
@@ -242,8 +242,8 @@ function SettingsMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id:
               <span className="text-base">{section.emoji}</span>
               <span className="flex-1 text-right text-xs font-semibold" style={{ color: section.color }}>{section.label}</span>
               {expanded[section.id]
-                ? <ChevronDown className="w-3 h-3 text-muted-foreground" />
-                : <ChevronRight className="w-3 h-3 text-muted-foreground" />}
+                ? <ChevronDown className="w-3 h-3 text-[#64748B]" />
+                : <ChevronRight className="w-3 h-3 text-[#64748B]" />}
             </button>
             {expanded[section.id] && (
               <div className="mb-1">
@@ -251,8 +251,8 @@ function SettingsMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id:
                   <button key={child.id} ref={activeId === child.id ? activeItemRef : undefined} onClick={(e) => { e.stopPropagation(); onSelect(child.id); }}
                     className={`w-full flex items-center gap-2 px-4 py-1.5 text-xs transition-colors ${
                       activeId === child.id
-                        ? "bg-[#D8AE55]/20 text-white font-semibold border-r-2 border-[#D8AE55]"
-                        : "text-gray-300 hover:text-white hover:bg-white/5"
+                        ? "bg-[#D8AE55]/25 text-[#334155] font-semibold border-r-2 border-[#B8892E]"
+                        : "text-[#475569] hover:text-[#1E293B] hover:bg-black/5"
                     }`}>
                     <StatusIcon status={child.status} />
                     <span className="flex-1 text-right leading-tight">{child.label}</span>
