@@ -2658,10 +2658,17 @@ function ActivationWizard({
 
   const readiness = readinessQ.data;
   const availableUnits = createdUnit ? [...units.filter(unit => unit.id !== createdUnit.id), createdUnit] : units;
-  const selectedUnit = availableUnits.find(unit => unit.id === selectedUnitId)
+  const selectedWarehouseNumber = warehouseId ? Number(warehouseId) : null;
+  const selectedUnit = availableUnits.find(unit =>
+    unit.id === selectedUnitId
+    && (selectedWarehouseNumber == null || unit.warehouseId === selectedWarehouseNumber),
+  )
     ?? (includeCompanyStep && readiness?.linkingUnitId
       ? units.find(unit => unit.id === readiness.linkingUnitId)
       : undefined);
+  const selectedWarehouseUnitId = selectedUnit?.warehouseId === selectedWarehouseNumber
+    ? selectedUnit.id
+    : null;
   const companyFields: Array<[string, string]> = [
     ["الاسم القانوني", String(cfg?.legalName ?? "")],
     ["الرقم الضريبي", String(cfg?.vatNumber ?? "")],
@@ -2683,10 +2690,14 @@ function ActivationWizard({
   const linkedTypes = new Set(unitJournals.map((journal: any) => journal.docType));
   const unitComplete = Boolean(
     selectedUnit
-    && (
-      requiredJournalTypes.every(type => linkedTypes.has(type))
-      || selectedUnit.linkedJournalIds?.length === requiredJournalTypes.length
-    ),
+    && selectedUnit.warehouseId === selectedWarehouseNumber
+    && requiredJournalTypes.every(type => unitJournals.some((journal: any) =>
+      journal.docType === type
+      && journal.journalId != null
+      && journal.journalCode?.trim()
+      && journal.journalName?.trim()
+      && journal.warehouseId === selectedWarehouseNumber,
+    )),
   );
   const invoiceTypeSaved = readiness?.savedSettings?.invoiceType === invoiceType
     && (!selectedUnitId || readiness.savedSettings?.zatcaPosUnitId === selectedUnitId);
@@ -2715,10 +2726,70 @@ function ActivationWizard({
     }
   }, [readiness?.savedSettings, units, warehouseId]);
 
-  const selectedWarehouseJournals = (readiness?.journals ?? []) as any[];
-  const salesJournal = selectedWarehouseJournals.find(journal => journal.docType === "sales_invoice");
+  type ReadinessJournal = {
+    docType: string;
+    label: string;
+    found: boolean;
+    linked: boolean;
+    linkedUnitId: number | null;
+    id: number | null;
+    code: string | null;
+    name: string | null;
+    warehouseId: number | null;
+    valid: boolean;
+  };
+  const readinessMatchesWarehouse = Boolean(
+    warehouseId
+    && readiness?.selectedWarehouseId === Number(warehouseId)
+    && !readinessQ.isFetching,
+  );
+  const selectedWarehouseJournals: ReadinessJournal[] = (
+    (readinessMatchesWarehouse ? (readiness?.journals ?? []) : []) as Array<Record<string, any>>
+  ).map(entry => {
+    const nestedJournal = (entry.journal ?? {}) as Record<string, any>;
+    const id = entry.journalId ?? nestedJournal.id ?? null;
+    const code = entry.journalCode ?? nestedJournal.code ?? null;
+    const name = entry.journalName ?? nestedJournal.name ?? null;
+    const journalWarehouseId = entry.journalWarehouseId ?? nestedJournal.warehouseId ?? null;
+    const belongsToSelectedWarehouse = Boolean(
+      warehouseId && journalWarehouseId === Number(warehouseId),
+    );
+    const linkedUnitId = entry.linkedUnitId ?? nestedJournal.zatcaPosUnitId ?? null;
+    const belongsToSelectedUnit = Boolean(
+      linkedUnitId == null || linkedUnitId === selectedWarehouseUnitId,
+    );
+    return {
+      docType: entry.docType,
+      label: entry.label ?? journalTypeLabel(entry.docType),
+      found: Boolean(entry.found),
+      linked: Boolean(entry.linked),
+      linkedUnitId,
+      id,
+      code,
+      name,
+      warehouseId: journalWarehouseId,
+      valid: Boolean(
+        entry.found
+        && id != null
+        && code?.trim()
+        && name?.trim()
+        && belongsToSelectedWarehouse
+        && belongsToSelectedUnit,
+      ),
+    };
+  });
+  const salesJournal = selectedWarehouseJournals.find(
+    journal => journal.docType === "sales_invoice" && journal.valid,
+  );
   const missingJournalTypes = requiredJournalTypes.filter(type =>
-    !selectedWarehouseJournals.some(journal => journal.docType === type),
+    !selectedWarehouseJournals.some(journal => journal.docType === type && journal.valid),
+  );
+  const conflictingJournalTypes = requiredJournalTypes.filter(type =>
+    selectedWarehouseJournals.some(
+      journal => journal.docType === type
+        && journal.linkedUnitId != null
+        && journal.linkedUnitId !== selectedWarehouseUnitId,
+    ),
   );
   const canCreateUnit = Boolean(
     warehouseId
@@ -2726,7 +2797,8 @@ function ActivationWizard({
     && unitCode.trim()
     && unitName.trim()
     && missingJournalTypes.length === 0
-    && selectedWarehouseJournals.every(journal => journal.zatcaPosUnitId == null),
+    && conflictingJournalTypes.length === 0
+    && selectedWarehouseJournals.every(journal => journal.valid),
   );
 
   const goTo = (step: number) => {
@@ -2762,17 +2834,19 @@ function ActivationWizard({
         }
         setCreatingUnit(true);
         const created = await createUnitM.mutateAsync({
-          journalId: salesJournal.id,
+          journalId: salesJournal.id as number,
           unitCode: unitCode.trim(),
           unitName: unitName.trim(),
         });
-        setCreatedUnit(created);
-        setSelectedUnitId(created.id);
-        await Promise.all([
+        const [refreshedUnits] = await Promise.all([
+          utils.zatca.listPosUnits.fetch(),
           utils.zatca.listPosUnits.invalidate(),
           utils.zatca.listLinkingJournalOptions.invalidate(),
           readinessQ.refetch(),
         ]);
+        const savedUnit = refreshedUnits.find(unit => unit.id === created.id) ?? created;
+        setCreatedUnit(savedUnit);
+        setSelectedUnitId(savedUnit.id);
         toast.success("تم إنشاء الوحدة وربط الدفاتر الأربعة معًا");
         setActiveStep(3);
         return;
@@ -2866,9 +2940,11 @@ function ActivationWizard({
                   <select style={fld} value={warehouseId} onChange={event => {
                     const value = event.target.value;
                     const next = (readiness?.locations ?? []).find(location => location.id === Number(value));
+                    const existingUnit = availableUnits.find(unit => unit.warehouseId === Number(value));
                     setWarehouseId(value);
-                    setUnitCode(next ? `POS-${String(next.id).padStart(2, "0")}` : "");
-                    setUnitName(next ? `وحدة ربط — ${next.label}` : "");
+                    setSelectedUnitId(existingUnit?.id ?? null);
+                    setUnitCode(existingUnit?.unitCode ?? (next ? `POS-${String(next.id).padStart(2, "0")}` : ""));
+                    setUnitName(existingUnit?.unitName ?? (next ? `وحدة ربط — ${next.label}` : ""));
                   }}>
                     <option value="">اختر المخزن/الفرع</option>
                     {(readiness?.locations ?? []).map(location => <option key={location.id} value={location.id}>{location.label}</option>)}
@@ -2888,15 +2964,36 @@ function ActivationWizard({
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 7 }}>
                   {requiredJournalTypes.map(type => {
                     const journal = selectedWarehouseJournals.find(item => item.docType === type);
+                    const journalIsValid = Boolean(journal?.valid);
+                    const journalSummary = journal
+                      ? `${journal.code ?? "رقم غير متاح"} — ${journal.name ?? "اسم غير متاح"} — ${journalTypeLabel(type)} — ID: ${journal.id ?? "غير متاح"}`
+                      : null;
                     return (
-                      <div key={type} style={{ background: journal ? "#f0fdf4" : "#fff7ed", border: `1px solid ${journal ? "#bbf7d0" : "#fed7aa"}`, color: journal ? "#166534" : "#9a3412", borderRadius: 7, padding: "8px 10px", fontSize: 11 }}>
-                        {journal ? "✓" : "!"} {journalTypeLabel(type)}
-                        <div style={{ color: "#64748b", fontSize: 10, marginTop: 3 }}>{journal ? `${journal.code} — ${journal.name}` : "غير موجود في هذا المخزن"}</div>
+                      <div key={type} style={{ background: journalIsValid ? "#f0fdf4" : "#fff7ed", border: `1px solid ${journalIsValid ? "#bbf7d0" : "#fed7aa"}`, color: journalIsValid ? "#166534" : "#9a3412", borderRadius: 7, padding: "8px 10px", fontSize: 11 }}>
+                        {journalIsValid ? "✓" : "!"} {journalTypeLabel(type)}
+                        <div style={{ color: "#64748b", fontSize: 10, marginTop: 3 }}>
+                          {journalIsValid
+                            ? journalSummary
+                            : journal?.linkedUnitId != null && journal.linkedUnitId !== selectedWarehouseUnitId
+                              ? "مرتبط بوحدة أخرى — استكمل الوحدة الحالية من إدارة الدفاتر"
+                              : journal
+                                ? "بيانات الدفتر غير مكتملة أو لا تطابق المخزن المختار"
+                                : "غير موجود في هذا المخزن"}
+                        </div>
                       </div>
                     );
                   })}
                 </div>
-                {missingJournalTypes.length > 0 && warehouseId && <div style={{ marginTop: 9, color: "#9a3412", fontSize: 11 }}>الدفاتر الناقصة: {missingJournalTypes.map(journalTypeLabel).join("، ")}</div>}
+                {missingJournalTypes.length > 0 && warehouseId && (
+                  <div style={{ marginTop: 9, color: "#9a3412", fontSize: 11 }}>
+                    الدفاتر الناقصة أو غير الصالحة: {missingJournalTypes.map(type => `دفتر ${journalTypeLabel(type)} غير موجود`).join("، ")}
+                  </div>
+                )}
+                {conflictingJournalTypes.length > 0 && (
+                  <div style={{ marginTop: 7, color: "#9a3412", fontSize: 11 }}>
+                    يوجد تعارض في: {conflictingJournalTypes.map(journalTypeLabel).join("، ")}. لا يمكن إنشاء وحدة مكررة.
+                  </div>
+                )}
               </div>
             </>
           )}

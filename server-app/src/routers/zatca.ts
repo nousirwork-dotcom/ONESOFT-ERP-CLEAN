@@ -383,6 +383,10 @@ async function getZatcaReadiness(
       found: Boolean(journal),
       linked: Boolean(journal?.zatcaPosUnitId),
       linkedUnitId: journal?.zatcaPosUnitId ?? null,
+      journalId: journal?.id ?? null,
+      journalCode: journal?.code ?? null,
+      journalName: journal?.name ?? null,
+      journalWarehouseId: journal?.warehouseId ?? null,
       journal: journal ?? null,
     };
   });
@@ -731,10 +735,6 @@ export const zatcaRouter = router({
         if (journal.warehouseId == null) {
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن إنشاء وحدة ربط قبل ربط الدفتر بالمخزن/الفرع' });
         }
-        if (journal.zatcaPosUnitId != null) {
-          throw new TRPCError({ code: 'CONFLICT', message: 'الدفتر مرتبط بالفعل بوحدة ربط ZATCA' });
-        }
-
         const warehouse = await tx.query.warehouses.findFirst({
           where: and(
             eq(warehouses.id, journal.warehouseId),
@@ -770,24 +770,55 @@ export const zatcaRouter = router({
             .map((row) => row.zatcaPosUnitId)
             .filter((id): id is number => id != null),
         )];
-        if (conflictingUnitIds.length > 0) {
+        if (conflictingUnitIds.length > 1) {
           throw new TRPCError({
             code: 'CONFLICT',
-            message: 'توجد دفاتر مرتبطة بالفعل بوحدة ربط في هذا المخزن. استخدم إدارة الدفاتر لاستكمال الوحدة الحالية بدل إنشاء وحدة مكررة.',
+            message: 'دفاتر هذا المخزن مرتبطة بوحدات ربط متعددة. لا يمكن إنشاء وحدة أو دمجها تلقائيًا قبل حل التعارض من إدارة الدفاتر.',
           });
         }
         const journalsToLink = POS_LINK_JOURNAL_TYPES.map((docType) =>
           locationJournals.find((row) => row.docType === docType),
         ).filter((row): row is (typeof locationJournals)[number] => Boolean(row));
 
-        const [unit] = await tx.insert(zatcaPosUnits).values({
-          orgId: ctx.user.orgId,
-          warehouseId: journal.warehouseId,
-          unitCode: input.unitCode,
-          unitName: input.unitName,
-          createdBy: ctx.user.id,
-          updatedBy: ctx.user.id,
-        }).returning();
+        let unit: typeof zatcaPosUnits.$inferSelect;
+        if (conflictingUnitIds.length === 1) {
+          const existingUnit = await tx.query.zatcaPosUnits.findFirst({
+            where: and(
+              eq(zatcaPosUnits.id, conflictingUnitIds[0]),
+              eq(zatcaPosUnits.orgId, ctx.user.orgId),
+              eq(zatcaPosUnits.warehouseId, journal.warehouseId),
+              eq(zatcaPosUnits.isActive, true),
+              eq(zatcaPosUnits.isDeleted, false),
+            ),
+          });
+          if (!existingUnit) {
+            throw new TRPCError({
+              code: 'CONFLICT',
+              message: 'الوحدة المرتبطة بأحد دفاتر هذا المخزن غير موجودة أو غير فعالة.',
+            });
+          }
+          [unit] = await tx.update(zatcaPosUnits)
+            .set({
+              unitCode: input.unitCode,
+              unitName: input.unitName,
+              updatedBy: ctx.user.id,
+              updatedAt: new Date(),
+            })
+            .where(and(
+              eq(zatcaPosUnits.id, existingUnit.id),
+              eq(zatcaPosUnits.orgId, ctx.user.orgId),
+            ))
+            .returning();
+        } else {
+          [unit] = await tx.insert(zatcaPosUnits).values({
+            orgId: ctx.user.orgId,
+            warehouseId: journal.warehouseId,
+            unitCode: input.unitCode,
+            unitName: input.unitName,
+            createdBy: ctx.user.id,
+            updatedBy: ctx.user.id,
+          }).returning();
+        }
         const linkedJournals = await tx.update(documentJournals)
           .set({ zatcaPosUnitId: unit.id, updatedAt: new Date() })
           .where(and(
