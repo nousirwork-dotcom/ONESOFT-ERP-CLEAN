@@ -62,6 +62,29 @@ export function assertSimulationUrl(value: string): URL {
   return parsed;
 }
 
+/**
+ * Transport-only probe. It intentionally does not send OTP, CSR, credentials,
+ * or invoice data and therefore cannot create or modify an EGS registration.
+ * A 4xx response still proves that the Simulation gateway is reachable; the
+ * API/authentication result is handled by the onboarding calls themselves.
+ */
+export async function probeFatooraSimulation(): Promise<{
+  reachable: boolean;
+  httpStatus: number | null;
+}> {
+  const url = assertSimulationUrl(getSimulationUrl('/compliance'));
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { accept: 'application/json', 'Accept-Version': 'V2' },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    return { reachable: response.status < 500, httpStatus: response.status };
+  } catch {
+    return { reachable: false, httpStatus: null };
+  }
+}
+
 function configValue(value: string): string {
   return value
     .replace(/\\/g, '\\\\')

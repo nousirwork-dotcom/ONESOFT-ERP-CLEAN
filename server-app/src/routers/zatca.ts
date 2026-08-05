@@ -46,6 +46,7 @@ import {
   generateSimulationCsr,
   postFatooraSimulation,
   getSimulationUrl,
+  probeFatooraSimulation,
 } from '../services/zatcaFatooraSimulation.js';
 import { buildAndSignSimulationInvoice } from '../services/zatcaInvoiceSubmission.js';
 import { decrypt, encrypt } from '../config-crypto.js';
@@ -406,11 +407,20 @@ async function getZatcaReadiness(
   const allScreensReady = screens.every(screen => screen.screenExists && screen.xmlReady);
   const latestOperationalByType = new Map<string, (typeof operationalRows)[number]>();
   for (const row of operationalRows) {
-    if (!latestOperationalByType.has(row.invoiceType)) latestOperationalByType.set(row.invoiceType, row);
+    const key = `${row.invoiceType}:${row.zatcaInvoiceType === 'standard' ? 'standard' : 'simplified'}`;
+    if (!latestOperationalByType.has(key)) latestOperationalByType.set(key, row);
   }
-  const operationalTests = POS_LINK_JOURNAL_TYPES.map((docType) => {
-    const invoiceType = docType === 'sales_invoice' ? 'sale' : docType === 'sales_return' ? 'return' : docType;
-    const candidate = latestOperationalByType.get(invoiceType);
+  const testGroups = selectedInvoiceType === 'both'
+    ? ['standard', 'simplified'] as const
+    : [selectedInvoiceType] as const;
+  const operationalTests = testGroups.flatMap((zatcaInvoiceType) => (
+    ([
+      ['sales_invoice', 'sale'],
+      ['sales_return', 'return'],
+      ['credit_note', 'credit_note'],
+      ['debit_note', 'debit_note'],
+    ] as const).map(([docType, invoiceType]) => {
+    const candidate = latestOperationalByType.get(`${invoiceType}:${zatcaInvoiceType}`);
     const linkedStock = candidate
       ? stockRows.filter((stock) => stock.sourceDocId === candidate.invoiceId && stock.status !== 'cancelled')
       : [];
@@ -424,27 +434,39 @@ async function getZatcaReadiness(
         ? linkedStock.length > 0
         : true;
     return {
-      docType,
-      label: JOURNAL_TYPE_LABELS[docType] ?? docType,
+      docType: `${zatcaInvoiceType}:${docType}`,
+      sourceDocType: docType,
+      zatcaInvoiceType,
+      label: `${zatcaInvoiceType === 'standard' ? 'قياسية' : 'مبسطة'} — ${
+        docType === 'sales_invoice'
+          ? 'فاتورة مبيعات'
+          : docType === 'sales_return'
+            ? 'مردود مبيعات'
+            : docType === 'credit_note'
+              ? 'إشعار دائن'
+              : 'إشعار مدين'
+      }`,
       completed: saved && posted && xml && zatca && stockRule,
       invoiceId: candidate?.invoiceId ?? null,
       invoiceNumber: candidate?.invoiceNumber ?? null,
       checkedAt: candidate?.checkedAt ?? null,
       checks: { saved, posted, xml, zatca, stockRule },
     };
-  });
+  })));
   const operationalTestCompleted = operationalTests.every((test) => test.completed);
   const simulationConfigured = cfg.environment === 'simulation'
     && cfg.apiBaseUrl === simulationEnvironmentValues().baseApiUrl
     && Boolean(simulationEnvironment);
   const preCsrReasons: string[] = [];
+  const advisoryReasons: string[] = [];
   if (missingOrganizationFields.length) preCsrReasons.push(`أكمل بيانات المنشأة: ${missingOrganizationFields.join('، ')}`);
   if (!selectedWarehouse) preCsrReasons.push('اختر المخزن/الفرع من القائمة');
   if (selectedWarehouse && !allJournalsPresent) preCsrReasons.push('يجب إنشاء الدفاتر الأربعة للمخزن/الفرع المحدد');
   if (selectedWarehouse && allJournalsPresent && !allJournalsLinked) preCsrReasons.push('اربط الدفاتر الأربعة بوحدة ربط ZATCA');
   if (selectedWarehouse && allJournalsSameUnit === false && allJournalsLinked) preCsrReasons.push('يجب أن ترتبط الدفاتر الأربعة بوحدة ربط واحدة');
+  if (selectedWarehouse && !allScreensReady) preCsrReasons.push('أكمل فحص الجاهزية المحلي وقدرة إنشاء XML الأساسي');
+  if (cfg.lastConnectionStatus !== 'success') preCsrReasons.push('نفّذ اختبار الاتصال ببوابة Fatoora Simulation بنجاح');
   if (!simulationConfigured) preCsrReasons.push('فعّل بيئة Fatoora Simulation من إعدادات البيئة');
-  const advisoryReasons: string[] = [];
   if (!allScreensReady) advisoryReasons.push('فحص XML المحلي الاسترشادي غير مكتمل لبعض الشاشات');
   const reasons = preCsrReasons;
 
@@ -523,12 +545,16 @@ async function getZatcaReadiness(
       && Boolean(selectedWarehouse)
       && allJournalsPresent
       && allJournalsSameUnit
+      && allScreensReady
+      && cfg.lastConnectionStatus === 'success'
       && simulationConfigured,
     // Kept as a compatibility alias for older technical screens.
     readyForCsr: missingOrganizationFields.length === 0
       && Boolean(selectedWarehouse)
       && allJournalsPresent
       && allJournalsSameUnit
+      && allScreensReady
+      && cfg.lastConnectionStatus === 'success'
       && simulationConfigured,
     preCsrReasons,
     advisoryReasons,
@@ -1649,11 +1675,14 @@ export const zatcaRouter = router({
     const now = new Date().toISOString();
     const userName = (ctx.user as any).name ?? (ctx.user as any).username ?? 'مسؤول';
 
+    const probe = await probeFatooraSimulation();
+    const connectionStatus = probe.reachable ? 'success' : 'failed';
+
     await db.update(organizations).set({
       zatcaConfig: {
         ...cfg,
         lastConnectionTest:   now,
-        lastConnectionStatus: 'unknown',
+        lastConnectionStatus: connectionStatus,
       } as any,
       updatedAt: new Date(),
     }).where(eq(organizations.id, ctx.user.orgId));
@@ -1661,15 +1690,26 @@ export const zatcaRouter = router({
     await db.insert(zatcaLogs).values({
       orgId:       ctx.user.orgId,
       eventType:   'connection_test',
-      status:      'error',
+      status:      probe.reachable ? 'success' : 'error',
       environment: cfg.environment ?? 'sandbox',
       userId:      ctx.user.id,
       userName,
-      responseBody: JSON.stringify({ simulated: false, testedAt: now, reason: 'production_connector_not_implemented' }),
-      errorMessage: 'اختبار الاتصال الفعلي غير منفذ؛ هذه المرحلة تسمح بمحاكاة OTP فقط',
+      responseBody: JSON.stringify({
+        transportOnly: true,
+        reachable: probe.reachable,
+        httpStatus: probe.httpStatus,
+        testedAt: now,
+      }),
+      errorMessage: probe.reachable ? null : 'تعذر الوصول إلى بوابة Fatoora Simulation',
     });
 
-    return { ok: false, message: 'الاتصال الفعلي غير منفذ — استخدم OTP محاكاة فقط حتى اعتماد SDK وFatoora Simulation' };
+    return {
+      ok: probe.reachable,
+      httpStatus: probe.httpStatus,
+      message: probe.reachable
+        ? 'تم الوصول إلى بوابة Fatoora Simulation (فحص نقل فقط؛ لم يُرسل OTP أو اعتماد)'
+        : 'تعذر الوصول إلى بوابة Fatoora Simulation',
+    };
   }),
 
   // ── بيانات ZATCA لفاتورة معينة ────────────────────────────────────────────
