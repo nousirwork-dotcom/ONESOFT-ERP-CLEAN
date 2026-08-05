@@ -213,7 +213,7 @@ function SettingsMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id:
   }, [activeId]);
 
   return (
-    <nav className={`${collapsed ? "w-12" : "w-56"} h-full min-h-0 shrink-0 border-l border-[#45484f] bg-[#303238] overflow-hidden flex flex-col transition-[width] duration-200`}>
+    <nav className={`${collapsed ? "w-12" : "w-56"} h-full min-h-0 shrink-0 border-l border-[#D8D3C8] bg-[#F2F0EC] overflow-hidden flex flex-col transition-[width] duration-200`}>
       <div className={`${collapsed ? "px-1" : "px-3"} py-3 border-b border-border/30`}>
         <div className={`flex items-center ${collapsed ? "justify-center" : "justify-between"} gap-2`}>
           {!collapsed && (
