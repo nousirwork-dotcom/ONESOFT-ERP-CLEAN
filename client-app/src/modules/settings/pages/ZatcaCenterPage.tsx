@@ -1136,10 +1136,10 @@ function LinkingUnitsSection({ onActivate }: { onActivate?: () => void }) {
 // ══════════════════════════════════════════════════════════════════════════════
 // 2c. تفعيل Fatoora Simulation — OTP مؤقت ولا يُحفظ
 // ══════════════════════════════════════════════════════════════════════════════
-function OtpSimulationSection() {
+function OtpSimulationSection({ initialPosUnitId = null }: { initialPosUnitId?: number | null } = {}) {
   const unitsQ = trpc.zatca.listPosUnits.useQuery();
   const utils = trpc.useUtils();
-  const [posUnitId, setPosUnitId] = useState<number | null>(null);
+  const [posUnitId, setPosUnitId] = useState<number | null>(initialPosUnitId);
   const [csrRequestId, setCsrRequestId] = useState<number | null>(null);
   const [otp, setOtp] = useState("");
   const [result, setResult] = useState<any>(null);
@@ -2620,6 +2620,426 @@ function ReportsSection() {
 // ══════════════════════════════════════════════════════════════════════════════
 // الواجهة النهائية: التفعيل والربط
 // ══════════════════════════════════════════════════════════════════════════════
+type ActivationWizardProps = {
+  cfg: any;
+  units: any[];
+  onOpenCompanyInfo?: () => void;
+  onOpenTechnical?: () => void;
+  onFinishedLinking: () => void;
+  includeCompanyStep?: boolean;
+};
+
+function ActivationWizard({
+  cfg,
+  units,
+  onOpenCompanyInfo,
+  onOpenTechnical,
+  onFinishedLinking,
+  includeCompanyStep = true,
+}: ActivationWizardProps) {
+  const utils = trpc.useUtils();
+  const [activeStep, setActiveStep] = useState(includeCompanyStep ? 1 : 2);
+  const [warehouseId, setWarehouseId] = useState("");
+  const [unitCode, setUnitCode] = useState("");
+  const [unitName, setUnitName] = useState("");
+  const [invoiceType, setInvoiceType] = useState<"simplified" | "standard" | "both">("both");
+  const [selectedUnitId, setSelectedUnitId] = useState<number | null>(
+    includeCompanyStep ? (units[0]?.id ?? null) : null,
+  );
+  const [creatingUnit, setCreatingUnit] = useState(false);
+  const [createdUnit, setCreatedUnit] = useState<any>(null);
+
+  const readinessQ = trpc.zatca.getReadiness.useQuery({
+    warehouseId: warehouseId ? Number(warehouseId) : undefined,
+    invoiceType,
+  });
+  const saveReadinessM = trpc.zatca.saveReadinessSettings.useMutation();
+  const createUnitM = trpc.zatca.createPosUnit.useMutation();
+
+  const readiness = readinessQ.data;
+  const availableUnits = createdUnit ? [...units.filter(unit => unit.id !== createdUnit.id), createdUnit] : units;
+  const selectedUnit = availableUnits.find(unit => unit.id === selectedUnitId)
+    ?? (includeCompanyStep && readiness?.linkingUnitId
+      ? units.find(unit => unit.id === readiness.linkingUnitId)
+      : undefined);
+  const companyFields: Array<[string, string]> = [
+    ["الاسم القانوني", String(cfg?.legalName ?? "")],
+    ["الرقم الضريبي", String(cfg?.vatNumber ?? "")],
+    ["السجل التجاري", String(cfg?.commercialReg ?? "")],
+    ["الدولة", String(cfg?.country ?? "")],
+    ["المدينة", String(cfg?.city ?? "")],
+    ["الحي", String(cfg?.district ?? "")],
+    ["الشارع", String(cfg?.street ?? "")],
+    ["رقم المبنى", String(cfg?.buildingNumber ?? "")],
+    ["الرقم الإضافي", String(cfg?.additionalNumber ?? "")],
+    ["الرمز البريدي", String(cfg?.postalCode ?? "")],
+  ];
+  const missingCompanyFields = companyFields.filter(([, value]) => !value.trim()).map(([label]) => label);
+  const companyComplete = missingCompanyFields.length === 0;
+  const unitJournals = selectedUnit?.journals ?? (
+    selectedUnit?.linkedJournalIds?.map((id: number) => ({ journalId: id })) ?? []
+  );
+  const requiredJournalTypes = ["sales_invoice", "sales_return", "credit_note", "debit_note"];
+  const linkedTypes = new Set(unitJournals.map((journal: any) => journal.docType));
+  const unitComplete = Boolean(
+    selectedUnit
+    && (
+      requiredJournalTypes.every(type => linkedTypes.has(type))
+      || selectedUnit.linkedJournalIds?.length === requiredJournalTypes.length
+    ),
+  );
+  const invoiceTypeSaved = readiness?.savedSettings?.invoiceType === invoiceType
+    && (!selectedUnitId || readiness.savedSettings?.zatcaPosUnitId === selectedUnitId);
+  const simulationComplete = Boolean(cfg?.csid);
+  const testsComplete = Boolean(readiness?.operationalTestCompleted)
+    || cfg?.lastConnectionStatus === "success";
+  const productionComplete = Boolean(cfg?.enabled && cfg?.environment === "production");
+  const allSteps = [
+    { id: 1, icon: "🏢", title: "بيانات المنشأة", detail: "بيانات القراءة فقط من معلومات المؤسسة", done: companyComplete },
+    { id: 2, icon: "🧩", title: "وحدة الربط والدفاتر", detail: "الوحدة والدفاتر الأربعة لنفس المخزن/الفرع", done: unitComplete },
+    { id: 3, icon: "🧾", title: "نوع الفواتير", detail: "مبسطة أو قياسية أو كلاهما", done: invoiceTypeSaved },
+    { id: 4, icon: "🌐", title: "المحاكاة الرسمية للهيئة", detail: "CSR وOTP للوحدة المحددة", done: simulationComplete },
+    { id: 5, icon: "📋", title: "اختبارات المطابقة", detail: "التحقق قبل التفعيل الفعلي", done: testsComplete },
+    { id: 6, icon: "🚀", title: "الإنتاج الفعلي", detail: "بعد نجاح الاختبارات واعتماد المسؤول", done: productionComplete },
+  ];
+  const steps = includeCompanyStep ? allSteps : allSteps.filter(step => step.id !== 1);
+  const firstIncomplete = steps.find(step => !step.done)?.id ?? 6;
+  const completed = steps.filter(step => step.done).length;
+  const progress = Math.round((completed / steps.length) * 100);
+
+  useEffect(() => {
+    if (includeCompanyStep && readiness?.savedSettings && !warehouseId) {
+      setWarehouseId(String(readiness.savedSettings.warehouseId));
+      setInvoiceType((readiness.savedSettings.invoiceType as typeof invoiceType) || "both");
+      setSelectedUnitId(readiness.savedSettings.zatcaPosUnitId ?? units[0]?.id ?? null);
+    }
+  }, [readiness?.savedSettings, units, warehouseId]);
+
+  const selectedWarehouseJournals = (readiness?.journals ?? []) as any[];
+  const salesJournal = selectedWarehouseJournals.find(journal => journal.docType === "sales_invoice");
+  const missingJournalTypes = requiredJournalTypes.filter(type =>
+    !selectedWarehouseJournals.some(journal => journal.docType === type),
+  );
+  const canCreateUnit = Boolean(
+    warehouseId
+    && salesJournal
+    && unitCode.trim()
+    && unitName.trim()
+    && missingJournalTypes.length === 0
+    && selectedWarehouseJournals.every(journal => journal.zatcaPosUnitId == null),
+  );
+
+  const goTo = (step: number) => {
+    if (step > firstIncomplete) {
+      toast.warning("أكمل متطلبات المرحلة الحالية أولًا");
+      return;
+    }
+    setActiveStep(step);
+  };
+
+  const saveStep = async () => {
+    try {
+      if (activeStep === 1) {
+        if (!companyComplete) {
+          toast.error(`البيانات الناقصة: ${missingCompanyFields.join("، ")}`);
+          return;
+        }
+        setActiveStep(2);
+        return;
+      }
+      if (activeStep === 2) {
+        if (unitComplete) {
+          setActiveStep(3);
+          return;
+        }
+        if (!canCreateUnit || !salesJournal) {
+          toast.error(
+            missingJournalTypes.length
+              ? `الدفاتر الناقصة: ${missingJournalTypes.map(journalTypeLabel).join("، ")}`
+              : "اختر المخزن/الفرع وأكمل اسم ورمز وحدة الربط",
+          );
+          return;
+        }
+        setCreatingUnit(true);
+        const created = await createUnitM.mutateAsync({
+          journalId: salesJournal.id,
+          unitCode: unitCode.trim(),
+          unitName: unitName.trim(),
+        });
+        setCreatedUnit(created);
+        setSelectedUnitId(created.id);
+        await Promise.all([
+          utils.zatca.listPosUnits.invalidate(),
+          utils.zatca.listLinkingJournalOptions.invalidate(),
+          readinessQ.refetch(),
+        ]);
+        toast.success("تم إنشاء الوحدة وربط الدفاتر الأربعة معًا");
+        setActiveStep(3);
+        return;
+      }
+      if (activeStep === 3) {
+        if (!warehouseId || !selectedUnitId) {
+          toast.error("اختر وحدة ربط قبل حفظ نوع الفواتير");
+          return;
+        }
+        await saveReadinessM.mutateAsync({
+          warehouseId: Number(warehouseId),
+          invoiceType,
+          zatcaPosUnitId: selectedUnitId,
+        });
+        await readinessQ.refetch();
+        toast.success("تم حفظ نوع الفواتير");
+        setActiveStep(4);
+        return;
+      }
+      if (activeStep === 4) {
+        if (!simulationComplete) {
+          toast.error("أكمل تفعيل الوحدة في المحاكاة الرسمية أولًا");
+          return;
+        }
+        setActiveStep(5);
+        return;
+      }
+      if (activeStep === 5) {
+        if (!testsComplete) {
+          toast.error("لا يمكن المتابعة قبل نجاح اختبارات المطابقة المطلوبة");
+          return;
+        }
+        setActiveStep(6);
+        return;
+      }
+      if (activeStep === 6) {
+        if (!productionComplete) {
+          toast.info("الإنتاج محجوب حتى اعتماد المسؤول وإتاحة بيئة الإنتاج");
+          return;
+        }
+        onFinishedLinking();
+      }
+    } catch (error: any) {
+      toast.error(error?.message ?? "تعذر حفظ المرحلة");
+    } finally {
+      setCreatingUnit(false);
+    }
+  };
+
+  const renderStep = () => {
+    if (activeStep === 1) {
+      return (
+        <div>
+          <SecTitle icon="🏢" title="بيانات المنشأة" />
+          <div style={{ background: companyComplete ? "#f0fdf4" : "#fff7ed", border: `1px solid ${companyComplete ? "#bbf7d0" : "#fed7aa"}`, color: companyComplete ? "#166534" : "#9a3412", borderRadius: 10, padding: 13, marginBottom: 14, fontSize: 12, lineHeight: 1.8 }}>
+            <strong>{companyComplete ? "بيانات المنشأة مكتملة وجاهزة للربط" : "بيانات المنشأة تحتاج إلى استكمال"}</strong>
+            {!companyComplete && <div>الحقول الناقصة: {missingCompanyFields.join("، ")}</div>}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
+            {companyFields.map(([label, value]) => (
+              <div key={label} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, padding: "9px 11px" }}>
+                <div style={{ color: "#64748b", fontSize: 10, marginBottom: 3 }}>{label}</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: value.trim() ? "#1e293b" : "#9a3412" }}>{value.trim() || "غير مكتمل"}</div>
+              </div>
+            ))}
+          </div>
+          {!companyComplete && onOpenCompanyInfo && (
+            <button onClick={onOpenCompanyInfo} style={{ ...smallBtn, marginTop: 12, background: "#fff7ed", color: "#9a3412", border: "1px solid #fdba74" }}>🏢 فتح معلومات المؤسسة</button>
+          )}
+        </div>
+      );
+    }
+    if (activeStep === 2) {
+      return (
+        <div>
+          <SecTitle icon="🧩" title="وحدة الربط والدفاتر" />
+          <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1e40af", borderRadius: 9, padding: 11, marginBottom: 14, fontSize: 11, lineHeight: 1.7 }}>
+            المخزن هو نفسه الفرع في OneSoft. اختر موقعًا واحدًا، ثم راجع الدفاتر الأربعة التابعة له قبل الحفظ.
+          </div>
+          {unitComplete ? (
+            <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 10, padding: 14, color: "#166534", fontSize: 12 }}>
+              <strong>وحدة الربط مكتملة</strong>
+              <div style={{ marginTop: 5 }}>{selectedUnit?.unitCode} — {selectedUnit?.unitName}</div>
+              <div>الدفاتر المرتبطة: {unitJournals.map((journal: any) => journal.journalCode).join("، ")}</div>
+            </div>
+          ) : (
+            <>
+              <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr", gap: 8, alignItems: "end", marginBottom: 12 }}>
+                <div>
+                  <label style={lbl}>المخزن/الفرع *</label>
+                  <select style={fld} value={warehouseId} onChange={event => {
+                    const value = event.target.value;
+                    const next = (readiness?.locations ?? []).find(location => location.id === Number(value));
+                    setWarehouseId(value);
+                    setUnitCode(next ? `POS-${String(next.id).padStart(2, "0")}` : "");
+                    setUnitName(next ? `وحدة ربط — ${next.label}` : "");
+                  }}>
+                    <option value="">اختر المخزن/الفرع</option>
+                    {(readiness?.locations ?? []).map(location => <option key={location.id} value={location.id}>{location.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={lbl}>رمز الوحدة *</label>
+                  <input style={fld} value={unitCode} onChange={event => setUnitCode(event.target.value)} placeholder="POS-01" />
+                </div>
+                <div>
+                  <label style={lbl}>اسم الوحدة *</label>
+                  <input style={fld} value={unitName} onChange={event => setUnitName(event.target.value)} placeholder="كاشير 1" />
+                </div>
+              </div>
+              <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 9, padding: 12 }}>
+                <div style={{ fontWeight: 800, fontSize: 12, marginBottom: 8 }}>مراجعة الدفاتر الأربعة</div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 7 }}>
+                  {requiredJournalTypes.map(type => {
+                    const journal = selectedWarehouseJournals.find(item => item.docType === type);
+                    return (
+                      <div key={type} style={{ background: journal ? "#f0fdf4" : "#fff7ed", border: `1px solid ${journal ? "#bbf7d0" : "#fed7aa"}`, color: journal ? "#166534" : "#9a3412", borderRadius: 7, padding: "8px 10px", fontSize: 11 }}>
+                        {journal ? "✓" : "!"} {journalTypeLabel(type)}
+                        <div style={{ color: "#64748b", fontSize: 10, marginTop: 3 }}>{journal ? `${journal.code} — ${journal.name}` : "غير موجود في هذا المخزن"}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {missingJournalTypes.length > 0 && warehouseId && <div style={{ marginTop: 9, color: "#9a3412", fontSize: 11 }}>الدفاتر الناقصة: {missingJournalTypes.map(journalTypeLabel).join("، ")}</div>}
+              </div>
+            </>
+          )}
+        </div>
+      );
+    }
+    if (activeStep === 3) {
+      return (
+        <div>
+          <SecTitle icon="🧾" title="نوع الفواتير" />
+          <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 9, padding: 11, marginBottom: 14, fontSize: 11, lineHeight: 1.8 }}>
+            <strong>{selectedUnit?.unitName ?? "وحدة الربط"}</strong>
+            <div>المخزن/الفرع: {selectedUnit ? locationLabel(selectedUnit) : "—"}</div>
+            <div>الدفاتر المرتبطة: {unitJournals.length} من 4</div>
+          </div>
+          <div style={{ display: "grid", gap: 8 }}>
+            {[
+              ["simplified", "فواتير مبسطة", "مبيعات الأفراد ونقاط البيع."],
+              ["standard", "فواتير عادية/قياسية", "مبيعات المنشآت."],
+              ["both", "كلاهما", "عند البيع للأفراد والمنشآت."],
+            ].map(([value, title, detail]) => (
+              <label key={value} style={{ display: "flex", alignItems: "center", gap: 9, border: `1px solid ${invoiceType === value ? "#D19C05" : "#e2e8f0"}`, background: invoiceType === value ? "#fffbeb" : "#fff", borderRadius: 9, padding: 11, cursor: "pointer" }}>
+                <input type="radio" checked={invoiceType === value} onChange={() => setInvoiceType(value as typeof invoiceType)} />
+                <span><strong style={{ display: "block", fontSize: 12 }}>{title}</strong><span style={{ color: "#64748b", fontSize: 11 }}>{detail}</span></span>
+              </label>
+            ))}
+          </div>
+        </div>
+      );
+    }
+    if (activeStep === 4) return <OtpSimulationSection initialPosUnitId={selectedUnitId} />;
+    if (activeStep === 5) {
+      const tests = (readiness?.operationalTests ?? []) as any[];
+      return (
+        <div>
+          <SecTitle icon="📋" title="اختبارات المطابقة" />
+          <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 9, padding: 11, marginBottom: 13, color: "#1e40af", fontSize: 11, lineHeight: 1.7 }}>
+            تظهر هنا الاختبارات المطلوبة لمسارات الفواتير المرتبطة بالوحدة. لا تُعد المرحلة ناجحة قبل إتمام الاختبارات.
+          </div>
+          <div style={{ display: "grid", gap: 7 }}>
+            {(tests.length ? tests : requiredJournalTypes.map(type => ({ docType: type, label: journalTypeLabel(type), completed: false }))).map((test: any) => (
+              <div key={test.docType} style={{ display: "flex", alignItems: "center", gap: 9, border: "1px solid #e2e8f0", borderRadius: 8, padding: "9px 11px", background: "#fff" }}>
+                <span style={{ width: 20, height: 20, borderRadius: "50%", display: "grid", placeItems: "center", background: test.completed ? "#dcfce7" : "#f1f5f9", color: test.completed ? "#16a34a" : "#64748b", fontSize: 11 }}>{test.completed ? "✓" : "—"}</span>
+                <strong style={{ flex: 1, fontSize: 11 }}>{test.label}</strong>
+                <span style={{ fontSize: 10, color: test.completed ? "#16a34a" : "#64748b" }}>{test.completed ? "ناجح" : "لم يبدأ"}</span>
+              </div>
+            ))}
+          </div>
+          {onOpenTechnical && <button onClick={onOpenTechnical} style={{ ...smallBtn, marginTop: 12, background: "#f1f5f9", color: "#334155", border: "1px solid #cbd5e1" }}>فتح أدوات المطابقة المتقدمة</button>}
+        </div>
+      );
+    }
+    return (
+      <div>
+        <SecTitle icon="🚀" title="الإنتاج الفعلي" />
+        <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: 14, fontSize: 11, lineHeight: 1.9 }}>
+          <div><strong>الوحدة:</strong> {selectedUnit?.unitName ?? "—"}</div>
+          <div><strong>المخزن/الفرع:</strong> {selectedUnit ? locationLabel(selectedUnit) : "—"}</div>
+          <div><strong>الدفاتر:</strong> {unitJournals.length} من 4</div>
+          <div><strong>الشهادة:</strong> {simulationComplete ? "موجودة" : "غير مكتملة"}</div>
+          <div><strong>الاتصال:</strong> {cfg?.lastConnectionStatus === "success" ? "ناجح" : "لم ينجح بعد"}</div>
+        </div>
+        <div style={{ background: "#fff7ed", border: "1px solid #fdba74", borderRadius: 9, padding: 12, marginTop: 12, color: "#9a3412", fontSize: 11, lineHeight: 1.8 }}>
+          الإنتاج الفعلي محجوب حتى نجاح المطابقة واعتماد المسؤول. لا تُرسل فواتير حقيقية من هذه المرحلة قبل إتاحة بيئة الإنتاج رسميًا.
+        </div>
+        <button
+          disabled={!productionComplete}
+          onClick={saveStep}
+          style={{ ...smallBtn, height: 32, marginTop: 12, background: productionComplete ? "#16a34a" : "#cbd5e1", color: "#fff", cursor: productionComplete ? "pointer" : "not-allowed" }}
+        >
+          {productionComplete ? "الانتقال إلى الإنتاج الفعلي" : "الانتقال إلى الإنتاج — غير متاح بعد"}
+        </button>
+        {onOpenTechnical && <button onClick={onOpenTechnical} style={{ ...smallBtn, marginTop: 12, background: "#f1f5f9", color: "#334155", border: "1px solid #cbd5e1" }}>مراجعة إعدادات الربط</button>}
+      </div>
+    );
+  };
+
+  return (
+    <div>
+      <div style={{ background: "linear-gradient(135deg,#1e4f7a,#2f6b96)", color: "#fff", borderRadius: 14, padding: "18px 20px", marginBottom: 14 }}>
+        <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+          <div style={{ fontSize: 28 }}>🔗</div>
+          <div style={{ flex: 1 }}><div style={{ fontSize: 17, fontWeight: 800 }}>معالج التفعيل والربط</div><div style={{ color: "#dbeafe", fontSize: 11, marginTop: 3 }}>محتوى المرحلة الحالية فقط — احفظ للانتقال إلى المرحلة التالية.</div></div>
+          <div style={{ textAlign: "center" }}><div style={{ fontSize: 23, fontWeight: 800, color: "#f7d47b" }}>{progress}%</div><div style={{ color: "#dbeafe", fontSize: 10 }}>{completed} من {steps.length} مراحل</div></div>
+        </div>
+        <div style={{ height: 5, background: "rgba(255,255,255,.18)", borderRadius: 5, marginTop: 15 }}><div style={{ height: "100%", width: `${progress}%`, background: "#f2c75c", borderRadius: 5 }} /></div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${steps.length}, minmax(120px, 1fr))`, gap: 7, marginBottom: 14, overflowX: "auto" }}>
+        {steps.map(step => (
+          <button key={step.id} onClick={() => goTo(step.id)} style={{ minHeight: 92, textAlign: "right", background: activeStep === step.id ? "#fffbeb" : "#fff", border: `1px solid ${activeStep === step.id ? "#D19C05" : "#e2e8f0"}`, borderTop: `3px solid ${step.done ? "#16a34a" : activeStep === step.id ? "#D19C05" : "#cbd5e1"}`, borderRadius: 9, padding: "8px 8px", cursor: step.id <= firstIncomplete ? "pointer" : "not-allowed", opacity: step.id <= firstIncomplete ? 1 : .55 }}>
+            <div style={{ display: "flex", justifyContent: "space-between" }}><span>{step.icon}</span><span style={{ fontSize: 10, color: step.done ? "#16a34a" : "#64748b" }}>{step.done ? "✓" : step.id}</span></div>
+            <strong style={{ display: "block", fontSize: 10, color: "#1e293b", marginTop: 7 }}>{step.title}</strong>
+            <span style={{ display: "block", fontSize: 9, lineHeight: 1.4, color: "#64748b", marginTop: 3 }}>{step.detail}</span>
+          </button>
+        ))}
+      </div>
+      {renderStep()}
+      <div style={{ display: "flex", gap: 8, marginTop: 18, paddingTop: 13, borderTop: "1px solid #e2e8f0" }}>
+        <button disabled={activeStep === (includeCompanyStep ? 1 : 2)} onClick={() => setActiveStep(step => Math.max(includeCompanyStep ? 1 : 2, step - 1))} style={{ ...smallBtn, height: 32, background: "#f1f5f9", color: "#475569", opacity: activeStep === (includeCompanyStep ? 1 : 2) ? .5 : 1 }}>السابق</button>
+        <button disabled={creatingUnit || saveReadinessM.isPending || activeStep > firstIncomplete} onClick={saveStep} style={{ ...smallBtn, height: 32, padding: "0 18px", background: "#D19C05", color: "#fff", opacity: creatingUnit || activeStep > firstIncomplete ? .55 : 1 }}>
+          {creatingUnit ? "جارٍ حفظ الوحدة..." : activeStep === 2 ? "حفظ الوحدة ومتابعة" : "حفظ ومتابعة"}
+        </button>
+        <button disabled={activeStep === 6 || activeStep >= firstIncomplete} onClick={() => setActiveStep(step => Math.min(6, step + 1))} style={{ ...smallBtn, height: 32, marginRight: "auto", background: "#f1f5f9", color: "#475569", opacity: activeStep === 6 || activeStep >= firstIncomplete ? .5 : 1 }}>التالي →</button>
+      </div>
+    </div>
+  );
+}
+
+function LinkingUnitsManagement({
+  cfg,
+  units,
+  onContinue,
+}: {
+  cfg: any;
+  units: any[];
+  onContinue: () => void;
+}) {
+  const [addingUnit, setAddingUnit] = useState(false);
+  if (addingUnit) {
+    return (
+      <ActivationWizard
+        cfg={cfg}
+        units={units}
+        includeCompanyStep={false}
+        onFinishedLinking={() => setAddingUnit(false)}
+      />
+    );
+  }
+  return (
+    <div>
+      <div style={{ background: "linear-gradient(135deg,#1e4f7a,#2f6b96)", color: "#fff", borderRadius: 14, padding: "18px 20px", marginBottom: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ fontSize: 28 }}>🧩</div>
+          <div style={{ flex: 1 }}><div style={{ fontSize: 17, fontWeight: 800 }}>إدارة وحدات الربط</div><div style={{ color: "#dbeafe", fontSize: 11, marginTop: 3 }}>أدر الوحدات الحالية وأكمل دفاتر أي وحدة ناقصة دون إنشاء وحدة مكررة.</div></div>
+          <button onClick={() => setAddingUnit(true)} style={{ ...smallBtn, height: 32, background: "#f2c75c", color: "#1e293b", fontWeight: 800 }}>＋ إضافة وحدة ربط جديدة</button>
+          <button onClick={onContinue} style={{ ...smallBtn, height: 32, background: "#f2c75c", color: "#1e293b", fontWeight: 800 }}>متابعة معالج التفعيل</button>
+        </div>
+      </div>
+      <LinkingUnitsSection onActivate={onContinue} />
+    </div>
+  );
+}
+
 function ActivationSection({
   onOpenCompanyInfo,
   onOpenTechnical,
@@ -2628,103 +3048,23 @@ function ActivationSection({
   onOpenTechnical?: () => void;
 }) {
   const cfgQ = trpc.zatca.getConfig.useQuery();
-  const statsQ = trpc.zatca.getStats.useQuery();
   const unitsQ = trpc.zatca.listPosUnits.useQuery();
-  const readinessQ = trpc.zatca.getReadiness.useQuery({ invoiceType: "both" });
-  const [activeStep, setActiveStep] = useState(1);
+  const [wizardMode, setWizardMode] = useState<boolean | null>(null);
   const cfg = cfgQ.data;
-  const stats = statsQ.data;
-
-  const steps = [
-    { id: 1, icon: "🏢", title: "بيانات المنشأة", detail: "التحقق من بيانات المنشأة والرقم الضريبي", done: Boolean(cfg?.legalName && cfg?.vatNumber) },
-    { id: 2, icon: "🧩", title: "وحدة الفوترة والدفاتر", detail: "إنشاء وحدة وربطها بالفروع والدفاتر", done: (unitsQ.data ?? []).length > 0 },
-    { id: 3, icon: "🧾", title: "نوع الفواتير", detail: "مبسطة أو قياسية أو كلاهما", done: Boolean(readinessQ.data?.savedSettings?.invoiceType) },
-    { id: 4, icon: "🌐", title: "المحاكاة الرسمية للهيئة", detail: "اعتماد الربط قبل الانتقال إلى الإنتاج", done: Boolean(cfg?.csid) },
-    { id: 5, icon: "📋", title: "اختبارات المطابقة", detail: "التحقق من صحة الفواتير قبل التفعيل", done: Boolean((cfg as any)?.lastConnectionStatus === "success") },
-    { id: 6, icon: "🚀", title: "الإنتاج الفعلي", detail: "يُفتح بعد اكتمال المتطلبات والمطابقة", done: Boolean(cfg?.enabled && cfg?.environment === "production") },
-  ];
-  const completed = steps.filter(step => step.done).length;
-  const progress = Math.round((completed / steps.length) * 100);
-
-  const renderStep = () => {
-    if (activeStep === 1) return <ReadinessSection onNavigate={section => section === "units" ? setActiveStep(2) : undefined} onOpenCompanyInfo={onOpenCompanyInfo} />;
-    if (activeStep === 2) return <LinkingUnitsSection onActivate={() => setActiveStep(4)} />;
-    if (activeStep === 3) return <ReadinessSection onNavigate={section => section === "units" ? setActiveStep(2) : undefined} onOpenCompanyInfo={onOpenCompanyInfo} />;
-    if (activeStep === 4) return <OtpSimulationSection />;
-    if (activeStep === 5) {
-      return (
-        <div>
-          <SecTitle icon="📋" title="اختبارات المطابقة" />
-          <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: 18 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
-              <div style={{ width: 42, height: 42, borderRadius: 10, background: "#eff6ff", display: "grid", placeItems: "center", fontSize: 22 }}>🔎</div>
-              <div>
-                <strong style={{ display: "block", color: "#1e293b", fontSize: 13 }}>تحقق من الفواتير وXML قبل التفعيل</strong>
-                <span style={{ color: "#64748b", fontSize: 11 }}>نفّذ فحص XML واختبار الاتصال من الأدوات المتقدمة بعد اكتمال المحاكاة الرسمية.</span>
-              </div>
-            </div>
-            {onOpenTechnical && <button onClick={onOpenTechnical} style={{ ...smallBtn, height: 32, padding: "0 14px", background: "#1e4f7a", color: "#fff", fontSize: 11 }}>فتح أدوات المطابقة</button>}
-          </div>
-        </div>
-      );
-    }
-    return (
-      <div>
-        <SecTitle icon="🚀" title="التفعيل الفعلي في Production" />
-        <EnvSection />
-        <div style={{ background: "#fff7ed", border: "1px solid #fdba74", borderRadius: 12, padding: 18, color: "#9a3412", lineHeight: 1.9, fontSize: 12 }}>
-          <strong style={{ display: "block", marginBottom: 5 }}>التفعيل الفعلي متاح بعد اكتمال جميع بوابات الاعتماد.</strong>
-          لا يتم فتح الإنتاج تلقائيًا. يجب أن تكون بيانات المنشأة ووحدة الفوترة والشهادة واختبارات المطابقة مكتملة، ثم يعتمد المسؤول الانتقال إلى الإنتاج من إعدادات الربط المتقدمة.
-        </div>
-        {onOpenTechnical && <button onClick={onOpenTechnical} style={{ ...smallBtn, height: 32, padding: "0 14px", marginTop: 12, background: "#1e4f7a", color: "#fff", fontSize: 11 }}>مراجعة إعدادات الربط</button>}
-      </div>
-    );
-  };
-
+  const units = unitsQ.data ?? [];
+  useEffect(() => {
+    if (wizardMode === null && !unitsQ.isLoading) setWizardMode(units.length === 0);
+  }, [wizardMode, unitsQ.isLoading, units.length]);
+  if (wizardMode === null || cfgQ.isLoading || unitsQ.isLoading) return <Skeleton height={280} />;
+  if (!wizardMode) return <LinkingUnitsManagement cfg={cfg} units={units} onContinue={() => setWizardMode(true)} />;
   return (
-    <div>
-      <div style={{ background: "linear-gradient(135deg,#1e4f7a,#2f6b96)", color: "#fff", borderRadius: 14, padding: "20px 22px", marginBottom: 16 }}>
-        <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
-          <div style={{ width: 52, height: 52, borderRadius: 14, background: "rgba(255,255,255,.14)", display: "grid", placeItems: "center", fontSize: 28 }}>🔗</div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 18, fontWeight: 800 }}>التفعيل والربط</div>
-            <div style={{ color: "#dbeafe", fontSize: 12, marginTop: 4 }}>رحلة موحدة لإعداد الفوترة الإلكترونية وربط وحدات EGS بالدفاتر والفروع.</div>
-          </div>
-          <div style={{ textAlign: "center", minWidth: 72 }}>
-            <div style={{ fontSize: 24, fontWeight: 800, color: "#f7d47b" }}>{progress}%</div>
-            <div style={{ color: "#dbeafe", fontSize: 10 }}>{completed} من {steps.length} مراحل</div>
-          </div>
-        </div>
-        <div style={{ height: 6, background: "rgba(255,255,255,.18)", borderRadius: 6, marginTop: 18 }}>
-          <div style={{ height: "100%", width: `${progress}%`, background: "#f2c75c", borderRadius: 6, transition: "width .2s" }} />
-        </div>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, minmax(130px, 1fr))", gap: 8, marginBottom: 16, overflowX: "auto" }}>
-        {steps.map(step => (
-          <button key={step.id} onClick={() => setActiveStep(step.id)} style={{ minHeight: 100, textAlign: "right", background: activeStep === step.id ? "#fffbeb" : "#fff", border: `1px solid ${activeStep === step.id ? "#D19C05" : "#e2e8f0"}`, borderTop: `3px solid ${step.done ? "#16a34a" : activeStep === step.id ? "#D19C05" : "#cbd5e1"}`, borderRadius: 10, padding: "10px 9px", cursor: "pointer" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 18 }}>{step.icon}</span>
-              <span style={{ width: 18, height: 18, borderRadius: "50%", display: "grid", placeItems: "center", background: step.done ? "#dcfce7" : "#f1f5f9", color: step.done ? "#16a34a" : "#94a3b8", fontSize: 10 }}>{step.done ? "✓" : step.id}</span>
-            </div>
-            <strong style={{ display: "block", fontSize: 11, color: "#1e293b", marginTop: 8 }}>{step.title}</strong>
-            <span style={{ display: "block", fontSize: 9, lineHeight: 1.5, color: "#64748b", marginTop: 4 }}>{step.detail}</span>
-          </button>
-        ))}
-      </div>
-
-      <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1e40af", borderRadius: 9, padding: "10px 13px", marginBottom: 16, fontSize: 11, lineHeight: 1.7 }}>
-        المحاكاة الرسمية للهيئة مرحلة اعتماد ضمن رحلة التفعيل، وليست نسخة من المنتج. لا تُفتح مرحلة الإنتاج قبل نجاح اختبارات المطابقة واعتماد المسؤول.
-      </div>
-
-      {renderStep()}
-      {onOpenTechnical && (
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 18, paddingTop: 12, borderTop: "1px solid #e2e8f0" }}>
-          <span style={{ color: "#64748b", fontSize: 11 }}>تحتاج إلى تفاصيل الشهادة أو المفتاح أو XML؟</span>
-          <button onClick={onOpenTechnical} style={{ ...smallBtn, height: 30, padding: "0 12px", background: "#f1f5f9", color: "#334155", border: "1px solid #cbd5e1" }}>⚙️ خيارات متقدمة</button>
-        </div>
-      )}
-    </div>
+    <ActivationWizard
+      cfg={cfg}
+      units={units}
+      onOpenCompanyInfo={onOpenCompanyInfo}
+      onOpenTechnical={onOpenTechnical}
+      onFinishedLinking={() => setWizardMode(false)}
+    />
   );
 }
 

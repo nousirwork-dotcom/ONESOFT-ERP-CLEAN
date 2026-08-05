@@ -748,7 +748,9 @@ export const zatcaRouter = router({
         }
 
         const locationJournals = await tx.select({
+          id: documentJournals.id,
           docType: documentJournals.docType,
+          zatcaPosUnitId: documentJournals.zatcaPosUnitId,
         }).from(documentJournals).where(and(
           eq(documentJournals.orgId, ctx.user.orgId),
           eq(documentJournals.warehouseId, journal.warehouseId),
@@ -763,6 +765,20 @@ export const zatcaRouter = router({
             message: `لا يمكن إنشاء وحدة الربط قبل ظهور الدفاتر الأربعة في نفس المخزن: ${missingTypes.map((type) => JOURNAL_TYPE_LABELS[type]).join('، ')}`,
           });
         }
+        const conflictingUnitIds = [...new Set(
+          locationJournals
+            .map((row) => row.zatcaPosUnitId)
+            .filter((id): id is number => id != null),
+        )];
+        if (conflictingUnitIds.length > 0) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'توجد دفاتر مرتبطة بالفعل بوحدة ربط في هذا المخزن. استخدم إدارة الدفاتر لاستكمال الوحدة الحالية بدل إنشاء وحدة مكررة.',
+          });
+        }
+        const journalsToLink = POS_LINK_JOURNAL_TYPES.map((docType) =>
+          locationJournals.find((row) => row.docType === docType),
+        ).filter((row): row is (typeof locationJournals)[number] => Boolean(row));
 
         const [unit] = await tx.insert(zatcaPosUnits).values({
           orgId: ctx.user.orgId,
@@ -772,15 +788,20 @@ export const zatcaRouter = router({
           createdBy: ctx.user.id,
           updatedBy: ctx.user.id,
         }).returning();
-        const [linkedJournal] = await tx.update(documentJournals)
+        const linkedJournals = await tx.update(documentJournals)
           .set({ zatcaPosUnitId: unit.id, updatedAt: new Date() })
           .where(and(
-            eq(documentJournals.id, journal.id),
             eq(documentJournals.orgId, ctx.user.orgId),
+            eq(documentJournals.warehouseId, journal.warehouseId),
             eq(documentJournals.isActive, true),
+            inArray(documentJournals.id, journalsToLink.map((row) => row.id)),
           ))
           .returning();
-        return { ...unit, journalId: linkedJournal.id };
+        return {
+          ...unit,
+          journalId: journal.id,
+          linkedJournalIds: linkedJournals.map((linked) => linked.id),
+        };
       });
     }),
 
