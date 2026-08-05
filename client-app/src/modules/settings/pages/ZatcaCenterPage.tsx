@@ -588,7 +588,7 @@ function ReadinessSection({ onNavigate, onOpenCompanyInfo }: {
   });
   const data = readinessQ.data;
   const organizationComplete = Boolean(data?.organization?.dataComplete);
-  const overallReady = Boolean(data?.readyForCsr);
+  const overallReady = Boolean(data?.preCsrReady);
   const saveM = trpc.zatca.saveReadinessSettings.useMutation({
     onSuccess: () => {
       toast.success("تم حفظ إعداد الجاهزية في قاعدة البيانات");
@@ -772,9 +772,9 @@ function ReadinessSection({ onNavigate, onOpenCompanyInfo }: {
           </div>
 
           <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: 14, marginBottom: 14 }}>
-            <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 4 }}>الاختبار التشغيلي الفعلي</div>
+            <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 4 }}>الفحص الاسترشادي قبل المطابقة</div>
             <div style={{ fontSize: 10, color: "#64748b", marginBottom: 10 }}>
-              لا يُحتسب الاختبار من وجود الشاشة أو مولّد XML فقط؛ يجب وجود مستند نهائي مُرحّل، XML محفوظ، ونتيجة Simulation نهائية، مع تطبيق قاعدة المخزون المناسبة.
+              هذا الفحص لا يسمى اختبار مطابقة رسميًا ولا يمنع إنشاء CSR. اختبارات المطابقة الرسمية تبدأ بعد الحصول على Compliance CSID.
             </div>
             {(data?.operationalTests ?? []).map(test => (
               <div key={test.docType} style={{ ...statusStyle(test.completed), display: "flex", alignItems: "center", gap: 8, padding: "7px 9px", borderRadius: 6, marginBottom: 5 }}>
@@ -786,11 +786,11 @@ function ReadinessSection({ onNavigate, onOpenCompanyInfo }: {
               </div>
             ))}
             <div style={{ marginTop: 8, fontSize: 11, fontWeight: 800, color: data?.operationalTestCompleted ? "#166534" : "#9a3412" }}>
-              الاختبار التشغيلي الفعلي: {data?.operationalTestCompleted ? "تم" : "لم يتم"}
+              الفحص الاسترشادي: {data?.operationalTestCompleted ? "متاح" : "لم يبدأ بعد"}
             </div>
           </div>
 
-          {!data?.readyForCsr && (
+          {!data?.preCsrReady && (
             <div style={{ background: "#fff7ed", border: "1px solid #fdba74", color: "#9a3412", borderRadius: 8, padding: "11px 13px", marginBottom: 12 }}>
               <div style={{ fontWeight: 800, fontSize: 12, marginBottom: 5 }}>لا يمكن بدء إنشاء CSR بعد</div>
               <ul style={{ margin: 0, paddingRight: 18, fontSize: 11, lineHeight: 1.8 }}>
@@ -807,11 +807,11 @@ function ReadinessSection({ onNavigate, onOpenCompanyInfo }: {
               {saveM.isPending ? "جارٍ الحفظ..." : "💾 حفظ إعداد الجاهزية"}
             </button>
             <button
-              disabled={!data?.readyForCsr}
-              onClick={() => onNavigate("csr")}
-              style={{ height: 36, padding: "0 18px", border: "none", borderRadius: 7, background: data?.readyForCsr ? "#D19C05" : "#cbd5e1", color: "#fff", fontWeight: 800, fontSize: 12, cursor: data?.readyForCsr ? "pointer" : "not-allowed" }}
+               disabled={!data?.preCsrReady}
+               onClick={() => onNavigate("otp-sim")}
+               style={{ height: 36, padding: "0 18px", border: "none", borderRadius: 7, background: data?.preCsrReady ? "#D19C05" : "#cbd5e1", color: "#fff", fontWeight: 800, fontSize: 12, cursor: data?.preCsrReady ? "pointer" : "not-allowed" }}
             >
-              {data?.readyForCsr ? "🔧 إنشاء CSR وبدء التفعيل" : "🔒 إنشاء CSR معطّل حتى اكتمال الجاهزية"}
+               {data?.preCsrReady ? "🌐 فتح بوابة Simulation وإدخال OTP" : "🔒 بدء المحاكاة معطّل حتى اكتمال الجاهزية"}
             </button>
             <button onClick={() => readinessQ.refetch()} style={{ ...smallBtn, height: 30, background: "#f1f5f9", color: "#475569" }}>🔄 تحديث الفحص</button>
           </div>
@@ -1136,7 +1136,13 @@ function LinkingUnitsSection({ onActivate }: { onActivate?: () => void }) {
 // ══════════════════════════════════════════════════════════════════════════════
 // 2c. تفعيل Fatoora Simulation — OTP مؤقت ولا يُحفظ
 // ══════════════════════════════════════════════════════════════════════════════
-function OtpSimulationSection({ initialPosUnitId = null }: { initialPosUnitId?: number | null } = {}) {
+function OtpSimulationSection({
+  initialPosUnitId = null,
+  allowOperational = false,
+}: {
+  initialPosUnitId?: number | null;
+  allowOperational?: boolean;
+} = {}) {
   const unitsQ = trpc.zatca.listPosUnits.useQuery();
   const utils = trpc.useUtils();
   const [posUnitId, setPosUnitId] = useState<number | null>(initialPosUnitId);
@@ -1149,16 +1155,6 @@ function OtpSimulationSection({ initialPosUnitId = null }: { initialPosUnitId?: 
     { posUnitId: posUnitId ?? 0 },
     { enabled: !!posUnitId },
   );
-  const createCsrM = trpc.zatca.createSimulationCsr.useMutation({
-    onSuccess: (data) => {
-      setCsrStatus(data);
-      setCsrRequestId(data.csrRequestId);
-      setResult(null);
-      statusQ.refetch();
-      toast.success("تم إنشاء CSR على الخادم — لا يغادر المفتاح الخاص الخادم");
-    },
-    onError: (error) => toast.error(error.message),
-  });
   const complianceM = trpc.zatca.requestSimulationComplianceCsid.useMutation({
     onSuccess: (data) => {
       setResult(data);
@@ -1167,6 +1163,21 @@ function OtpSimulationSection({ initialPosUnitId = null }: { initialPosUnitId?: 
       statusQ.refetch();
       if (data.ok) toast.success(data.message);
       else toast.error(data.message);
+    },
+    onError: (error) => toast.error(error.message),
+  });
+  const createCsrM = trpc.zatca.createSimulationCsr.useMutation({
+    onSuccess: (data, variables) => {
+      setCsrStatus(data);
+      setCsrRequestId(data.csrRequestId);
+      setResult(null);
+      statusQ.refetch();
+      toast.success("تم إنشاء المفتاح وCSR — جارٍ إرسال طلب Compliance باستخدام OTP");
+      complianceM.mutate({
+        posUnitId: data.posUnitId,
+        csrRequestId: data.csrRequestId,
+        otp: variables.otp,
+      });
     },
     onError: (error) => toast.error(error.message),
   });
@@ -1184,6 +1195,59 @@ function OtpSimulationSection({ initialPosUnitId = null }: { initialPosUnitId?: 
   const hasCsr = !!(csrStatus?.csrRequestId || statusQ.data?.csr?.id);
   const hasComplianceCsid = !!statusQ.data?.csid?.id;
   const operationalReady = !!statusQ.data?.operationalReady;
+
+  if (allowOperational) {
+    return (
+      <div style={{ maxWidth: 680 }}>
+        <SecTitle icon="🔑" title="طلب CSID التشغيلي" />
+        <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1e40af", borderRadius: 8, padding: 12, fontSize: 12, lineHeight: 1.8, marginBottom: 16 }}>
+          لا يُطلب CSID التشغيلي إلا بعد نجاح اختبارات المطابقة الرسمية. يستخدم الخادم Compliance CSID المحفوظ داخليًا، ولا يحتاج هذا الطلب إلى OTP جديد.
+        </div>
+        <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: 18 }}>
+          <label style={lbl}>وحدة الربط</label>
+          <select
+            value={posUnitId ?? ""}
+            onChange={e => {
+              const value = Number(e.target.value);
+              setPosUnitId(value || null);
+              setResult(null);
+            }}
+            style={{ ...fld, maxWidth: 420, marginBottom: 14 }}
+          >
+            <option value="">اختر وحدة ربط EGS</option>
+            {(unitsQ.data ?? []).map(unit => (
+              <option key={unit.id} value={unit.id}>
+                {unit.unitCode} — {unit.unitName} — {unit.warehouseName ?? "مخزن غير محدد"}
+              </option>
+            ))}
+          </select>
+          {posUnitId && (
+            <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 12, marginBottom: 14, fontSize: 11, lineHeight: 1.8 }}>
+              <div>حالة Compliance CSID: {hasComplianceCsid ? "موجود" : "غير موجود"}</div>
+              <div>حالة الجهاز: {statusQ.data?.device?.registrationStatus ?? "لم يبدأ"}</div>
+              <div>حالة التشغيل: {operationalReady ? "موجود" : "لم يُطلب بعد"}</div>
+            </div>
+          )}
+          <button
+            onClick={() => posUnitId && operationalM.mutate({ posUnitId, csrRequestId: statusQ.data?.csr?.id })}
+            disabled={!posUnitId || !hasComplianceCsid || operationalReady || operationalM.isPending}
+            style={{ ...smallBtn, height: 30, background: posUnitId && hasComplianceCsid && !operationalReady ? "#7c3aed" : "#cbd5e1", color: "#fff", cursor: posUnitId && hasComplianceCsid && !operationalReady ? "pointer" : "not-allowed" }}
+          >
+            {operationalM.isPending ? "جارٍ طلب CSID التشغيلي..." : operationalReady ? "✅ CSID التشغيلي موجود" : "طلب CSID التشغيلي"}
+          </button>
+          {result && (
+            <div style={{ marginTop: 14, background: result.ok ? "#f0fdf4" : "#fef2f2", border: `1px solid ${result.ok ? "#86efac" : "#fecaca"}`, borderRadius: 8, padding: 12, fontSize: 11, lineHeight: 1.8 }}>
+              <strong>{result.ok ? "✅ تم استلام الرد الرسمي" : "❌ لم يكتمل طلب CSID التشغيلي"}</strong>
+              <div>Request ID: <span style={{ fontFamily: "monospace" }}>{result.requestId ?? "—"}</span></div>
+              <div>HTTP Status: <span style={{ fontFamily: "monospace" }}>{result.httpStatus ?? "لا يوجد رد"}</span></div>
+              <div>{result.message}</div>
+              <div style={{ color: "#64748b" }}>لم يتم عرض أو حفظ أي Secret أو Private Key في هذه الشاشة.</div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ maxWidth: 680 }}>
@@ -1222,30 +1286,9 @@ function OtpSimulationSection({ initialPosUnitId = null }: { initialPosUnitId?: 
           </div>
         )}
 
-        <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 8 }}>الخطوة 2: إنشاء CSR ومفتاح EC</div>
+         <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 8 }}>الخطوة 2: فتح بوابة Fatoora واستخراج OTP</div>
         <p style={{ color: "#64748b", fontSize: 11, lineHeight: 1.7, marginTop: 0 }}>
-          ينشئ الخادم مفتاح secp256k1 وCSR باستخدام قالب <code>PREZATCA-Code-Signing</code>. لا يتم تنزيل المفتاح الخاص أو CSR إلى الواجهة.
-        </p>
-        <button
-          disabled={!posUnitId || createCsrM.isPending}
-          onClick={() => posUnitId && createCsrM.mutate({
-            posUnitId,
-            serialNumber: selectedUnit?.unitCode ?? `EGS-${posUnitId}`,
-            solutionName: "OneSoft",
-            model: "ERP",
-            branchName: selectedUnit?.branchName ?? selectedUnit?.warehouseName ?? "OneSoft",
-            branchLocation: selectedUnit?.warehouseName ?? "Saudi Arabia",
-            businessCategory: "Retail and invoicing",
-            taxpayerProvidedId: selectedUnit?.unitCode ?? `OneSoft-${posUnitId}`,
-          })}
-          style={{ ...smallBtn, height: 30, background: posUnitId ? "#D19C05" : "#cbd5e1", color: "#fff", cursor: posUnitId ? "pointer" : "not-allowed" }}
-        >
-          {createCsrM.isPending ? "جارٍ إنشاء CSR..." : hasCsr ? "🔄 تدوير CSR والمفتاح" : "🔧 إنشاء CSR الآن"}
-        </button>
-
-        <div style={{ marginTop: 18, fontWeight: 800, fontSize: 13, marginBottom: 8 }}>الخطوة 3: إدخال OTP الرسمي</div>
-        <p style={{ color: "#64748b", fontSize: 11, lineHeight: 1.7, marginTop: 0 }}>
-          افتح بوابة Fatoora Simulation، أنشئ OTP لوحدة EGS، ثم أدخله هنا. لن يُرسل الطلب قبل إنشاء CSR.
+           افتح بوابة Fatoora Simulation، أنشئ OTP لوحدة EGS، ثم أدخله هنا. لا يُحفظ OTP ولا يظهر في السجلات.
         </p>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <input
@@ -1255,28 +1298,34 @@ function OtpSimulationSection({ initialPosUnitId = null }: { initialPosUnitId?: 
             placeholder="OTP من Fatoora Simulation"
             style={{ ...fld, width: 250, direction: "ltr", fontFamily: "monospace", letterSpacing: 1 }}
           />
-          <button
-            onClick={() => posUnitId && complianceM.mutate({ posUnitId, csrRequestId: csrRequestId ?? statusQ.data?.csr?.id, otp })}
-            disabled={!posUnitId || !hasCsr || !otp || complianceM.isPending}
-            style={{ ...smallBtn, height: 28, background: posUnitId && hasCsr && otp ? "#2563eb" : "#cbd5e1", color: "#fff", cursor: posUnitId && hasCsr && otp ? "pointer" : "not-allowed" }}
-          >
-            {complianceM.isPending ? "جارٍ الاتصال..." : "طلب Compliance CSID"}
-          </button>
+           <span style={{ fontSize: 10, color: otp ? "#166534" : "#9a3412" }}>
+             {otp ? "OTP مُدخل" : "OTP مطلوب قبل إنشاء CSR"}
+           </span>
         </div>
         <div style={{ marginTop: 8, fontSize: 10, color: "#64748b" }}>
           بوابة Fatoora Simulation: <a href="https://fatoora.zatca.gov.sa/" target="_blank" rel="noreferrer">فتح البوابة الرسمية</a>
         </div>
-        <div style={{ marginTop: 18, fontWeight: 800, fontSize: 13, marginBottom: 8 }}>الخطوة 4: طلب CSID التشغيلي</div>
+         <div style={{ marginTop: 18, fontWeight: 800, fontSize: 13, marginBottom: 8 }}>الخطوة 3: إنشاء EC وCSR وإرسال Compliance</div>
         <p style={{ color: "#64748b", fontSize: 11, lineHeight: 1.7, marginTop: 0 }}>
-          بعد نجاح Compliance CSID، يطلب الخادم CSID التشغيلي من Simulation باستخدام الاعتماد المشفّر داخليًا. لا يُفتح Production الحقيقي.
+           بعد إدخال OTP فقط، ينشئ الخادم مفتاح secp256k1 وCSR ثم يرسل الطلب إلى Simulation تلقائيًا. لا يتم تنزيل المفتاح الخاص أو CSR إلى الواجهة.
         </p>
-        <button
-          onClick={() => posUnitId && operationalM.mutate({ posUnitId, csrRequestId: csrRequestId ?? statusQ.data?.csr?.id })}
-          disabled={!posUnitId || !hasComplianceCsid || operationalReady || operationalM.isPending}
-          style={{ ...smallBtn, height: 28, background: posUnitId && hasComplianceCsid && !operationalReady ? "#7c3aed" : "#cbd5e1", color: "#fff", cursor: posUnitId && hasComplianceCsid && !operationalReady ? "pointer" : "not-allowed" }}
-        >
-          {operationalM.isPending ? "جارٍ طلب CSID التشغيلي..." : operationalReady ? "✅ CSID التشغيلي موجود" : "طلب CSID التشغيلي"}
-        </button>
+         <button
+           disabled={!posUnitId || !otp || createCsrM.isPending || complianceM.isPending}
+           onClick={() => posUnitId && otp && createCsrM.mutate({
+             posUnitId,
+             otp,
+             serialNumber: selectedUnit?.unitCode ?? `EGS-${posUnitId}`,
+             solutionName: "OneSoft",
+             model: "ERP",
+             branchName: selectedUnit?.branchName ?? selectedUnit?.warehouseName ?? "OneSoft",
+             branchLocation: selectedUnit?.warehouseName ?? "Saudi Arabia",
+             businessCategory: "Retail and invoicing",
+             taxpayerProvidedId: selectedUnit?.unitCode ?? `OneSoft-${posUnitId}`,
+           })}
+           style={{ ...smallBtn, height: 30, background: posUnitId && otp ? "#D19C05" : "#cbd5e1", color: "#fff", cursor: posUnitId && otp ? "pointer" : "not-allowed" }}
+         >
+           {createCsrM.isPending ? "جارٍ إنشاء CSR..." : complianceM.isPending ? "جارٍ إرسال Compliance..." : hasComplianceCsid ? "✅ Compliance CSID موجود" : "🔐 إنشاء CSR وإرسال Compliance"}
+         </button>
         {result && (
           <div style={{ marginTop: 14, background: result.ok ? "#f0fdf4" : "#fef2f2", border: `1px solid ${result.ok ? "#86efac" : "#fecaca"}`, borderRadius: 8, padding: 12, fontSize: 11, lineHeight: 1.8 }}>
             <strong>{result.ok ? "✅ تم استلام الرد الرسمي" : "❌ لم يكتمل طلب Compliance CSID"}</strong>
@@ -1677,94 +1726,7 @@ function KeysSection() {
 // 7. إنشاء CSR
 // ══════════════════════════════════════════════════════════════════════════════
 function CsrSection() {
-  const cfgQ = trpc.zatca.getConfig.useQuery();
-  const unitsQ = trpc.zatca.listPosUnits.useQuery();
-  const readinessQ = trpc.zatca.getReadiness.useQuery({ invoiceType: "both" });
-  const createM = trpc.zatca.createSimulationCsr.useMutation({
-    onSuccess: (data) => {
-      toast.success(`تم إنشاء CSR لوحدة الربط. بصمة المفتاح: ${data.fingerprint}`);
-      setCreated(data);
-    },
-    onError: (error) => toast.error(error.message),
-  });
-  const cfg = cfgQ.data;
-  const [posUnitId, setPosUnitId] = useState<number | null>(null);
-  const [serialNumber, setSerialNumber] = useState("");
-  const [branchName, setBranchName] = useState("");
-  const [branchLocation, setBranchLocation] = useState("");
-  const [businessCategory, setBusinessCategory] = useState("");
-  const [created, setCreated] = useState<any>(null);
-  const selectedUnit = (unitsQ.data ?? []).find(unit => unit.id === posUnitId);
-  const readiness = readinessQ.data;
-
-  return (
-    <div style={{ maxWidth: 640 }}>
-      <SecTitle icon="📜" title="إنشاء CSR (Certificate Signing Request)" />
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 16 }}>
-        <StatusCard label="الحالة"     value={created ? "CSR جاهز لـ OTP" : "لم يُنشَأ بعد"} dot={created ? "ok" : "none"} />
-        <StatusCard label="الخوارزمية" value="EC secp256k1"  dot="ok"  />
-        <StatusCard label="القالب"    value="PREZATCA-Code-Signing"    dot="ok"  />
-      </div>
-
-      <div style={{ background: "#fef3c7", border: "1px solid #fde68a", borderRadius: 8, padding: "10px 14px", marginBottom: 16, fontSize: 12, color: "#92400e" }}>
-        ℹ️ يُنشأ المفتاح الخاص وCSR على الخادم فقط. لا يتم عرض أو تنزيل المفتاح الخاص أو ملف CSR.
-      </div>
-      {!readiness?.readyForCsr && (
-        <div style={{ background: "#fff7ed", border: "1px solid #fdba74", borderRadius: 8, padding: "10px 14px", marginBottom: 16, fontSize: 11, color: "#9a3412", lineHeight: 1.8 }}>
-          <strong>إنشاء CSR محجوب:</strong> أكمل شاشة «جاهزية الربط» أولاً.
-          {(readiness?.reasons ?? []).length > 0 && <div>{readiness!.reasons.join("؛ ")}</div>}
-        </div>
-      )}
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
-        <div style={grp}>
-          <label style={lbl}>وحدة الربط *</label>
-          <select style={fld} value={posUnitId ?? ""} onChange={e => setPosUnitId(Number(e.target.value) || null)}>
-            <option value="">اختر وحدة EGS</option>
-            {(unitsQ.data ?? []).map(unit => <option key={unit.id} value={unit.id}>{unit.unitCode} — {unit.unitName}</option>)}
-          </select>
-        </div>
-        <div style={grp}>
-          <label style={lbl}>Serial Number *</label>
-          <input style={{ ...fld, fontFamily: "monospace", direction: "ltr" }} value={serialNumber || selectedUnit?.unitCode || ""} onChange={e => setSerialNumber(e.target.value)} placeholder="EGS-01-SERIAL" />
-        </div>
-        <div style={grp}>
-          <label style={lbl}>اسم الفرع *</label>
-          <input style={fld} value={branchName || selectedUnit?.branchName || ""} onChange={e => setBranchName(e.target.value)} placeholder="Riyadh Branch" />
-        </div>
-        <div style={grp}>
-          <label style={lbl}>عنوان الفرع *</label>
-          <input style={fld} value={branchLocation || selectedUnit?.warehouseName || ""} onChange={e => setBranchLocation(e.target.value)} placeholder="Riyadh, Saudi Arabia" />
-        </div>
-        <div style={grp}>
-          <label style={lbl}>النشاط *</label>
-          <input style={fld} value={businessCategory} onChange={e => setBusinessCategory(e.target.value)} />
-        </div>
-      </div>
-
-      <div style={{ display: "flex", gap: 10 }}>
-        <button
-          disabled={!readiness?.readyForCsr || !posUnitId || !serialNumber && !selectedUnit?.unitCode || !branchName && !selectedUnit?.branchName || !branchLocation && !selectedUnit?.warehouseName || createM.isPending}
-          onClick={() => posUnitId && createM.mutate({
-            posUnitId,
-            serialNumber: serialNumber || selectedUnit?.unitCode || `EGS-${posUnitId}`,
-            solutionName: "OneSoft",
-            model: "ERP",
-            branchName: branchName || selectedUnit?.branchName || "OneSoft",
-            branchLocation: branchLocation || selectedUnit?.warehouseName || "Saudi Arabia",
-            businessCategory,
-            taxpayerProvidedId: selectedUnit?.unitCode || `OneSoft-${posUnitId}`,
-          })}
-           style={{ height: 36, padding: "0 24px", background: readiness?.readyForCsr && posUnitId ? "#D19C05" : "#cbd5e1", color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: readiness?.readyForCsr && posUnitId ? "pointer" : "not-allowed" }}>
-          {createM.isPending ? "جارٍ إنشاء CSR..." : "🔧 إنشاء CSR الآن"}
-        </button>
-      </div>
-      {created && <div style={{ marginTop: 14, background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 8, padding: 12, fontSize: 11, lineHeight: 1.8 }}>
-        ✅ تم إنشاء CSR. Request ID الداخلي: {created.csrRequestId} — بصمة المفتاح: <span style={{ fontFamily: "monospace" }}>{created.fingerprint}</span>. انتقل إلى «إدخال OTP» لإكمال الطلب الرسمي.
-      </div>}
-    </div>
-  );
+  return <OtpSimulationSection />;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -2653,6 +2615,11 @@ function ActivationWizard({
     warehouseId: warehouseId ? Number(warehouseId) : undefined,
     invoiceType,
   });
+  const simulationUnitId = selectedUnitId ?? null;
+  const simulationStatusQ = trpc.zatca.getSimulationOnboardingStatus.useQuery(
+    { posUnitId: simulationUnitId ?? 0 },
+    { enabled: Boolean(simulationUnitId) },
+  );
   const saveReadinessM = trpc.zatca.saveReadinessSettings.useMutation();
   const createUnitM = trpc.zatca.createPosUnit.useMutation();
 
@@ -2701,20 +2668,21 @@ function ActivationWizard({
   );
   const invoiceTypeSaved = readiness?.savedSettings?.invoiceType === invoiceType
     && (!selectedUnitId || readiness.savedSettings?.zatcaPosUnitId === selectedUnitId);
-  const simulationComplete = Boolean(cfg?.csid);
-  const testsComplete = Boolean(readiness?.operationalTestCompleted)
-    || cfg?.lastConnectionStatus === "success";
+  const simulationComplete = Boolean(simulationStatusQ.data?.csid?.id);
+  const testsComplete = simulationComplete && Boolean(readiness?.operationalTestCompleted);
+  const operationalComplete = simulationComplete && Boolean(simulationStatusQ.data?.operationalReady);
   const productionComplete = Boolean(cfg?.enabled && cfg?.environment === "production");
   const allSteps = [
     { id: 1, icon: "🏢", title: "بيانات المنشأة", detail: "بيانات القراءة فقط من معلومات المؤسسة", done: companyComplete },
     { id: 2, icon: "🧩", title: "وحدة الربط والدفاتر", detail: "الوحدة والدفاتر الأربعة لنفس المخزن/الفرع", done: unitComplete },
     { id: 3, icon: "🧾", title: "نوع الفواتير", detail: "مبسطة أو قياسية أو كلاهما", done: invoiceTypeSaved },
-    { id: 4, icon: "🌐", title: "المحاكاة الرسمية للهيئة", detail: "CSR وOTP للوحدة المحددة", done: simulationComplete },
-    { id: 5, icon: "📋", title: "اختبارات المطابقة", detail: "التحقق قبل التفعيل الفعلي", done: testsComplete },
-    { id: 6, icon: "🚀", title: "الإنتاج الفعلي", detail: "بعد نجاح الاختبارات واعتماد المسؤول", done: productionComplete },
+    { id: 4, icon: "🌐", title: "المحاكاة الرسمية", detail: "OTP ثم EC/CSR ثم Compliance CSID", done: simulationComplete },
+    { id: 5, icon: "📋", title: "اختبارات المطابقة", detail: "بعد الحصول على Compliance CSID", done: testsComplete },
+    { id: 6, icon: "🔑", title: "CSID التشغيلي", detail: "بعد نجاح اختبارات المطابقة", done: operationalComplete },
+    { id: 7, icon: "🚀", title: "الإنتاج الفعلي", detail: "بعد CSID التشغيلي واعتماد المسؤول", done: productionComplete },
   ];
   const steps = includeCompanyStep ? allSteps : allSteps.filter(step => step.id !== 1);
-  const firstIncomplete = steps.find(step => !step.done)?.id ?? 6;
+  const firstIncomplete = steps.find(step => !step.done)?.id ?? 7;
   const completed = steps.filter(step => step.done).length;
   const progress = Math.round((completed / steps.length) * 100);
 
@@ -2868,7 +2836,7 @@ function ActivationWizard({
       }
       if (activeStep === 4) {
         if (!simulationComplete) {
-          toast.error("أكمل تفعيل الوحدة في المحاكاة الرسمية أولًا");
+          toast.error("أدخل OTP وأنشئ EC/CSR واحصل على Compliance CSID أولًا");
           return;
         }
         setActiveStep(5);
@@ -2883,6 +2851,14 @@ function ActivationWizard({
         return;
       }
       if (activeStep === 6) {
+        if (!operationalComplete) {
+          toast.error("اطلب CSID التشغيلي بعد نجاح اختبارات المطابقة أولًا");
+          return;
+        }
+        setActiveStep(7);
+        return;
+      }
+      if (activeStep === 7) {
         if (!productionComplete) {
           toast.info("الإنتاج محجوب حتى اعتماد المسؤول وإتاحة بيئة الإنتاج");
           return;
@@ -3031,7 +3007,7 @@ function ActivationWizard({
         <div>
           <SecTitle icon="📋" title="اختبارات المطابقة" />
           <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 9, padding: 11, marginBottom: 13, color: "#1e40af", fontSize: 11, lineHeight: 1.7 }}>
-            تظهر هنا الاختبارات المطلوبة لمسارات الفواتير المرتبطة بالوحدة. لا تُعد المرحلة ناجحة قبل إتمام الاختبارات.
+            تظهر هنا الاختبارات الرسمية بعد الحصول على Compliance CSID. لا تُعد المرحلة ناجحة قبل إتمام الاختبارات.
           </div>
           <div style={{ display: "grid", gap: 7 }}>
             {(tests.length ? tests : requiredJournalTypes.map(type => ({ docType: type, label: journalTypeLabel(type), completed: false }))).map((test: any) => (
@@ -3043,6 +3019,17 @@ function ActivationWizard({
             ))}
           </div>
           {onOpenTechnical && <button onClick={onOpenTechnical} style={{ ...smallBtn, marginTop: 12, background: "#f1f5f9", color: "#334155", border: "1px solid #cbd5e1" }}>فتح أدوات المطابقة المتقدمة</button>}
+        </div>
+      );
+    }
+    if (activeStep === 6) {
+      return (
+        <div>
+          <SecTitle icon="🔑" title="طلب CSID التشغيلي" />
+          <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 9, padding: 11, marginBottom: 13, color: "#1e40af", fontSize: 11, lineHeight: 1.7 }}>
+            لا يُطلب CSID التشغيلي إلا بعد نجاح اختبارات المطابقة الرسمية. يستخدم الخادم Compliance CSID المحفوظ داخليًا.
+          </div>
+          <OtpSimulationSection initialPosUnitId={selectedUnitId} allowOperational />
         </div>
       );
     }
@@ -3096,7 +3083,7 @@ function ActivationWizard({
         <button disabled={creatingUnit || saveReadinessM.isPending || activeStep > firstIncomplete} onClick={saveStep} style={{ ...smallBtn, height: 32, padding: "0 18px", background: "#D19C05", color: "#fff", opacity: creatingUnit || activeStep > firstIncomplete ? .55 : 1 }}>
           {creatingUnit ? "جارٍ حفظ الوحدة..." : activeStep === 2 ? "حفظ الوحدة ومتابعة" : "حفظ ومتابعة"}
         </button>
-        <button disabled={activeStep === 6 || activeStep >= firstIncomplete} onClick={() => setActiveStep(step => Math.min(6, step + 1))} style={{ ...smallBtn, height: 32, marginRight: "auto", background: "#f1f5f9", color: "#475569", opacity: activeStep === 6 || activeStep >= firstIncomplete ? .5 : 1 }}>التالي →</button>
+         <button disabled={activeStep === 7 || activeStep >= firstIncomplete} onClick={() => setActiveStep(step => Math.min(7, step + 1))} style={{ ...smallBtn, height: 32, marginRight: "auto", background: "#f1f5f9", color: "#475569", opacity: activeStep === 7 || activeStep >= firstIncomplete ? .5 : 1 }}>التالي →</button>
       </div>
     </div>
   );

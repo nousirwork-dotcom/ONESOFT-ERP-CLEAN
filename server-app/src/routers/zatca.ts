@@ -437,15 +437,16 @@ async function getZatcaReadiness(
   const simulationConfigured = cfg.environment === 'simulation'
     && cfg.apiBaseUrl === simulationEnvironmentValues().baseApiUrl
     && Boolean(simulationEnvironment);
-  const reasons: string[] = [];
-  if (missingOrganizationFields.length) reasons.push(`أكمل بيانات المنشأة: ${missingOrganizationFields.join('، ')}`);
-  if (!selectedWarehouse) reasons.push('اختر المخزن/الفرع من القائمة');
-  if (selectedWarehouse && !allJournalsPresent) reasons.push('يجب إنشاء الدفاتر الأربعة للمخزن/الفرع المحدد');
-  if (selectedWarehouse && allJournalsPresent && !allJournalsLinked) reasons.push('اربط الدفاتر الأربعة بوحدة ربط ZATCA');
-  if (selectedWarehouse && allJournalsSameUnit === false && allJournalsLinked) reasons.push('يجب أن ترتبط الدفاتر الأربعة بوحدة ربط واحدة');
-  if (!allScreensReady) reasons.push('شاشتا الإشعار الدائن والمدين غير مكتملتين أو غير قادرتين على إنشاء XML');
-  if (!simulationConfigured) reasons.push('فعّل بيئة Fatoora Simulation من إعدادات البيئة');
-  if (!operationalTestCompleted) reasons.push('الاختبار التشغيلي الفعلي لم يكتمل لكل مسارات الفواتير والإشعارات');
+  const preCsrReasons: string[] = [];
+  if (missingOrganizationFields.length) preCsrReasons.push(`أكمل بيانات المنشأة: ${missingOrganizationFields.join('، ')}`);
+  if (!selectedWarehouse) preCsrReasons.push('اختر المخزن/الفرع من القائمة');
+  if (selectedWarehouse && !allJournalsPresent) preCsrReasons.push('يجب إنشاء الدفاتر الأربعة للمخزن/الفرع المحدد');
+  if (selectedWarehouse && allJournalsPresent && !allJournalsLinked) preCsrReasons.push('اربط الدفاتر الأربعة بوحدة ربط ZATCA');
+  if (selectedWarehouse && allJournalsSameUnit === false && allJournalsLinked) preCsrReasons.push('يجب أن ترتبط الدفاتر الأربعة بوحدة ربط واحدة');
+  if (!simulationConfigured) preCsrReasons.push('فعّل بيئة Fatoora Simulation من إعدادات البيئة');
+  const advisoryReasons: string[] = [];
+  if (!allScreensReady) advisoryReasons.push('فحص XML المحلي الاسترشادي غير مكتمل لبعض الشاشات');
+  const reasons = preCsrReasons;
 
   return {
     availableOrganizations: [{
@@ -518,13 +519,19 @@ async function getZatcaReadiness(
     allScreensReady,
     operationalTestCompleted,
     operationalTests,
+    preCsrReady: missingOrganizationFields.length === 0
+      && Boolean(selectedWarehouse)
+      && allJournalsPresent
+      && allJournalsSameUnit
+      && simulationConfigured,
+    // Kept as a compatibility alias for older technical screens.
     readyForCsr: missingOrganizationFields.length === 0
       && Boolean(selectedWarehouse)
       && allJournalsPresent
       && allJournalsSameUnit
-      && allScreensReady
-      && operationalTestCompleted
       && simulationConfigured,
+    preCsrReasons,
+    advisoryReasons,
     reasons,
   };
 }
@@ -913,10 +920,12 @@ export const zatcaRouter = router({
     }),
 
   // ── تهيئة EGS في Fatoora Simulation ───────────────────────────────────────
-  // المفتاح الخاص يُنشأ داخل الخادم ولا يغادره. هذه العملية لا ترسل OTP.
+  // OTP مطلوب قبل بدء إنشاء المفتاح وCSR. يبقى في الذاكرة ويُستخدم لاحقًا
+  // لإرسال CSR إلى /compliance؛ لا يُخزّن في قاعدة البيانات أو السجلات.
   createSimulationCsr: adminProcedure
     .input(z.object({
       posUnitId: z.number().int().positive(),
+      otp: z.string().trim().min(1).max(32),
       serialNumber: z.string().trim().min(1).max(100),
       solutionName: z.string().trim().min(1).max(100).default('OneSoft'),
       model: z.string().trim().min(1).max(100).default('ERP'),
@@ -937,10 +946,10 @@ export const zatcaRouter = router({
       if (!org) throw new TRPCError({ code: 'NOT_FOUND', message: 'المنشأة غير موجودة' });
 
       const readiness = await getZatcaReadiness(ctx.user.orgId, unit.warehouseId, 'both');
-      if (!readiness.readyForCsr) {
+      if (!readiness.preCsrReady) {
         throw new TRPCError({
           code: 'PRECONDITION_FAILED',
-          message: `لا يمكن إنشاء CSR قبل اكتمال الجاهزية: ${readiness.reasons.join('؛ ')}`,
+          message: `لا يمكن بدء المحاكاة قبل اكتمال المتطلبات الأساسية: ${readiness.preCsrReasons.join('؛ ')}`,
         });
       }
 
@@ -1067,7 +1076,7 @@ export const zatcaRouter = router({
             csrRequestId: csrRequest.id,
             fingerprint: csr.fingerprint,
           }),
-          responseBody: JSON.stringify({ template: 'PREZATCA-Code-Signing' }),
+            responseBody: JSON.stringify({ template: 'PREZATCA-Code-Signing', otpProvided: true }),
         });
 
         return {
@@ -1267,6 +1276,13 @@ export const zatcaRouter = router({
     .mutation(async ({ ctx, input }) => {
       requireSimulationEncryptionKey();
       const unit = await getPosUnitForOrg(ctx.user.orgId, input.posUnitId);
+      const readiness = await getZatcaReadiness(ctx.user.orgId, unit.warehouseId, 'both');
+      if (!readiness.operationalTestCompleted) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'لا يمكن طلب CSID التشغيلي قبل نجاح اختبارات المطابقة الرسمية',
+        });
+      }
       const environment = await db.query.zatcaEnvironments.findFirst({
         where: and(
           eq(zatcaEnvironments.orgId, ctx.user.orgId),
