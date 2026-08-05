@@ -2365,6 +2365,8 @@ export const zatcaRouter = router({
             zatcaInvoiceCounter: true,
             zatcaStatus: true,
             zatcaResponse: true,
+             zatcaXml: true,
+             zatcaQrCode: true,
             zatcaSubmittedAt: true,
             zatcaAttemptCount: true,
             zatcaRejectionReason: true,
@@ -3010,6 +3012,10 @@ export const zatcaRouter = router({
       page:   z.number().default(1),
       limit:  z.number().default(30),
       status: z.string().optional(),
+        zatcaInvoiceType: z.enum(['standard', 'simplified']).optional(),
+        warehouseId: z.number().int().positive().optional(),
+        journalId: z.number().int().positive().optional(),
+        posUnitId: z.number().int().positive().optional(),
     }))
     .query(async ({ ctx, input }) => {
       const offset = (input.page - 1) * input.limit;
@@ -3020,6 +3026,18 @@ export const zatcaRouter = router({
       ];
       if (input.status) {
         conditions.push(eq(salesInvoices.zatcaStatus, input.status));
+      }
+      if (input.zatcaInvoiceType) {
+        conditions.push(eq(salesInvoices.zatcaInvoiceType, input.zatcaInvoiceType));
+      }
+      if (input.warehouseId) {
+        conditions.push(eq(salesInvoices.warehouseId, input.warehouseId));
+      }
+      if (input.journalId) {
+        conditions.push(eq(salesInvoices.journalId, input.journalId));
+      }
+      if (input.posUnitId) {
+        conditions.push(eq(documentJournals.zatcaPosUnitId, input.posUnitId));
       }
 
       const rows = await db.select({
@@ -3038,13 +3056,24 @@ export const zatcaRouter = router({
         zatcaAttemptCount:    salesInvoices.zatcaAttemptCount,
         zatcaRejectionReason: salesInvoices.zatcaRejectionReason,
         isPosted:             salesInvoices.isPosted,
+        warehouseId:          salesInvoices.warehouseId,
+        journalId:            salesInvoices.journalId,
+        zatcaInvoiceType:     salesInvoices.zatcaInvoiceType,
+        zatcaQrCode:          salesInvoices.zatcaQrCode,
+        posUnitId:            documentJournals.zatcaPosUnitId,
+        warehouseName:        warehouses.name,
+        branchName:           branches.name,
       }).from(salesInvoices)
+        .leftJoin(documentJournals, eq(salesInvoices.journalId, documentJournals.id))
+        .leftJoin(warehouses, eq(salesInvoices.warehouseId, warehouses.id))
+        .leftJoin(branches, eq(warehouses.branchId, branches.id))
         .where(and(...conditions))
         .orderBy(desc(salesInvoices.invoiceDate))
         .limit(input.limit)
         .offset(offset);
 
       const totalRows = await db.select({ cnt: count() }).from(salesInvoices)
+        .leftJoin(documentJournals, eq(salesInvoices.journalId, documentJournals.id))
         .where(and(...conditions));
 
       return {

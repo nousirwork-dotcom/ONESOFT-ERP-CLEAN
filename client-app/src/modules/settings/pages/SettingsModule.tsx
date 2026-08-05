@@ -6093,7 +6093,7 @@ function ElectronicInvoicingCenter({ initialTab = "qr" }: { initialTab?: Electro
       <div ref={panelRef} className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden" role="tabpanel" aria-label={activeTab === "qr" ? "الفوترة وQR" : "الربط مع ZATCA"}>
         {activeTab === "qr"
           ? <div className="p-5"><QRSettingsPage /></div>
-          : <div className="h-full min-h-[620px]"><ZatcaCenterPage initialSection="dashboard" /></div>}
+          : <div className="h-full min-h-[620px]"><ZatcaCenterPage initialSection="activation" /></div>}
       </div>
     </div>
   );
@@ -6103,7 +6103,7 @@ function ElectronicInvoicingCenter({ initialTab = "qr" }: { initialTab?: Electro
 function ElectronicInvoicingStandalone({ tab }: { tab: ElectronicInvoicingTab }) {
   return tab === "qr"
     ? <div className="h-full min-h-0 overflow-y-auto overflow-x-hidden bg-background p-5" dir="rtl"><QRSettingsPage /></div>
-    : <div className="h-full min-h-[620px]"><ZatcaCenterPage initialSection="dashboard" /></div>;
+    : <div className="h-full min-h-[620px]"><ZatcaCenterPage initialSection="activation" /></div>;
 }
 
 function SettingsContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (id: MenuId) => void }) {
