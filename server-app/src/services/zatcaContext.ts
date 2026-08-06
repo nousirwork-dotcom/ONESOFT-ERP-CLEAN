@@ -10,6 +10,7 @@ import {
   zatcaEnvironments,
   zatcaPosUnits,
 } from '../schema.js';
+import { assertEnvironmentCanBeUsed } from './zatcaUnitLifecycle.js';
 
 export type ZatcaEnvironment = 'sandbox' | 'simulation' | 'production';
 
@@ -47,6 +48,7 @@ type PosUnitRecord = {
   unitName: string;
   isActive: boolean;
   isDeleted: boolean;
+  oneSoftStatus?: string;
 };
 
 type EgsRecord = {
@@ -58,6 +60,7 @@ type EgsRecord = {
   environmentId: number | null;
   currentCsidId: number | null;
   registrationStatus: string;
+  lifecycleStatus?: string;
   isActive: boolean;
   isDeleted: boolean;
 };
@@ -120,6 +123,7 @@ export type ResolvedZatcaContext = {
     deviceName: string;
     deviceUuid: string;
     registrationStatus: string;
+    lifecycleStatus: string;
   };
   environment: {
     id: number;
@@ -224,6 +228,12 @@ function assertContextRecords(records: ZatcaContextRecords, requestedEnvironment
   if (!records.posUnit || !records.posUnit.isActive || records.posUnit.isDeleted || records.posUnit.orgId !== user.orgId) {
     throwContext('UNIT_NOT_FOUND', 'وحدة ربط نقطة البيع مع ZATCA غير موجودة أو غير فعالة');
   }
+  if (records.posUnit.oneSoftStatus === 'paused') {
+    throwContext('UNIT_NOT_FOUND', 'وحدة ربط نقطة البيع متوقفة مؤقتًا داخل OneSoft');
+  }
+  if (records.posUnit.oneSoftStatus === 'archived') {
+    throwContext('UNIT_NOT_FOUND', 'وحدة ربط نقطة البيع مؤرشفة ولا يمكن استخدامها');
+  }
   if (records.posUnit.id !== activeLinks[0]!.posUnitId) {
     throwContext('UNIT_NOT_FOUND', 'بيانات ربط دفتر المستند لا تطابق وحدة الربط الفعالة');
   }
@@ -279,6 +289,11 @@ function assertContextRecords(records: ZatcaContextRecords, requestedEnvironment
     throwContext('MULTIPLE_EGS', 'وحدة ربط ZATCA مرتبطة بأكثر من وحدة EGS نشطة للبيئة المطلوبة');
   }
   const egs = matchingEgs[0]!;
+  try {
+    assertEnvironmentCanBeUsed(egs.lifecycleStatus);
+  } catch (error) {
+    throwContext('EGS_NOT_LINKED', error instanceof Error ? error.message : 'بيئة وحدة الربط غير قابلة للاستخدام');
+  }
 
   if (
     !records.csid ||
@@ -331,6 +346,7 @@ function assertContextRecords(records: ZatcaContextRecords, requestedEnvironment
       deviceName: egs.deviceName,
       deviceUuid: egs.deviceUuid,
       registrationStatus: egs.registrationStatus,
+      lifecycleStatus: egs.lifecycleStatus ?? 'active',
     },
     environment: {
       id: records.environment.id,
@@ -436,7 +452,7 @@ export async function resolveZatcaContext(input: {
           eq(zatcaPosUnits.id, journal.zatcaPosUnitId),
           eq(zatcaPosUnits.orgId, user.orgId),
         ),
-      });
+      }) ?? null;
 
   const egs = journal.zatcaPosUnitId == null || environmentRow == null
     ? []
@@ -457,6 +473,7 @@ export async function resolveZatcaContext(input: {
           environmentId: true,
           currentCsidId: true,
           registrationStatus: true,
+          lifecycleStatus: true,
           isActive: true,
           isDeleted: true,
         },
@@ -497,10 +514,10 @@ export async function resolveZatcaContext(input: {
           isDeleted: true,
         },
       })
-    : null;
+      : null;
   const certificate = csid?.certificateId == null
     ? null
-    : await db.query.zatcaCertificates.findFirst({
+      : await db.query.zatcaCertificates.findFirst({
         where: and(
           eq(zatcaCertificates.id, csid.certificateId),
           eq(zatcaCertificates.orgId, user.orgId),
@@ -514,7 +531,7 @@ export async function resolveZatcaContext(input: {
           isActive: true,
           isDeleted: true,
         },
-      });
+      }) ?? null;
 
   try {
     return assertContextRecords({

@@ -7,6 +7,7 @@ import { autoPostSalesInvoice } from './posting.js';
 import { TRPCError } from '@trpc/server';
 import { validateSalesInvoiceWarehouseContext } from '../lib/salesWarehouseValidation.js';
 import { resolveInvoiceTaxItems } from '../lib/invoiceTaxValidation.js';
+import { assertSalesJournalUnitCanBeUsed } from '../services/zatcaUnitLifecycle.js';
 
 // ── تحقق أن جميع بنود الفاتورة تُشير إلى أصناف مسجلة في النظام ──────────────────
 async function validateInvoiceItems(items: { productId?: number; productName: string; productCode?: string }[], orgId: number) {
@@ -386,6 +387,7 @@ export const salesRouter = router({
       const orgId = ctx.user.orgId;
       const items = await resolveInvoiceTaxItems(rawItems, orgId);
       const isDraft = invoiceData.status === 'draft';
+      if (!isDraft) await assertSalesJournalUnitCanBeUsed(orgId, invoiceData.journalId);
       if (!isDraft && ['credit_note', 'debit_note'].includes(invoiceData.invoiceType)) {
         if (!invoiceData.basedOnNumber?.trim() && !invoiceData.sourceDocumentId) {
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'الإشعار يتطلب مرجع فاتورة المبيعات الأصلية' });
@@ -692,6 +694,7 @@ export const salesRouter = router({
       const finalSourceDocId  = rest.sourceDocumentId !== undefined
         ? rest.sourceDocumentId
         : existing?.sourceDocumentId ?? undefined;
+      if (!isNowDraft) await assertSalesJournalUnitCanBeUsed(ctx.user.orgId, finalJournalId);
 
       // التحقق من المخزن/الأصناف يُتخطى للمسودة فقط؛ عند تحويلها نهائية يجب التحقق
       if (!isNowDraft && ['credit_note', 'debit_note'].includes(rest.invoiceType ?? '')) {

@@ -28,8 +28,9 @@ import {
   zatcaComplianceFixtureItems,
   zatcaReadinessSettings,
   stockVouchers,
+  zatcaUnitLifecycleEvents,
 } from '../schema.js';
-import { eq, and, desc, count, sql, gte, lte, like, or, asc, notInArray, inArray } from 'drizzle-orm';
+import { eq, and, desc, count, sql, gte, lte, like, or, asc, notInArray, inArray, isNull } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { resolveZatcaContext, type ZatcaEnvironment } from '../services/zatcaContext.js';
 import {
@@ -46,6 +47,7 @@ import {
   stateForMockOutcome,
 } from '../services/zatcaLifecycle.js';
 import { enqueueZatcaSubmission } from '../services/zatcaQueue.js';
+import { assertUnitCanBeUsed } from '../services/zatcaUnitLifecycle.js';
 import {
   generateSimulationCsr,
   complianceCertificatePem,
@@ -316,6 +318,7 @@ async function getPosUnitForOrg(orgId: number, posUnitId: number) {
     ),
   });
   if (!unit) throw new TRPCError({ code: 'NOT_FOUND', message: 'وحدة ربط نقطة البيع غير موجودة أو غير فعالة' });
+  assertUnitCanBeUsed(unit);
   return unit;
 }
 
@@ -772,6 +775,9 @@ export const zatcaRouter = router({
       unitCode: zatcaPosUnits.unitCode,
       unitName: zatcaPosUnits.unitName,
       status: zatcaPosUnits.status,
+      oneSoftStatus: zatcaPosUnits.oneSoftStatus,
+      lifecycleUpdatedAt: zatcaPosUnits.lifecycleUpdatedAt,
+      lifecycleReason: zatcaPosUnits.lifecycleReason,
       warehouseId: zatcaPosUnits.warehouseId,
       warehouseName: warehouses.name,
       branchName: branches.name,
@@ -790,7 +796,6 @@ export const zatcaRouter = router({
       ))
       .where(and(
         eq(zatcaPosUnits.orgId, ctx.user.orgId),
-        eq(zatcaPosUnits.isActive, true),
         eq(zatcaPosUnits.isDeleted, false),
       ))
       .orderBy(asc(warehouses.name), asc(zatcaPosUnits.unitCode));
@@ -817,6 +822,9 @@ export const zatcaRouter = router({
         deviceId: zatcaDevices.id,
         deviceName: zatcaDevices.deviceName,
         registrationStatus: zatcaDevices.registrationStatus,
+        lifecycleStatus: zatcaDevices.lifecycleStatus,
+        lifecycleUpdatedAt: zatcaDevices.lifecycleUpdatedAt,
+        cancellationConfirmedAt: zatcaDevices.cancellationConfirmedAt,
         lastRegistrationDate: zatcaDevices.lastRegistrationDate,
         lastConnectionDate: zatcaDevices.lastConnectionDate,
         complianceCsidPresent: sql<boolean>`EXISTS (
@@ -1302,6 +1310,392 @@ export const zatcaRouter = router({
         .where(and(eq(zatcaPosUnits.id, input.id), eq(zatcaPosUnits.orgId, ctx.user.orgId)))
         .returning();
       return unit;
+    }),
+
+  // ── دورة حياة وحدة الربط ────────────────────────────────────────────────────
+  // لا يستدعي أي API خارجي. إلغاء المنصة لا يُسجّل إلا بعد إقرار المسؤول
+  // بأنه نفّذ الإلغاء يدويًا في منصة فاتورة.
+  getUnitLifecycle: protectedProcedure
+    .input(z.object({
+      posUnitId: z.number().int().positive(),
+      environment: z.enum(['simulation', 'production']),
+    }))
+    .query(async ({ ctx, input }) => {
+      const unit = await db.query.zatcaPosUnits.findFirst({
+        where: and(
+          eq(zatcaPosUnits.id, input.posUnitId),
+          eq(zatcaPosUnits.orgId, ctx.user.orgId),
+          eq(zatcaPosUnits.isActive, true),
+          eq(zatcaPosUnits.isDeleted, false),
+        ),
+        columns: { id: true, oneSoftStatus: true, lifecycleUpdatedAt: true, lifecycleReason: true },
+      });
+      if (!unit) throw new TRPCError({ code: 'NOT_FOUND', message: 'وحدة الربط غير موجودة' });
+      const environmentRow = await db.query.zatcaEnvironments.findFirst({
+        where: and(eq(zatcaEnvironments.orgId, ctx.user.orgId), eq(zatcaEnvironments.name, input.environment === 'simulation' ? 'Simulation' : 'Production')),
+        columns: { id: true, name: true },
+      });
+      const device = environmentRow
+        ? await db.query.zatcaDevices.findFirst({
+            where: and(
+              eq(zatcaDevices.orgId, ctx.user.orgId),
+              eq(zatcaDevices.posUnitId, input.posUnitId),
+              eq(zatcaDevices.environmentId, environmentRow.id),
+              eq(zatcaDevices.isActive, true),
+              eq(zatcaDevices.isDeleted, false),
+            ),
+            columns: {
+              id: true, deviceName: true, registrationStatus: true,
+              lifecycleStatus: true, lifecycleUpdatedAt: true,
+              cancellationConfirmedAt: true, cancellationNote: true,
+            },
+          })
+        : null;
+      return { ...unit, environment: input.environment, environmentId: environmentRow?.id ?? null, device };
+    }),
+
+  setUnitEnvironmentLifecycle: adminProcedure
+    .input(z.object({
+      posUnitId: z.number().int().positive(),
+      environment: z.enum(['simulation', 'production']),
+      action: z.enum(['pause', 'resume', 'refresh', 'archive']),
+      reason: z.string().trim().max(1000).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const unit = await db.query.zatcaPosUnits.findFirst({
+        where: and(
+          eq(zatcaPosUnits.id, input.posUnitId),
+          eq(zatcaPosUnits.orgId, ctx.user.orgId),
+          eq(zatcaPosUnits.isActive, true),
+          eq(zatcaPosUnits.isDeleted, false),
+        ),
+      });
+      if (!unit) throw new TRPCError({ code: 'NOT_FOUND', message: 'وحدة الربط غير موجودة' });
+      if (unit.oneSoftStatus === 'archived') {
+        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'وحدة الربط مؤرشفة ولا يمكن تعديل بيئتها' });
+      }
+      const environmentName = input.environment === 'simulation' ? 'Simulation' : 'Production';
+      const env = await db.query.zatcaEnvironments.findFirst({
+        where: and(eq(zatcaEnvironments.orgId, ctx.user.orgId), eq(zatcaEnvironments.name, environmentName)),
+      });
+      if (!env) throw new TRPCError({ code: 'NOT_FOUND', message: `بيئة ${environmentName} غير مهيأة` });
+
+      const device = await db.query.zatcaDevices.findFirst({
+        where: and(
+          eq(zatcaDevices.orgId, ctx.user.orgId),
+          eq(zatcaDevices.posUnitId, input.posUnitId),
+          eq(zatcaDevices.environmentId, env.id),
+          eq(zatcaDevices.isActive, true),
+          eq(zatcaDevices.isDeleted, false),
+        ),
+      });
+      if (!device) throw new TRPCError({ code: 'PRECONDITION_FAILED', message: `لا توجد وحدة EGS في بيئة ${environmentName} لتغيير حالتها` });
+      if (device.lifecycleStatus === 'cancelled_from_fatoora' || device.lifecycleStatus === 'archived') {
+        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'لا يمكن تعديل بيئة ملغاة أو مؤرشفة' });
+      }
+
+      const nextStatus = input.action === 'pause'
+        ? 'paused'
+        : input.action === 'resume'
+          ? 'active'
+          : input.action === 'archive'
+            ? 'archived'
+            : device.lifecycleStatus;
+      const action = input.action === 'pause' ? 'pause_environment'
+        : input.action === 'resume' ? 'resume_environment'
+          : input.action === 'archive' ? 'archive_environment' : 'refresh_environment';
+      if (input.action === 'archive') {
+        const [pendingInvoices, pendingTransactions, pendingQueue] = await Promise.all([
+          db.select({ id: salesInvoices.id })
+            .from(salesInvoices)
+            .innerJoin(documentJournals, and(
+              eq(documentJournals.id, salesInvoices.journalId),
+              eq(documentJournals.orgId, ctx.user.orgId),
+            ))
+            .where(and(
+              eq(salesInvoices.orgId, ctx.user.orgId),
+              eq(documentJournals.zatcaPosUnitId, input.posUnitId),
+              notInArray(salesInvoices.status, ['draft', 'cancelled']),
+              or(isNull(salesInvoices.zatcaStatus), notInArray(salesInvoices.zatcaStatus, ['cleared', 'reported', 'accepted_with_warnings'])),
+            ))
+            .limit(1),
+          db.select({ id: zatcaInvoiceTransactions.id })
+            .from(zatcaInvoiceTransactions)
+            .where(and(
+              eq(zatcaInvoiceTransactions.orgId, ctx.user.orgId),
+              eq(zatcaInvoiceTransactions.deviceId, device.id),
+              eq(zatcaInvoiceTransactions.isActive, true),
+              eq(zatcaInvoiceTransactions.isDeleted, false),
+              or(isNull(zatcaInvoiceTransactions.invoiceStatus), notInArray(zatcaInvoiceTransactions.invoiceStatus, ['cleared', 'reported', 'accepted_with_warnings'])),
+            ))
+            .limit(1),
+          db.query.zatcaSubmissionQueue.findFirst({
+            where: and(
+              eq(zatcaSubmissionQueue.orgId, ctx.user.orgId),
+              eq(zatcaSubmissionQueue.deviceId, device.id),
+              sql`${zatcaSubmissionQueue.state} NOT IN ('completed', 'failed', 'blocked')`,
+            ),
+            columns: { id: true },
+          }),
+        ]);
+        if (pendingInvoices.length || pendingTransactions.length || pendingQueue) {
+          throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'لا يمكن أرشفة البيئة مع وجود مستندات معلقة أو غير مرسلة' });
+        }
+      }
+      const now = new Date();
+      const actorName = (ctx.user.name ?? ctx.user.username ?? 'مستخدم').trim();
+      await db.transaction(async (tx) => {
+        await tx.update(zatcaDevices).set({
+          lifecycleStatus: nextStatus,
+          lifecycleUpdatedAt: now,
+          lifecycleUpdatedBy: ctx.user.id,
+          updatedAt: now,
+        }).where(eq(zatcaDevices.id, device.id));
+        await tx.insert(zatcaUnitLifecycleEvents).values({
+          orgId: ctx.user.orgId,
+          posUnitId: input.posUnitId,
+          deviceId: device.id,
+          environmentId: env.id,
+          action,
+          previousStatus: device.lifecycleStatus,
+          nextStatus,
+          reason: input.reason ?? null,
+          actorUserId: ctx.user.id,
+          actorUsername: actorName,
+        });
+      });
+      return { ok: true, status: nextStatus, environment: input.environment };
+    }),
+
+  confirmUnitCancellation: adminProcedure
+    .input(z.object({
+      posUnitId: z.number().int().positive(),
+      environment: z.enum(['simulation', 'production']),
+      reason: z.string().trim().min(1).max(1000),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const unit = await db.query.zatcaPosUnits.findFirst({
+        where: and(eq(zatcaPosUnits.id, input.posUnitId), eq(zatcaPosUnits.orgId, ctx.user.orgId), eq(zatcaPosUnits.isActive, true), eq(zatcaPosUnits.isDeleted, false)),
+      });
+      if (!unit) throw new TRPCError({ code: 'NOT_FOUND', message: 'وحدة الربط غير موجودة' });
+      const environmentName = input.environment === 'simulation' ? 'Simulation' : 'Production';
+      const env = await db.query.zatcaEnvironments.findFirst({
+        where: and(eq(zatcaEnvironments.orgId, ctx.user.orgId), eq(zatcaEnvironments.name, environmentName)),
+      });
+      if (!env) throw new TRPCError({ code: 'NOT_FOUND', message: `بيئة ${environmentName} غير مهيأة` });
+      const device = await db.query.zatcaDevices.findFirst({
+        where: and(eq(zatcaDevices.orgId, ctx.user.orgId), eq(zatcaDevices.posUnitId, input.posUnitId), eq(zatcaDevices.environmentId, env.id), eq(zatcaDevices.isActive, true), eq(zatcaDevices.isDeleted, false)),
+      });
+      if (!device) throw new TRPCError({ code: 'PRECONDITION_FAILED', message: `لا توجد وحدة EGS في بيئة ${environmentName}` });
+
+      const pendingInvoices = await db.select({ id: salesInvoices.id, number: salesInvoices.invoiceNumber })
+        .from(salesInvoices)
+        .innerJoin(documentJournals, and(
+          eq(documentJournals.id, salesInvoices.journalId),
+          eq(documentJournals.orgId, ctx.user.orgId),
+        ))
+        .where(and(
+          eq(salesInvoices.orgId, ctx.user.orgId),
+          eq(documentJournals.zatcaPosUnitId, input.posUnitId),
+          notInArray(salesInvoices.status, ['draft', 'cancelled']),
+          or(
+            isNull(salesInvoices.zatcaStatus),
+            notInArray(salesInvoices.zatcaStatus, ['cleared', 'reported', 'accepted_with_warnings']),
+          ),
+        ))
+        .limit(5);
+      const pendingTransactions = await db.select({ id: zatcaInvoiceTransactions.id })
+        .from(zatcaInvoiceTransactions)
+        .where(and(
+          eq(zatcaInvoiceTransactions.orgId, ctx.user.orgId),
+          eq(zatcaInvoiceTransactions.deviceId, device.id),
+          eq(zatcaInvoiceTransactions.isActive, true),
+          eq(zatcaInvoiceTransactions.isDeleted, false),
+          or(isNull(zatcaInvoiceTransactions.invoiceStatus), notInArray(zatcaInvoiceTransactions.invoiceStatus, ['cleared', 'reported', 'accepted_with_warnings'])),
+        ))
+        .limit(5);
+      if (pendingInvoices.length || pendingTransactions.length) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: `لا يمكن تأكيد الإلغاء قبل معالجة المستندات المعلقة أو غير المرسلة (${pendingInvoices.length + pendingTransactions.length})`,
+        });
+      }
+
+      const now = new Date();
+      const actorName = (ctx.user.name ?? ctx.user.username ?? 'مستخدم').trim();
+      await db.transaction(async (tx) => {
+        await tx.update(zatcaDevices).set({
+          lifecycleStatus: 'cancelled_from_fatoora',
+          lifecycleUpdatedAt: now,
+          lifecycleUpdatedBy: ctx.user.id,
+          cancellationConfirmedAt: now,
+          cancellationNote: input.reason,
+          updatedAt: now,
+        }).where(eq(zatcaDevices.id, device.id));
+        await tx.insert(zatcaUnitLifecycleEvents).values({
+          orgId: ctx.user.orgId,
+          posUnitId: input.posUnitId,
+          deviceId: device.id,
+          environmentId: env.id,
+          action: 'confirm_cancellation_from_fatoora',
+          previousStatus: device.lifecycleStatus,
+          nextStatus: 'cancelled_from_fatoora',
+          reason: input.reason,
+          actorUserId: ctx.user.id,
+          actorUsername: actorName,
+        });
+      });
+      return { ok: true, status: 'cancelled_from_fatoora', environment: input.environment };
+    }),
+
+  archivePosUnit: adminProcedure
+    .input(z.object({ posUnitId: z.number().int().positive(), reason: z.string().trim().min(1).max(1000) }))
+    .mutation(async ({ ctx, input }) => {
+      const unit = await db.query.zatcaPosUnits.findFirst({
+        where: and(eq(zatcaPosUnits.id, input.posUnitId), eq(zatcaPosUnits.orgId, ctx.user.orgId), eq(zatcaPosUnits.isActive, true), eq(zatcaPosUnits.isDeleted, false)),
+      });
+      if (!unit) throw new TRPCError({ code: 'NOT_FOUND', message: 'وحدة الربط غير موجودة' });
+      const pending = await db.select({ id: zatcaInvoiceTransactions.id })
+        .from(zatcaInvoiceTransactions)
+        .innerJoin(zatcaDevices, eq(zatcaDevices.id, zatcaInvoiceTransactions.deviceId))
+        .where(and(
+          eq(zatcaInvoiceTransactions.orgId, ctx.user.orgId),
+          eq(zatcaDevices.posUnitId, unit.id),
+          eq(zatcaInvoiceTransactions.isActive, true),
+          eq(zatcaInvoiceTransactions.isDeleted, false),
+          or(isNull(zatcaInvoiceTransactions.invoiceStatus), notInArray(zatcaInvoiceTransactions.invoiceStatus, ['cleared', 'reported', 'accepted_with_warnings'])),
+        ))
+        .limit(1);
+      if (pending.length) throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'لا يمكن أرشفة الوحدة مع وجود مستندات ZATCA معلقة' });
+      const now = new Date();
+      const actorName = (ctx.user.name ?? ctx.user.username ?? 'مستخدم').trim();
+      await db.transaction(async (tx) => {
+        await tx.update(zatcaPosUnits).set({
+          oneSoftStatus: 'archived',
+          lifecycleUpdatedAt: now,
+          lifecycleUpdatedBy: ctx.user.id,
+          lifecycleReason: input.reason,
+          updatedAt: now,
+        }).where(eq(zatcaPosUnits.id, unit.id));
+        await tx.update(zatcaDevices).set({
+          lifecycleStatus: 'archived',
+          lifecycleUpdatedAt: now,
+          lifecycleUpdatedBy: ctx.user.id,
+          updatedAt: now,
+        }).where(and(
+          eq(zatcaDevices.orgId, ctx.user.orgId),
+          eq(zatcaDevices.posUnitId, unit.id),
+          eq(zatcaDevices.isActive, true),
+          eq(zatcaDevices.isDeleted, false),
+        ));
+        await tx.insert(zatcaUnitLifecycleEvents).values({
+          orgId: ctx.user.orgId, posUnitId: unit.id, action: 'archive_unit',
+          previousStatus: unit.oneSoftStatus, nextStatus: 'archived', reason: input.reason,
+          actorUserId: ctx.user.id, actorUsername: actorName,
+        });
+      });
+      return { ok: true, status: 'archived' };
+    }),
+
+  setUnitLifecycle: adminProcedure
+    .input(z.object({
+      posUnitId: z.number().int().positive(),
+      action: z.enum(['pause', 'resume']),
+      reason: z.string().trim().max(1000).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const unit = await db.query.zatcaPosUnits.findFirst({
+        where: and(
+          eq(zatcaPosUnits.id, input.posUnitId),
+          eq(zatcaPosUnits.orgId, ctx.user.orgId),
+          eq(zatcaPosUnits.isActive, true),
+          eq(zatcaPosUnits.isDeleted, false),
+        ),
+      });
+      if (!unit) throw new TRPCError({ code: 'NOT_FOUND', message: 'وحدة الربط غير موجودة' });
+      if (unit.oneSoftStatus === 'archived') {
+        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'وحدة الربط مؤرشفة ولا يمكن استئنافها' });
+      }
+      const nextStatus = input.action === 'pause' ? 'paused' : 'active';
+      const now = new Date();
+      const actorName = (ctx.user.name ?? ctx.user.username ?? 'مستخدم').trim();
+      await db.transaction(async (tx) => {
+        await tx.update(zatcaPosUnits).set({
+          oneSoftStatus: nextStatus,
+          lifecycleUpdatedAt: now,
+          lifecycleUpdatedBy: ctx.user.id,
+          lifecycleReason: input.reason ?? null,
+          updatedAt: now,
+        }).where(eq(zatcaPosUnits.id, unit.id));
+        await tx.insert(zatcaUnitLifecycleEvents).values({
+          orgId: ctx.user.orgId,
+          posUnitId: unit.id,
+          action: input.action === 'pause' ? 'pause_unit' : 'resume_unit',
+          previousStatus: unit.oneSoftStatus,
+          nextStatus,
+          reason: input.reason ?? null,
+          actorUserId: ctx.user.id,
+          actorUsername: actorName,
+        });
+      });
+      return { ok: true, status: nextStatus };
+    }),
+
+  getUnitLifecycleEvents: protectedProcedure
+    .input(z.object({
+      posUnitId: z.number().int().positive(),
+      environment: z.enum(['simulation', 'production']).optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const environmentName = input.environment === 'simulation'
+        ? 'Simulation'
+        : input.environment === 'production' ? 'Production' : null;
+      const rows = await db.select({
+        id: zatcaUnitLifecycleEvents.id,
+        action: zatcaUnitLifecycleEvents.action,
+        previousStatus: zatcaUnitLifecycleEvents.previousStatus,
+        nextStatus: zatcaUnitLifecycleEvents.nextStatus,
+        reason: zatcaUnitLifecycleEvents.reason,
+        actorUsername: zatcaUnitLifecycleEvents.actorUsername,
+        createdAt: zatcaUnitLifecycleEvents.createdAt,
+        environment: zatcaEnvironments.name,
+      })
+        .from(zatcaUnitLifecycleEvents)
+        .leftJoin(zatcaEnvironments, eq(zatcaEnvironments.id, zatcaUnitLifecycleEvents.environmentId))
+        .where(and(
+          eq(zatcaUnitLifecycleEvents.orgId, ctx.user.orgId),
+          eq(zatcaUnitLifecycleEvents.posUnitId, input.posUnitId),
+          ...(environmentName ? [eq(zatcaEnvironments.name, environmentName)] : []),
+        ))
+        .orderBy(desc(zatcaUnitLifecycleEvents.createdAt))
+        .limit(100);
+      return rows;
+    }),
+
+  deleteDraftPosUnit: adminProcedure
+    .input(z.object({ posUnitId: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const unit = await db.query.zatcaPosUnits.findFirst({
+        where: and(eq(zatcaPosUnits.id, input.posUnitId), eq(zatcaPosUnits.orgId, ctx.user.orgId), eq(zatcaPosUnits.isActive, true), eq(zatcaPosUnits.isDeleted, false)),
+      });
+      if (!unit) throw new TRPCError({ code: 'NOT_FOUND', message: 'وحدة الربط غير موجودة' });
+      const device = await db.query.zatcaDevices.findFirst({
+        where: and(eq(zatcaDevices.orgId, ctx.user.orgId), eq(zatcaDevices.posUnitId, unit.id), eq(zatcaDevices.isActive, true), eq(zatcaDevices.isDeleted, false)),
+        columns: { id: true },
+      });
+      const [journal, fixture, compliance, transaction, queue] = await Promise.all([
+        db.query.documentJournals.findFirst({ where: and(eq(documentJournals.orgId, ctx.user.orgId), eq(documentJournals.zatcaPosUnitId, unit.id), eq(documentJournals.isActive, true)), columns: { id: true } }),
+        db.query.zatcaComplianceFixtures.findFirst({ where: and(eq(zatcaComplianceFixtures.orgId, ctx.user.orgId), eq(zatcaComplianceFixtures.posUnitId, unit.id), eq(zatcaComplianceFixtures.isActive, true), eq(zatcaComplianceFixtures.isDeleted, false)), columns: { id: true } }),
+        db.query.zatcaComplianceTests.findFirst({ where: and(eq(zatcaComplianceTests.orgId, ctx.user.orgId), eq(zatcaComplianceTests.posUnitId, unit.id), eq(zatcaComplianceTests.isActive, true), eq(zatcaComplianceTests.isDeleted, false)), columns: { id: true } }),
+        db.query.zatcaInvoiceTransactions.findFirst({ where: and(eq(zatcaInvoiceTransactions.orgId, ctx.user.orgId), eq(zatcaInvoiceTransactions.deviceId, device?.id ?? -1), eq(zatcaInvoiceTransactions.isActive, true), eq(zatcaInvoiceTransactions.isDeleted, false)), columns: { id: true } }),
+        db.query.zatcaSubmissionQueue.findFirst({ where: and(eq(zatcaSubmissionQueue.orgId, ctx.user.orgId), eq(zatcaSubmissionQueue.posUnitId, unit.id)), columns: { id: true } }),
+      ]);
+      if (device || journal || fixture || compliance || transaction || queue) {
+        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'لا يُحذف إلا الربط المسودة الذي لم يحصل على جهاز أو دفتر أو مستند أو نتيجة اختبار' });
+      }
+      const now = new Date();
+      await db.update(zatcaPosUnits).set({ isActive: false, isDeleted: true, updatedAt: now, updatedBy: ctx.user.id }).where(eq(zatcaPosUnits.id, unit.id));
+      return { ok: true, deleted: true };
     }),
 
   linkJournalToPosUnit: adminProcedure

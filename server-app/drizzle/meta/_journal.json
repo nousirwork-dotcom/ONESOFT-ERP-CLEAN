@@ -575,6 +575,13 @@
       "when": 1786320100000,
       "tag": "0081_zatca_environment_device_separation",
       "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1786320200000,
+      "tag": "0082_zatca_unit_lifecycle",
+      "breakpoints": true
     }
   ]
 }

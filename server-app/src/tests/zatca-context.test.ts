@@ -100,6 +100,18 @@ describe('resolveZatcaContext', () => {
     }
   });
 
+  it('blocks a paused OneSoft linking unit before resolving context', () => {
+    expect(() => resolveZatcaContextFromRecords(records({
+      posUnit: { ...records().posUnit!, oneSoftStatus: 'paused' },
+    }), 'simulation')).toThrow('متوقفة مؤقتًا');
+  });
+
+  it('blocks a cancelled environment without exposing any secret material', () => {
+    expect(() => resolveZatcaContextFromRecords(records({
+      egs: [{ ...records().egs[0]!, lifecycleStatus: 'cancelled_from_fatoora' }],
+    }), 'simulation')).toThrow('إلغاء');
+  });
+
   it('allows an admin to resolve journals for both units', () => {
     const result = resolveZatcaContextFromRecords(records({
       user: { id: 99, orgId: 1, role: 'admin', userGroupId: null },

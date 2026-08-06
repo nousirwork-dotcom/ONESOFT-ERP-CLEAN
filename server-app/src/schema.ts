@@ -772,6 +772,10 @@ export const zatcaPosUnits = pgTable('zatca_pos_units', {
   unitCode:    varchar('unit_code', { length: 50 }).notNull(),
   unitName:    varchar('unit_name', { length: 255 }).notNull(),
   status:      varchar('status', { length: 30 }).notNull().default('unlinked'),
+  oneSoftStatus: varchar('onesoft_status', { length: 30 }).notNull().default('active'),
+  lifecycleUpdatedAt: timestamp('lifecycle_updated_at'),
+  lifecycleUpdatedBy: integer('lifecycle_updated_by').references(() => users.id, { onDelete: 'set null' }),
+  lifecycleReason: text('lifecycle_reason'),
   isActive:    boolean('is_active').notNull().default(true),
   isDeleted:   boolean('is_deleted').notNull().default(false),
   createdAt:   timestamp('created_at').notNull().defaultNow(),
@@ -1237,6 +1241,11 @@ export const zatcaDevices = pgTable('zatca_devices', {
   environmentId:        integer('environment_id').references(() => zatcaEnvironments.id, { onDelete: 'set null' }),
   userId:               integer('user_id').references(() => users.id, { onDelete: 'set null' }),
   registrationStatus:   varchar('registration_status', { length: 30 }).notNull().default('pending'),
+  lifecycleStatus:      varchar('lifecycle_status', { length: 40 }).notNull().default('active'),
+  lifecycleUpdatedAt:   timestamp('lifecycle_updated_at'),
+  lifecycleUpdatedBy:   integer('lifecycle_updated_by').references(() => users.id, { onDelete: 'set null' }),
+  cancellationConfirmedAt: timestamp('cancellation_confirmed_at'),
+  cancellationNote:     text('cancellation_note'),
   lastRegistrationDate: timestamp('last_registration_date'),
   lastConnectionDate:   timestamp('last_connection_date'),
   currentCsidId:        integer('current_csid_id'),           // FK دوري — مُعرَّف في SQL فقط
@@ -1251,6 +1260,24 @@ export const zatcaDevices = pgTable('zatca_devices', {
      .on(t.orgId, t.posUnitId, t.environmentId)
      .where(sql`${t.posUnitId} IS NOT NULL AND ${t.environmentId} IS NOT NULL AND ${t.isActive} = true AND ${t.isDeleted} = false`),
 }));
+
+// ─── ZATCA Unit lifecycle audit ───────────────────────────────────────────────
+// Records OneSoft pause/resume/archive actions and the user's confirmation that
+// an environment was cancelled externally in Fatoora. No secret is stored here.
+export const zatcaUnitLifecycleEvents = pgTable('zatca_unit_lifecycle_events', {
+  id:             serial('id').primaryKey(),
+  orgId:          integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  posUnitId:      integer('pos_unit_id').notNull().references(() => zatcaPosUnits.id, { onDelete: 'cascade' }),
+  deviceId:       integer('device_id').references(() => zatcaDevices.id, { onDelete: 'set null' }),
+  environmentId:  integer('environment_id').references(() => zatcaEnvironments.id, { onDelete: 'set null' }),
+  action:         varchar('action', { length: 50 }).notNull(),
+  previousStatus: varchar('previous_status', { length: 50 }),
+  nextStatus:     varchar('next_status', { length: 50 }),
+  reason:         text('reason'),
+  actorUserId:    integer('actor_user_id').references(() => users.id, { onDelete: 'set null' }),
+  actorUsername:  varchar('actor_username', { length: 100 }),
+  createdAt:      timestamp('created_at').notNull().defaultNow(),
+});
 
 // ─── 3. ZATCA Certificates ────────────────────────────────────────────────────
 export const zatcaCertificates = pgTable('zatca_certificates', {

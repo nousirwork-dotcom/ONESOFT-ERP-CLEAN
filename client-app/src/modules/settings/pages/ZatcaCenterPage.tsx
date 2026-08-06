@@ -955,6 +955,7 @@ function LinkingUnitsSection({ onActivate }: { onActivate?: () => void }) {
   const journalsQ = trpc.zatca.listLinkingJournalOptions.useQuery();
   const [form, setForm] = useState({ journalId: "", unitCode: "", unitName: "" });
   const [linkingUnitId, setLinkingUnitId] = useState<number | null>(null);
+  const [auditUnitId, setAuditUnitId] = useState<number | null>(null);
 
   const createM = trpc.zatca.createPosUnit.useMutation({
     onSuccess: () => {
@@ -982,6 +983,46 @@ function LinkingUnitsSection({ onActivate }: { onActivate?: () => void }) {
     },
     onError: e => toast.error(e.message),
   });
+  const lifecycleM = trpc.zatca.setUnitEnvironmentLifecycle.useMutation({
+    onSuccess: data => {
+      toast.success(data.status === "paused" ? "تم إيقاف البيئة مؤقتًا" : data.status === "active" ? "تم استئناف البيئة" : data.status === "archived" ? "تمت أرشفة البيئة" : "تم تحديث حالة البيئة");
+      utils.zatca.listPosUnits.invalidate();
+    },
+    onError: e => toast.error(e.message),
+  });
+  const cancelM = trpc.zatca.confirmUnitCancellation.useMutation({
+    onSuccess: () => {
+      toast.success("تم تسجيل تأكيد الإلغاء في سجل المراجعة");
+      utils.zatca.listPosUnits.invalidate();
+    },
+    onError: e => toast.error(e.message),
+  });
+  const archiveM = trpc.zatca.archivePosUnit.useMutation({
+    onSuccess: () => {
+      toast.success("تمت أرشفة الوحدة دون حذف بياناتها");
+      utils.zatca.listPosUnits.invalidate();
+    },
+    onError: e => toast.error(e.message),
+  });
+  const deleteDraftM = trpc.zatca.deleteDraftPosUnit.useMutation({
+    onSuccess: () => {
+      toast.success("تم حذف مسودة الربط غير المستخدمة");
+      utils.zatca.listPosUnits.invalidate();
+      utils.zatca.listLinkingJournalOptions.invalidate();
+    },
+    onError: e => toast.error(e.message),
+  });
+  const unitLifecycleM = trpc.zatca.setUnitLifecycle.useMutation({
+    onSuccess: data => {
+      toast.success(data.status === "paused" ? "تم إيقاف الوحدة داخل OneSoft" : "تم استئناف الوحدة داخل OneSoft");
+      utils.zatca.listPosUnits.invalidate();
+    },
+    onError: e => toast.error(e.message),
+  });
+  const auditQ = trpc.zatca.getUnitLifecycleEvents.useQuery(
+    { posUnitId: auditUnitId ?? 0 },
+    { enabled: auditUnitId != null },
+  );
 
   const journals = journalsQ.data ?? [];
   const selected = journals.find(j => j.id === Number(form.journalId));
@@ -1003,7 +1044,58 @@ function LinkingUnitsSection({ onActivate }: { onActivate?: () => void }) {
     && form.unitName.trim()
     && missingJournalTypes.length === 0
   );
-  const busy = createM.isPending || linkM.isPending || unlinkM.isPending;
+  const busy = createM.isPending || linkM.isPending || unlinkM.isPending
+    || lifecycleM.isPending || cancelM.isPending || archiveM.isPending || deleteDraftM.isPending || unitLifecycleM.isPending;
+  const unitStatusLabel: Record<string, string> = {
+    draft: "مسودة",
+    initializing: "قيد التهيئة",
+    active: "نشطة",
+    paused: "متوقفة مؤقتًا",
+    archived: "مؤرشفة",
+  };
+  const environmentStatusLabel: Record<string, string> = {
+    active: "نشطة",
+    paused: "متوقفة مؤقتًا",
+    cancelled_from_fatoora: "ملغاة من منصة فاتورة",
+    archived: "مؤرشفة",
+  };
+  const environmentStatusColor = (status?: string | null) =>
+    status === "active" ? "#166534"
+      : status === "paused" ? "#92400e"
+        : status === "cancelled_from_fatoora" || status === "archived" ? "#991b1b"
+          : "#64748b";
+  const askReason = (label: string, required = false) => {
+    const value = window.prompt(`${label}${required ? " (مطلوب)" : " (اختياري)"}`);
+    if (required && !value?.trim()) {
+      toast.error("يجب إدخال السبب");
+      return null;
+    }
+    return value?.trim() ?? "";
+  };
+  const runEnvironmentAction = (
+    posUnitId: number,
+    environment: "simulation" | "production",
+    action: "pause" | "resume" | "refresh" | "archive",
+  ) => {
+    if (action === "pause" && !window.confirm("سيمنع الإيقاف إصدار وإرسال المستندات الجديدة لهذه البيئة. هل تريد المتابعة؟")) return;
+    if (action === "archive" && !window.confirm("ستُؤرشف هذه البيئة ولن تُستخدم لاحقًا، مع إبقاء الشهادات والمفاتيح والفواتير محفوظة. هل تريد المتابعة؟")) return;
+    const reason = action === "pause" || action === "archive" ? askReason(action === "archive" ? "سبب الأرشفة" : "سبب الإيقاف") : "";
+    if (reason === null) return;
+    lifecycleM.mutate({ posUnitId, environment, action, ...(reason ? { reason } : {}) });
+  };
+  const openCancellationInstructions = (environment: "simulation" | "production") => {
+    window.alert(
+      `${ENVIRONMENT_COPY[environment].shortTitle}\n\n`
+      + "هذا الخيار لا ينفذ إلغاءً تقنيًا ولا يحذف شهادة أو مفتاحًا من OneSoft.\n"
+      + "افتح منصة فاتورة، نفّذ الإلغاء هناك وفق إجراءاتها، ثم عد إلى البطاقة واختر «تأكيد الإلغاء بعد التنفيذ» لتسجيل الإقرار فقط.",
+    );
+  };
+  const confirmCancellation = (posUnitId: number, environment: "simulation" | "production") => {
+    if (!window.confirm("أقرّ بأنني نفذت إلغاء هذه الوحدة من منصة فاتورة خارجيًا. سيتم منع استخدامها داخل OneSoft وتسجيل العملية في سجل المراجعة.")) return;
+    const reason = askReason("سبب الإلغاء من منصة فاتورة", true);
+    if (reason === null) return;
+    cancelM.mutate({ posUnitId, environment, reason });
+  };
 
   return (
     <div>
@@ -1100,7 +1192,7 @@ function LinkingUnitsSection({ onActivate }: { onActivate?: () => void }) {
       {unitsQ.isLoading ? <Skeleton height={80} /> : (
         <div style={{ display: "grid", gap: 10 }}>
           {(unitsQ.data ?? []).map(unit => (
-            <div key={unit.id} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: 14 }}>
+            <div key={unit.id} style={{ background: "#fff", border: unit.oneSoftStatus === "archived" ? "1px solid #cbd5e1" : "1px solid #e2e8f0", borderRadius: 10, padding: 14, opacity: unit.oneSoftStatus === "archived" ? 0.82 : 1 }}>
               <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10 }}>
                 <div style={{ width: 38, height: 38, borderRadius: 9, background: "#fef3c7", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>🧩</div>
                 <div style={{ flex: 1 }}>
@@ -1109,14 +1201,22 @@ function LinkingUnitsSection({ onActivate }: { onActivate?: () => void }) {
                     المخزن/الفرع: {unit.branchName ? `${unit.branchName} — ` : ""}{unit.warehouseName ?? "—"}
                   </div>
                 </div>
-                <StatusBadge status={unit.environmentStatuses?.simulation?.registrationStatus ?? "pending"} />
+                 <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                   <span style={{ fontSize: 11, fontWeight: 800, color: unitStatusLabel[unit.oneSoftStatus] === "متوقفة مؤقتًا" ? "#92400e" : "#334155" }}>
+                     {unitStatusLabel[unit.oneSoftStatus] ?? (unit.oneSoftStatus || "نشطة")}
+                   </span>
+                   <StatusBadge status={unit.environmentStatuses?.simulation?.registrationStatus ?? "pending"} />
+                 </div>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8, marginBottom: 10 }}>
                 <div style={{ background: "#eff6ff", borderRadius: 6, padding: "9px 10px", fontSize: 10, border: "1px solid #bfdbfe" }}>
                   <div style={{ color: "#1d4ed8", fontWeight: 800, marginBottom: 5 }}>الاختبار التجريبي</div>
-                  <strong style={{ color: unit.environmentStatuses?.simulation ? "#166534" : "#64748b" }}>
-                    {unit.environmentStatuses?.simulation?.registrationStatus === "operational" ? "✓ مكتمل" : unit.environmentStatuses?.simulation ? "مهيأة" : "○ غير مفعّل"}
+                   <strong style={{ color: environmentStatusColor(unit.environmentStatuses?.simulation?.lifecycleStatus) }}>
+                     {environmentStatusLabel[unit.environmentStatuses?.simulation?.lifecycleStatus ?? ""] ?? (unit.environmentStatuses?.simulation?.registrationStatus === "operational" ? "مكتملة" : unit.environmentStatuses?.simulation ? "قيد التهيئة" : "مسودة")}
                   </strong>
+                   <div style={{ color: environmentStatusColor(unit.environmentStatuses?.simulation?.lifecycleStatus), marginTop: 4 }}>
+                     حالة الاستخدام: {environmentStatusLabel[unit.environmentStatuses?.simulation?.lifecycleStatus ?? ""] ?? "قيد التهيئة"}
+                   </div>
                   <div style={{ color: "#64748b", marginTop: 4 }}>
                     {unit.environmentStatuses?.simulation?.certificatePresent ? "الشهادة موجودة" : "لا توجد شهادة"}
                   </div>
@@ -1125,12 +1225,26 @@ function LinkingUnitsSection({ onActivate }: { onActivate?: () => void }) {
                       ? `${unit.environmentCompliance.simulation.filter((test: any) => test.status === "passed" || test.status === "passed_with_warnings" || test.status === "completed_previously").length}/${unit.environmentCompliance.simulation.length} مكتملة`
                       : "لا توجد نتائج"}
                   </div>
+                   <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 8 }}>
+                     {unit.environmentStatuses?.simulation && unit.environmentStatuses.simulation.lifecycleStatus !== "cancelled_from_fatoora" && unit.environmentStatuses.simulation.lifecycleStatus !== "archived" && (
+                       <button disabled={busy || unit.oneSoftStatus === "archived"} onClick={() => runEnvironmentAction(unit.id, "simulation", unit.environmentStatuses?.simulation?.lifecycleStatus === "paused" ? "resume" : "pause")} style={{ ...smallBtn, background: unit.environmentStatuses.simulation.lifecycleStatus === "paused" ? "#dcfce7" : "#fef3c7", color: unit.environmentStatuses.simulation.lifecycleStatus === "paused" ? "#166534" : "#92400e" }}>
+                         {unit.environmentStatuses.simulation.lifecycleStatus === "paused" ? "▶ استئناف" : "⏸ إيقاف مؤقت"}
+                       </button>
+                     )}
+                     <button disabled={busy} onClick={() => runEnvironmentAction(unit.id, "simulation", "refresh")} style={{ ...smallBtn, background: "#f1f5f9", color: "#475569" }}>↻ تحديث الحالة</button>
+                     {unit.environmentStatuses?.simulation && unit.environmentStatuses.simulation.lifecycleStatus !== "archived" && <button disabled={busy} onClick={() => runEnvironmentAction(unit.id, "simulation", "archive")} style={{ ...smallBtn, background: "#f1f5f9", color: "#475569" }}>▣ أرشفة البيئة</button>}
+                     <button disabled={busy} onClick={() => openCancellationInstructions("simulation")} style={{ ...smallBtn, background: "#fff", color: "#7c2d12", border: "1px solid #fed7aa" }}>↗ إلغاء من منصة فاتورة</button>
+                     {unit.environmentStatuses?.simulation && <button disabled={busy} onClick={() => confirmCancellation(unit.id, "simulation")} style={{ ...smallBtn, background: "#fee2e2", color: "#991b1b" }}>✓ تأكيد الإلغاء بعد التنفيذ</button>}
+                   </div>
                 </div>
                 <div style={{ background: "#f0fdf4", borderRadius: 6, padding: "9px 10px", fontSize: 10, border: "1px solid #bbf7d0" }}>
                   <div style={{ color: "#15803d", fontWeight: 800, marginBottom: 5 }}>الربط الفعلي</div>
-                  <strong style={{ color: unit.environmentStatuses?.production ? "#166534" : "#64748b" }}>
-                    {unit.environmentStatuses?.production?.registrationStatus === "operational" ? "✓ مفعّل" : "○ غير مفعّل"}
+                   <strong style={{ color: environmentStatusColor(unit.environmentStatuses?.production?.lifecycleStatus) }}>
+                     {environmentStatusLabel[unit.environmentStatuses?.production?.lifecycleStatus ?? ""] ?? (unit.environmentStatuses?.production?.registrationStatus === "operational" ? "نشطة" : unit.environmentStatuses?.production ? "قيد التهيئة" : "مسودة")}
                   </strong>
+                   <div style={{ color: environmentStatusColor(unit.environmentStatuses?.production?.lifecycleStatus), marginTop: 4 }}>
+                     حالة الاستخدام: {environmentStatusLabel[unit.environmentStatuses?.production?.lifecycleStatus ?? ""] ?? "قيد التهيئة"}
+                   </div>
                   <div style={{ color: "#64748b", marginTop: 4 }}>
                     {unit.environmentStatuses?.production?.certificatePresent ? "الشهادة موجودة" : "لم يبدأ"}
                   </div>
@@ -1139,6 +1253,17 @@ function LinkingUnitsSection({ onActivate }: { onActivate?: () => void }) {
                       ? `${unit.environmentCompliance.production.filter((test: any) => test.status === "passed" || test.status === "passed_with_warnings" || test.status === "completed_previously").length}/${unit.environmentCompliance.production.length} مكتملة`
                       : "لا توجد نتائج"}
                   </div>
+                   <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 8 }}>
+                     {unit.environmentStatuses?.production && unit.environmentStatuses.production.lifecycleStatus !== "cancelled_from_fatoora" && unit.environmentStatuses.production.lifecycleStatus !== "archived" && (
+                       <button disabled={busy || unit.oneSoftStatus === "archived"} onClick={() => runEnvironmentAction(unit.id, "production", unit.environmentStatuses?.production?.lifecycleStatus === "paused" ? "resume" : "pause")} style={{ ...smallBtn, background: unit.environmentStatuses.production.lifecycleStatus === "paused" ? "#dcfce7" : "#fef3c7", color: unit.environmentStatuses.production.lifecycleStatus === "paused" ? "#166534" : "#92400e" }}>
+                         {unit.environmentStatuses.production.lifecycleStatus === "paused" ? "▶ استئناف" : "⏸ إيقاف مؤقت"}
+                       </button>
+                     )}
+                     <button disabled={busy} onClick={() => runEnvironmentAction(unit.id, "production", "refresh")} style={{ ...smallBtn, background: "#f1f5f9", color: "#475569" }}>↻ تحديث الحالة</button>
+                     {unit.environmentStatuses?.production && unit.environmentStatuses.production.lifecycleStatus !== "archived" && <button disabled={busy} onClick={() => runEnvironmentAction(unit.id, "production", "archive")} style={{ ...smallBtn, background: "#f1f5f9", color: "#475569" }}>▣ أرشفة البيئة</button>}
+                     <button disabled={busy} onClick={() => openCancellationInstructions("production")} style={{ ...smallBtn, background: "#fff", color: "#7c2d12", border: "1px solid #fed7aa" }}>↗ إلغاء من منصة فاتورة</button>
+                     {unit.environmentStatuses?.production && <button disabled={busy} onClick={() => confirmCancellation(unit.id, "production")} style={{ ...smallBtn, background: "#fee2e2", color: "#991b1b" }}>✓ تأكيد الإلغاء بعد التنفيذ</button>}
+                   </div>
                 </div>
               </div>
               <div style={{ fontWeight: 700, fontSize: 11, marginBottom: 6 }}>الدفاتر المرتبطة ({unit.journals.length})</div>
@@ -1165,6 +1290,45 @@ function LinkingUnitsSection({ onActivate }: { onActivate?: () => void }) {
                   <button onClick={() => setLinkingUnitId(unit.id)} disabled={busy} style={{ ...smallBtn, background: "#eff6ff", color: "#1d4ed8", cursor: busy ? "not-allowed" : "pointer" }}>إدارة الدفاتر</button>
                   <button onClick={() => onActivate?.()} style={{ ...smallBtn, background: "#fef3c7", color: "#92400e" }}>فتح التفعيل</button>
                   <button onClick={() => toast.info(`تفاصيل وحدة الربط: ${unit.unitName}`)} style={{ ...smallBtn, background: "#f1f5f9", color: "#475569" }}>التفاصيل</button>
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 12, paddingTop: 10, borderTop: "1px solid #f1f5f9" }}>
+                {unit.oneSoftStatus !== "archived" && (
+                  <button disabled={busy} onClick={() => {
+                    const action = unit.oneSoftStatus === "paused" ? "resume" : "pause";
+                    if (!window.confirm(action === "pause"
+                      ? "ستتوقف الوحدة داخل OneSoft ولن تُصدر أو ترسل مستندات جديدة. هل تريد الإيقاف؟"
+                      : "سيُسمح للوحدة بإصدار وإرسال المستندات من جديد. هل تريد الاستئناف؟")) return;
+                    const reason = action === "pause" ? askReason("سبب إيقاف الوحدة") : "";
+                    if (reason === null) return;
+                    unitLifecycleM.mutate({ posUnitId: unit.id, action, ...(reason ? { reason } : {}) });
+                  }} style={{ ...smallBtn, background: unit.oneSoftStatus === "paused" ? "#dcfce7" : "#fef3c7", color: unit.oneSoftStatus === "paused" ? "#166534" : "#92400e" }}>
+                    {unit.oneSoftStatus === "paused" ? "▶ استئناف الوحدة" : "⏸ إيقاف الوحدة مؤقتًا"}
+                  </button>
+                )}
+                <button disabled={busy || unit.oneSoftStatus === "archived"} onClick={() => {
+                  const reason = askReason("سبب الأرشفة", true);
+                  if (reason !== null) archiveM.mutate({ posUnitId: unit.id, reason });
+                }} style={{ ...smallBtn, background: "#f1f5f9", color: "#475569" }}>▣ أرشفة الوحدة</button>
+                {unit.oneSoftStatus === "draft" && <button disabled={busy} onClick={() => {
+                  if (window.confirm("سيُحذف الربط المسودة فقط إذا لم يكن مستخدمًا أو مرتبطًا بأي بيانات. هل تريد المتابعة؟")) deleteDraftM.mutate({ posUnitId: unit.id });
+                }} style={{ ...smallBtn, background: "#fee2e2", color: "#991b1b" }}>حذف المسودة</button>}
+                <button disabled={busy} onClick={() => setAuditUnitId(auditUnitId === unit.id ? null : unit.id)} style={{ ...smallBtn, background: "#eef2ff", color: "#3730a3" }}>
+                  {auditUnitId === unit.id ? "إخفاء سجل التدقيق" : "سجل التدقيق"}
+                </button>
+              </div>
+              {auditUnitId === unit.id && (
+                <div style={{ marginTop: 10, padding: 10, borderRadius: 8, background: "#f8fafc", border: "1px solid #e2e8f0" }}>
+                  <div style={{ fontWeight: 800, fontSize: 11, marginBottom: 7 }}>سجل إجراءات دورة الحياة</div>
+                  {auditQ.isLoading ? <div style={{ color: "#64748b", fontSize: 11 }}>جارٍ تحميل السجل...</div>
+                    : auditQ.data?.length ? auditQ.data.map(event => (
+                      <div key={event.id} style={{ display: "flex", gap: 8, alignItems: "baseline", borderTop: "1px solid #e2e8f0", padding: "6px 0", fontSize: 10 }}>
+                        <strong style={{ minWidth: 155 }}>{event.action}</strong>
+                        <span style={{ color: "#475569" }}>{event.previousStatus ?? "—"} ← {event.nextStatus ?? "—"}</span>
+                        <span style={{ color: "#64748b", flex: 1 }}>{event.reason ?? ""}</span>
+                        <span style={{ color: "#94a3b8" }}>{event.actorUsername ?? "—"} · {new Date(event.createdAt).toLocaleString("ar-SA")}</span>
+                      </div>
+                    )) : <div style={{ color: "#64748b", fontSize: 11 }}>لا توجد إجراءات مسجلة.</div>}
                 </div>
               )}
             </div>
@@ -3470,7 +3634,10 @@ function EnvironmentSelection({
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: 10, marginBottom: 10 }}>
             <div>
               <div style={{ fontSize: 22, marginBottom: 5 }}>🚀</div>
-              <div style={{ fontWeight: 900, fontSize: 16, color: "#166534" }}>{ENVIRONMENT_COPY.production.fullTitle}</div>
+              <div dir="rtl" style={{ fontWeight: 900, fontSize: 16, color: "#166534", lineHeight: 1.45 }}>
+                <div>الربط الفعلي — منصة فاتورة</div>
+                <div dir="ltr" style={{ fontSize: 12, marginTop: 2, fontWeight: 700 }}>Production</div>
+              </div>
             </div>
             <span style={{ background: "#dcfce7", color: "#166534", border: "1px solid #86efac", borderRadius: 999, padding: "4px 9px", fontSize: 10, fontWeight: 800, whiteSpace: "nowrap" }}>إنتاج فعلي</span>
           </div>
@@ -3490,7 +3657,10 @@ function EnvironmentSelection({
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: 10, marginBottom: 10 }}>
             <div>
               <div style={{ fontSize: 22, marginBottom: 5 }}>🧪</div>
-              <div style={{ fontWeight: 900, fontSize: 16, color: "#1d4ed8" }}>{ENVIRONMENT_COPY.simulation.fullTitle}</div>
+              <div dir="rtl" style={{ fontWeight: 900, fontSize: 16, color: "#1d4ed8", lineHeight: 1.45 }}>
+                <div>الاختبار التجريبي — منصة محاكاة فاتورة</div>
+                <div dir="ltr" style={{ fontSize: 12, marginTop: 2, fontWeight: 700 }}>Fatoora Simulation</div>
+              </div>
             </div>
             <span style={{ background: "#dbeafe", color: "#1d4ed8", border: "1px solid #93c5fd", borderRadius: 999, padding: "4px 9px", fontSize: 10, fontWeight: 800, whiteSpace: "nowrap" }}>اختياري — للاختبار والدعم الفني</span>
           </div>
@@ -3825,7 +3995,7 @@ export default function ZatcaCenterPage({
       {/* المحتوى الرئيسي */}
       <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
         <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1e40af", borderRadius: 8, padding: "9px 12px", marginBottom: 12, fontSize: 11, fontWeight: 700 }}>
-          المحاكاة الرسمية للهيئة مرحلة اعتماد قبل الإنتاج. لا يتم تفعيل الإنتاج إلا بعد اكتمال المطابقة واعتماد المسؤول.
+          الاختبار التجريبي في منصة محاكاة فاتورة اختياري، ويمكن بدء الربط الفعلي مباشرة. تحتفظ كل بيئة ببياناتها واعتماداتها بشكل مستقل.
         </div>
         {renderSection()}
       </div>

@@ -10,6 +10,8 @@ import {
   zatcaResponseLog,
   zatcaSubmissionAttempts,
   zatcaSubmissionQueue,
+  zatcaDevices,
+  zatcaPosUnits,
 } from '../schema.js';
 import {
   buildMockAuthorityResponse,
@@ -21,6 +23,7 @@ import {
   type ZatcaMockOutcome,
   type ZatcaOperation,
 } from './zatcaLifecycle.js';
+import { assertEnvironmentCanBeUsed, assertUnitCanBeUsed } from './zatcaUnitLifecycle.js';
 
 type QueueRow = {
   id: number;
@@ -32,6 +35,8 @@ type QueueRow = {
   invoice_counter: number;
   idempotency_key: string;
   mock_outcome: ZatcaMockOutcome;
+  pos_unit_id: number | null;
+  device_id: number | null;
   locked_by: string | null;
 };
 
@@ -51,6 +56,32 @@ export async function enqueueZatcaSubmission(input: {
   availableAt?: Date;
   initialState?: 'queued' | 'retry_pending' | 'uncertain';
 }) {
+  const [unit, device] = await Promise.all([
+    db.query.zatcaPosUnits.findFirst({
+      where: and(
+        eq(zatcaPosUnits.id, input.posUnitId),
+        eq(zatcaPosUnits.orgId, input.orgId),
+        eq(zatcaPosUnits.isActive, true),
+        eq(zatcaPosUnits.isDeleted, false),
+      ),
+      columns: { id: true, orgId: true, oneSoftStatus: true },
+    }),
+    db.query.zatcaDevices.findFirst({
+      where: and(
+        eq(zatcaDevices.id, input.deviceId),
+        eq(zatcaDevices.orgId, input.orgId),
+        eq(zatcaDevices.isActive, true),
+        eq(zatcaDevices.isDeleted, false),
+      ),
+      columns: { id: true, lifecycleStatus: true },
+    }),
+  ]);
+  assertUnitCanBeUsed(unit);
+  if (!device) {
+    throw new Error('وحدة EGS غير موجودة أو غير فعالة');
+  }
+  assertEnvironmentCanBeUsed(device.lifecycleStatus);
+
   const existing = await db.query.zatcaSubmissionQueue.findFirst({
     where: and(
       eq(zatcaSubmissionQueue.transactionId, input.transactionId),
@@ -120,7 +151,8 @@ async function claimNextQueueItem(): Promise<QueueRow | null> {
            updated_at = now()
      WHERE q.id = (SELECT id FROM candidate)
      RETURNING q.id, q.org_id, q.transaction_id, q.queue_key, q.operation,
-               q.uuid, q.invoice_counter, q.idempotency_key, q.mock_outcome, q.locked_by
+                q.uuid, q.invoice_counter, q.idempotency_key, q.mock_outcome,
+                q.pos_unit_id, q.device_id, q.locked_by
   `);
   return (result.rows[0] as QueueRow | undefined) ?? null;
 }
@@ -150,10 +182,46 @@ async function processQueueItem(item: QueueRow): Promise<void> {
           columns: { name: true },
         })
       : null;
+    const unit = item.pos_unit_id
+      ? await tx.query.zatcaPosUnits.findFirst({
+          where: and(
+            eq(zatcaPosUnits.id, item.pos_unit_id),
+            eq(zatcaPosUnits.orgId, item.org_id),
+            eq(zatcaPosUnits.isActive, true),
+            eq(zatcaPosUnits.isDeleted, false),
+          ),
+          columns: { oneSoftStatus: true },
+        })
+      : null;
+    const device = item.device_id
+      ? await tx.query.zatcaDevices.findFirst({
+          where: and(
+            eq(zatcaDevices.id, item.device_id),
+            eq(zatcaDevices.orgId, item.org_id),
+            eq(zatcaDevices.isActive, true),
+            eq(zatcaDevices.isDeleted, false),
+          ),
+          columns: { lifecycleStatus: true },
+        })
+      : null;
     if (!transaction) {
       await tx.update(zatcaSubmissionQueue).set({
         state: 'failed',
         lastError: 'معاملة ZATCA غير موجودة',
+        updatedAt: new Date(),
+      }).where(eq(zatcaSubmissionQueue.id, item.id));
+      return;
+    }
+
+    if (unit?.oneSoftStatus === 'paused' || unit?.oneSoftStatus === 'archived'
+      || device?.lifecycleStatus === 'paused'
+      || device?.lifecycleStatus === 'cancelled_from_fatoora'
+      || device?.lifecycleStatus === 'archived') {
+      await tx.update(zatcaSubmissionQueue).set({
+        state: 'blocked',
+        lastError: 'تم منع الإرسال لأن وحدة الربط أو بيئتها متوقفة أو ملغاة أو مؤرشفة',
+        lockedAt: null,
+        lockedBy: null,
         updatedAt: new Date(),
       }).where(eq(zatcaSubmissionQueue.id, item.id));
       return;
