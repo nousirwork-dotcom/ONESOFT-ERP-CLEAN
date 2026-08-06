@@ -778,20 +778,11 @@ export const zatcaRouter = router({
       isActive: zatcaPosUnits.isActive,
       createdAt: zatcaPosUnits.createdAt,
       updatedAt: zatcaPosUnits.updatedAt,
-      egsId: zatcaDevices.id,
-      egsName: zatcaDevices.deviceName,
-      egsStatus: zatcaDevices.registrationStatus,
     })
       .from(zatcaPosUnits)
       .innerJoin(warehouses, and(
         eq(warehouses.id, zatcaPosUnits.warehouseId),
         eq(warehouses.orgId, ctx.user.orgId),
-      ))
-      .leftJoin(zatcaDevices, and(
-        eq(zatcaDevices.posUnitId, zatcaPosUnits.id),
-        eq(zatcaDevices.orgId, ctx.user.orgId),
-        eq(zatcaDevices.isActive, true),
-        eq(zatcaDevices.isDeleted, false),
       ))
       .leftJoin(branches, and(
         eq(branches.id, warehouses.branchId),
@@ -804,25 +795,127 @@ export const zatcaRouter = router({
       ))
       .orderBy(asc(warehouses.name), asc(zatcaPosUnits.unitCode));
 
-    const journals = await db.select({
-      posUnitId: documentJournals.zatcaPosUnitId,
-      journalId: documentJournals.id,
-      journalCode: documentJournals.code,
-      journalName: documentJournals.name,
-      docType: documentJournals.docType,
-      warehouseId: documentJournals.warehouseId,
-    })
-      .from(documentJournals)
-      .where(and(
-        eq(documentJournals.orgId, ctx.user.orgId),
-        eq(documentJournals.isActive, true),
-        sql`${documentJournals.zatcaPosUnitId} IS NOT NULL`,
-      ))
-      .orderBy(asc(documentJournals.sortOrder), asc(documentJournals.id));
+    const [journals, devices, complianceResults] = await Promise.all([
+      db.select({
+        posUnitId: documentJournals.zatcaPosUnitId,
+        journalId: documentJournals.id,
+        journalCode: documentJournals.code,
+        journalName: documentJournals.name,
+        docType: documentJournals.docType,
+        warehouseId: documentJournals.warehouseId,
+      })
+        .from(documentJournals)
+        .where(and(
+          eq(documentJournals.orgId, ctx.user.orgId),
+          eq(documentJournals.isActive, true),
+          sql`${documentJournals.zatcaPosUnitId} IS NOT NULL`,
+        ))
+        .orderBy(asc(documentJournals.sortOrder), asc(documentJournals.id)),
+      db.select({
+        posUnitId: zatcaDevices.posUnitId,
+        environmentName: zatcaEnvironments.name,
+        deviceId: zatcaDevices.id,
+        deviceName: zatcaDevices.deviceName,
+        registrationStatus: zatcaDevices.registrationStatus,
+        lastRegistrationDate: zatcaDevices.lastRegistrationDate,
+        lastConnectionDate: zatcaDevices.lastConnectionDate,
+        complianceCsidPresent: sql<boolean>`EXISTS (
+          SELECT 1 FROM zatca_csid c
+          WHERE c.id = ${zatcaDevices.currentCsidId}
+            AND c.org_id = ${ctx.user.orgId}
+            AND c.is_active = true
+            AND c.is_deleted = false
+            AND c.compliance_csid IS NOT NULL
+            AND c.compliance_csid <> ''
+        )`,
+        operationalCsidPresent: sql<boolean>`EXISTS (
+          SELECT 1 FROM zatca_csid c
+          WHERE c.id = ${zatcaDevices.currentCsidId}
+            AND c.org_id = ${ctx.user.orgId}
+            AND c.is_active = true
+            AND c.is_deleted = false
+            AND c.production_csid IS NOT NULL
+            AND c.production_csid <> ''
+        )`,
+        certificatePresent: sql<boolean>`EXISTS (
+          SELECT 1 FROM zatca_csid c
+          INNER JOIN zatca_certificates cert ON cert.id = c.certificate_id
+          WHERE c.id = ${zatcaDevices.currentCsidId}
+            AND c.org_id = ${ctx.user.orgId}
+            AND c.is_active = true
+            AND c.is_deleted = false
+            AND cert.public_certificate IS NOT NULL
+            AND cert.public_certificate <> ''
+            AND cert.is_active = true
+            AND cert.is_deleted = false
+        )`,
+      })
+        .from(zatcaDevices)
+        .innerJoin(zatcaEnvironments, and(
+          eq(zatcaEnvironments.id, zatcaDevices.environmentId),
+          eq(zatcaEnvironments.orgId, ctx.user.orgId),
+        ))
+        .where(and(
+          eq(zatcaDevices.orgId, ctx.user.orgId),
+          eq(zatcaDevices.isActive, true),
+          eq(zatcaDevices.isDeleted, false),
+          sql`${zatcaDevices.posUnitId} IS NOT NULL`,
+        )),
+      db.select({
+        deviceId: zatcaComplianceTests.deviceId,
+        testKey: zatcaComplianceTests.testKey,
+        status: zatcaComplianceTests.status,
+        httpStatus: zatcaComplianceTests.httpStatus,
+        completedAt: zatcaComplianceTests.completedAt,
+        updatedAt: zatcaComplianceTests.updatedAt,
+      })
+        .from(zatcaComplianceTests)
+        .where(and(
+          eq(zatcaComplianceTests.orgId, ctx.user.orgId),
+          eq(zatcaComplianceTests.isActive, true),
+          eq(zatcaComplianceTests.isDeleted, false),
+          sql`${zatcaComplianceTests.deviceId} IS NOT NULL`,
+        ))
+        .orderBy(desc(zatcaComplianceTests.updatedAt)),
+    ]);
 
     return units.map((unit) => ({
       ...unit,
       journals: journals.filter((journal) => journal.posUnitId === unit.id),
+      environmentStatuses: {
+        simulation: devices.find((device) => (
+          device.posUnitId === unit.id && device.environmentName === 'Simulation'
+        )) ?? null,
+        production: devices.find((device) => (
+          device.posUnitId === unit.id && device.environmentName === 'Production'
+        )) ?? null,
+      },
+      environmentCompliance: {
+        simulation: complianceResults
+          .filter((result) => {
+            const device = devices.find((candidate) => candidate.deviceId === result.deviceId);
+            return device?.posUnitId === unit.id && device.environmentName === 'Simulation';
+          })
+          .map(({ testKey, status, httpStatus, completedAt, updatedAt }) => ({
+            testKey,
+            status,
+            httpStatus,
+            completedAt,
+            updatedAt,
+          })),
+        production: complianceResults
+          .filter((result) => {
+            const device = devices.find((candidate) => candidate.deviceId === result.deviceId);
+            return device?.posUnitId === unit.id && device.environmentName === 'Production';
+          })
+          .map(({ testKey, status, httpStatus, completedAt, updatedAt }) => ({
+            testKey,
+            status,
+            httpStatus,
+            completedAt,
+            updatedAt,
+          })),
+      },
     }));
   }),
 

@@ -1247,9 +1247,9 @@ export const zatcaDevices = pgTable('zatca_devices', {
   createdBy:            integer('created_by').references(() => users.id, { onDelete: 'set null' }),
   updatedBy:            integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
 }, (t) => ({
-  activePosUnitUidx: uniqueIndex('zatca_devices_active_pos_unit_uidx')
-    .on(t.orgId, t.posUnitId)
-    .where(sql`${t.posUnitId} IS NOT NULL AND ${t.isActive} = true AND ${t.isDeleted} = false`),
+   activePosUnitEnvironmentUidx: uniqueIndex('zatca_devices_active_pos_unit_env_uidx')
+     .on(t.orgId, t.posUnitId, t.environmentId)
+     .where(sql`${t.posUnitId} IS NOT NULL AND ${t.environmentId} IS NOT NULL AND ${t.isActive} = true AND ${t.isDeleted} = false`),
 }));
 
 // ─── 3. ZATCA Certificates ────────────────────────────────────────────────────

@@ -568,6 +568,13 @@
       "when": 1786320000000,
       "tag": "0080_zatca_fixture_customer_address",
       "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "7",
+      "when": 1786320100000,
+      "tag": "0081_zatca_environment_device_separation",
+      "breakpoints": true
     }
   ]
 }

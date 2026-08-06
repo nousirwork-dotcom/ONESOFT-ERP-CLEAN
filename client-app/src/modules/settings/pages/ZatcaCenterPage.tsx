@@ -15,6 +15,33 @@ type Section =
   | "support";
 
 type SetupStepStatus = "done" | "active" | "pending" | "error";
+type LinkingEnvironment = "simulation" | "production";
+
+const ENVIRONMENT_COPY: Record<LinkingEnvironment, {
+  title: string;
+  fullTitle: string;
+  shortTitle: string;
+  description: string;
+  color: string;
+  softColor: string;
+}> = {
+  simulation: {
+    title: "الاختبار التجريبي",
+    fullTitle: "الاختبار التجريبي — (منصة محاكاة فاتورة) Fatoora Simulation",
+    shortTitle: "الاختبار التجريبي — Fatoora Simulation",
+    description: "بيئة اختيارية لاختبار ربط OneSoft وإنشاء XML والتوقيع الإلكتروني واختبارات المطابقة قبل استخدام الفواتير الحقيقية.",
+    color: "#2563eb",
+    softColor: "#eff6ff",
+  },
+  production: {
+    title: "الربط الفعلي",
+    fullTitle: "الربط الفعلي — (منصة فاتورة) Production",
+    shortTitle: "الربط الفعلي — Production",
+    description: "ربط وحدة الفوترة بمنصة فاتورة الفعلية وإصدار اعتمادات الإنتاج اللازمة لإرسال الفواتير الحقيقية إلى الهيئة.",
+    color: "#15803d",
+    softColor: "#f0fdf4",
+  },
+};
 
 // ─── قائمة الأقسام ────────────────────────────────────────────────────────────
 const PRIMARY_SECTIONS: { id: Section; label: string; icon: string }[] = [
@@ -1082,20 +1109,36 @@ function LinkingUnitsSection({ onActivate }: { onActivate?: () => void }) {
                     المخزن/الفرع: {unit.branchName ? `${unit.branchName} — ` : ""}{unit.warehouseName ?? "—"}
                   </div>
                 </div>
-                <StatusBadge status={unit.egsId ? unit.egsStatus : "pending"} />
+                <StatusBadge status={unit.environmentStatuses?.simulation?.registrationStatus ?? "pending"} />
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 10 }}>
-                <div style={{ background: "#f8fafc", borderRadius: 6, padding: "7px 9px", fontSize: 10 }}>
-                  <div style={{ color: "#9ca3af" }}>البيئة</div><strong>محاكاة</strong>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8, marginBottom: 10 }}>
+                <div style={{ background: "#eff6ff", borderRadius: 6, padding: "9px 10px", fontSize: 10, border: "1px solid #bfdbfe" }}>
+                  <div style={{ color: "#1d4ed8", fontWeight: 800, marginBottom: 5 }}>الاختبار التجريبي</div>
+                  <strong style={{ color: unit.environmentStatuses?.simulation ? "#166534" : "#64748b" }}>
+                    {unit.environmentStatuses?.simulation?.registrationStatus === "operational" ? "✓ مكتمل" : unit.environmentStatuses?.simulation ? "مهيأة" : "○ غير مفعّل"}
+                  </strong>
+                  <div style={{ color: "#64748b", marginTop: 4 }}>
+                    {unit.environmentStatuses?.simulation?.certificatePresent ? "الشهادة موجودة" : "لا توجد شهادة"}
+                  </div>
+                  <div style={{ color: "#64748b", marginTop: 4 }}>
+                    المطابقة: {unit.environmentCompliance?.simulation?.length
+                      ? `${unit.environmentCompliance.simulation.filter((test: any) => test.status === "passed" || test.status === "passed_with_warnings" || test.status === "completed_previously").length}/${unit.environmentCompliance.simulation.length} مكتملة`
+                      : "لا توجد نتائج"}
+                  </div>
                 </div>
-                <div style={{ background: "#f8fafc", borderRadius: 6, padding: "7px 9px", fontSize: 10 }}>
-                  <div style={{ color: "#9ca3af" }}>EGS</div><strong>{unit.egsName ?? "غير مرتبط"}</strong>
-                </div>
-                <div style={{ background: "#f8fafc", borderRadius: 6, padding: "7px 9px", fontSize: 10 }}>
-                  <div style={{ color: "#9ca3af" }}>الشهادة</div><strong>غير مرتبطة</strong>
-                </div>
-                <div style={{ background: "#f8fafc", borderRadius: 6, padding: "7px 9px", fontSize: 10 }}>
-                  <div style={{ color: "#9ca3af" }}>التفعيل</div><strong>{unit.status === "active" ? "مفعّلة" : "غير مفعّلة"}</strong>
+                <div style={{ background: "#f0fdf4", borderRadius: 6, padding: "9px 10px", fontSize: 10, border: "1px solid #bbf7d0" }}>
+                  <div style={{ color: "#15803d", fontWeight: 800, marginBottom: 5 }}>الربط الفعلي</div>
+                  <strong style={{ color: unit.environmentStatuses?.production ? "#166534" : "#64748b" }}>
+                    {unit.environmentStatuses?.production?.registrationStatus === "operational" ? "✓ مفعّل" : "○ غير مفعّل"}
+                  </strong>
+                  <div style={{ color: "#64748b", marginTop: 4 }}>
+                    {unit.environmentStatuses?.production?.certificatePresent ? "الشهادة موجودة" : "لم يبدأ"}
+                  </div>
+                  <div style={{ color: "#64748b", marginTop: 4 }}>
+                    المطابقة: {unit.environmentCompliance?.production?.length
+                      ? `${unit.environmentCompliance.production.filter((test: any) => test.status === "passed" || test.status === "passed_with_warnings" || test.status === "completed_previously").length}/${unit.environmentCompliance.production.length} مكتملة`
+                      : "لا توجد نتائج"}
+                  </div>
                 </div>
               </div>
               <div style={{ fontWeight: 700, fontSize: 11, marginBottom: 6 }}>الدفاتر المرتبطة ({unit.journals.length})</div>
@@ -2797,6 +2840,7 @@ function ReportsSection() {
 type ActivationWizardProps = {
   cfg: any;
   units: any[];
+  environment: LinkingEnvironment;
   onOpenCompanyInfo?: () => void;
   onOpenTechnical?: () => void;
   onFinishedLinking: () => void;
@@ -2806,6 +2850,7 @@ type ActivationWizardProps = {
 function ActivationWizard({
   cfg,
   units,
+  environment,
   onOpenCompanyInfo,
   onOpenTechnical,
   onFinishedLinking,
@@ -2830,7 +2875,7 @@ function ActivationWizard({
   const simulationUnitId = selectedUnitId ?? null;
   const simulationStatusQ = trpc.zatca.getSimulationOnboardingStatus.useQuery(
     { posUnitId: simulationUnitId ?? 0 },
-    { enabled: Boolean(simulationUnitId) },
+    { enabled: Boolean(simulationUnitId) && environment === "simulation" },
   );
   const saveReadinessM = trpc.zatca.saveReadinessSettings.useMutation();
   const createUnitM = trpc.zatca.createPosUnit.useMutation();
@@ -2883,18 +2928,27 @@ function ActivationWizard({
   const simulationComplete = Boolean(simulationStatusQ.data?.signingMaterialsReady);
   const testsComplete = simulationComplete && Boolean(readiness?.complianceTestCompleted);
   const operationalComplete = simulationComplete && Boolean(simulationStatusQ.data?.operationalReady);
-  const productionComplete = Boolean(cfg?.enabled && cfg?.environment === "production");
+  const environmentStatus = selectedUnit?.environmentStatuses?.[environment] ?? null;
+  const productionComplete = Boolean(
+    environment === "production"
+      && environmentStatus?.registrationStatus === "operational"
+      && environmentStatus?.operationalCsidPresent,
+  );
+  const environmentComplete = environment === "simulation" ? simulationComplete : productionComplete;
   const allSteps = [
     { id: 1, icon: "🏢", title: "بيانات المنشأة", detail: "بيانات القراءة فقط من معلومات المؤسسة", done: companyComplete },
     { id: 2, icon: "🧩", title: "وحدة الربط والدفاتر", detail: "الوحدة والدفاتر الأربعة لنفس المخزن/الفرع", done: unitComplete },
     { id: 3, icon: "🧾", title: "نوع الفواتير", detail: "مبسطة أو قياسية أو كلاهما", done: invoiceTypeSaved },
-    { id: 4, icon: "🌐", title: "المحاكاة الرسمية", detail: "OTP ثم EC/CSR ثم شهادة Compliance ومفتاح متطابقان", done: simulationComplete },
-    { id: 5, icon: "📋", title: "اختبارات المطابقة", detail: "بعد الحصول على Compliance CSID", done: testsComplete },
-    { id: 6, icon: "🔑", title: "CSID التشغيلي", detail: "بعد نجاح اختبارات المطابقة", done: operationalComplete },
-    { id: 7, icon: "🚀", title: "الإنتاج الفعلي", detail: "بعد CSID التشغيلي واعتماد المسؤول", done: productionComplete },
+    { id: 4, icon: "🌐", title: environment === "simulation" ? "تهيئة المحاكاة" : "تهيئة الربط الفعلي", detail: environment === "simulation" ? "OTP ثم EC/CSR ثم شهادة Compliance" : "OTP إنتاجي واعتمادات Production مستقلة", done: environmentComplete },
+    { id: 5, icon: "📋", title: "اختبارات المطابقة", detail: environment === "simulation" ? "بعد الحصول على Compliance CSID" : "اختبارات المطابقة الخاصة بالإنتاج", done: environment === "production" ? productionComplete : testsComplete },
+    { id: 6, icon: "🔑", title: "CSID التشغيلي", detail: "بعد نجاح اختبارات المطابقة", done: environment === "production" ? productionComplete : operationalComplete },
+    { id: 7, icon: "✅", title: "اكتمال الربط", detail: ENVIRONMENT_COPY[environment].shortTitle, done: environment === "production" ? productionComplete : operationalComplete },
   ];
   const steps = includeCompanyStep ? allSteps : allSteps.filter(step => step.id !== 1);
-  const firstIncomplete = steps.find(step => !step.done)?.id ?? 7;
+  const firstIncomplete = environment === "production"
+    ? 7
+    : steps.find(step => !step.done)?.id ?? 7;
+  const linkingComplete = environment === "production" ? productionComplete : operationalComplete;
   const completed = steps.filter(step => step.done).length;
   const progress = Math.round((completed / steps.length) * 100);
 
@@ -2982,7 +3036,7 @@ function ActivationWizard({
   );
 
   const goTo = (step: number) => {
-    if (step > firstIncomplete) {
+    if (environment !== "production" && step > firstIncomplete) {
       toast.warning("أكمل متطلبات المرحلة الحالية أولًا");
       return;
     }
@@ -3047,6 +3101,11 @@ function ActivationWizard({
         return;
       }
       if (activeStep === 4) {
+        if (environment === "production") {
+          toast.info("تم فتح مسار Production مستقل. لا يتم إرسال OTP أو حفظ اعتماد إنتاجي من هذه النسخة قبل اعتماد بوابة Production الآمنة.");
+          setActiveStep(5);
+          return;
+        }
         if (!simulationComplete) {
           toast.error("أدخل OTP وأنشئ EC/CSR واحصل على Compliance CSID أولًا");
           return;
@@ -3055,6 +3114,11 @@ function ActivationWizard({
         return;
       }
       if (activeStep === 5) {
+        if (environment === "production") {
+          toast.info("اختبارات المطابقة الخاصة بالإنتاج ستتاح بعد تهيئة اعتماد Production المستقل.");
+          setActiveStep(6);
+          return;
+        }
         if (!testsComplete) {
           toast.error("لا يمكن المتابعة قبل نجاح اختبارات المطابقة المطلوبة");
           return;
@@ -3063,6 +3127,11 @@ function ActivationWizard({
         return;
       }
       if (activeStep === 6) {
+        if (environment === "production") {
+          toast.info("CSID التشغيلي للإنتاج سيُطلب من مسار Production بعد تهيئة الاعتماد.");
+          setActiveStep(7);
+          return;
+        }
         if (!operationalComplete) {
           toast.error("اطلب CSID التشغيلي بعد نجاح اختبارات المطابقة أولًا");
           return;
@@ -3071,8 +3140,12 @@ function ActivationWizard({
         return;
       }
       if (activeStep === 7) {
-        if (!productionComplete) {
-          toast.info("الإنتاج محجوب حتى اعتماد المسؤول وإتاحة بيئة الإنتاج");
+        if (!linkingComplete) {
+          if (environment === "production") {
+            toast.info("مسار Production مفتوح للمراجعة، لكن التفعيل الفعلي محمي حتى اعتماد بوابة Production.");
+          } else {
+            toast.info("اكتملت المحاكاة. اختر الربط الفعلي من شاشة اختيار البيئة للانتقال إلى Production.");
+          }
           return;
         }
         onFinishedLinking();
@@ -3212,8 +3285,35 @@ function ActivationWizard({
         </div>
       );
     }
-    if (activeStep === 4) return <OtpSimulationSection initialPosUnitId={selectedUnitId} />;
+    if (activeStep === 4) {
+      if (environment === "production") {
+        return (
+          <div>
+            <SecTitle icon="🚀" title="تهيئة الربط الفعلي — Production" />
+            <div style={{ background: "#f0fdf4", border: "1px solid #86efac", color: "#166534", borderRadius: 9, padding: 13, marginBottom: 13, fontSize: 11, lineHeight: 1.8 }}>
+              <strong>هذا مسار مستقل عن Fatoora Simulation.</strong>
+              <div>سيتم استخدام بيانات المنشأة الحقيقية وOTP صادر من منصة فاتورة الفعلية عند إتاحة بوابة Production.</div>
+              <div style={{ marginTop: 5 }}>لا يتم نسخ شهادة أو CSID أو Secret أو مفتاح من المحاكاة إلى الإنتاج.</div>
+            </div>
+            <div style={{ background: "#fff7ed", border: "1px solid #fdba74", color: "#9a3412", borderRadius: 9, padding: 12, fontSize: 11, lineHeight: 1.8 }}>
+              بدء الربط الفعلي يتطلب تأكيدًا صريحًا من المسؤول. هذه النسخة تفتح المعالج وتعرض الحالة فقط، ولا ترسل OTP أو تحفظ اعتمادًا إنتاجيًا.
+            </div>
+          </div>
+        );
+      }
+      return <OtpSimulationSection initialPosUnitId={selectedUnitId} />;
+    }
     if (activeStep === 5) {
+      if (environment === "production") {
+        return (
+          <div>
+            <SecTitle icon="📋" title="اختبارات المطابقة — Production" />
+            <div style={{ background: "#fff7ed", border: "1px solid #fdba74", color: "#9a3412", borderRadius: 9, padding: 13, fontSize: 11, lineHeight: 1.8 }}>
+              اختبارات Production منفصلة عن نتائج المحاكاة. ستظهر هنا بعد تهيئة اعتماد Production، ولن تستخدم نتائج المحاكاة كبديل.
+            </div>
+          </div>
+        );
+      }
       return (
         <ComplianceTestsSection
           posUnitId={selectedUnitId}
@@ -3223,6 +3323,16 @@ function ActivationWizard({
       );
     }
     if (activeStep === 6) {
+      if (environment === "production") {
+        return (
+          <div>
+            <SecTitle icon="🔑" title="CSID التشغيلي — Production" />
+            <div style={{ background: "#fff7ed", border: "1px solid #fdba74", color: "#9a3412", borderRadius: 9, padding: 13, fontSize: 11, lineHeight: 1.8 }}>
+              لا يتم طلب CSID التشغيلي للإنتاج من اعتماد المحاكاة. سيُنشأ من مسار Production المستقل بعد نجاح اختبارات Production.
+            </div>
+          </div>
+        );
+      }
       return (
         <div>
           <SecTitle icon="🔑" title="طلب CSID التشغيلي" />
@@ -3235,23 +3345,26 @@ function ActivationWizard({
     }
     return (
       <div>
-        <SecTitle icon="🚀" title="الإنتاج الفعلي" />
+        <SecTitle icon={environment === "production" ? "✅" : "🚀"} title={environment === "production" ? "اكتمال الربط الفعلي" : "اكتمال الاختبار التجريبي"} />
         <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: 14, fontSize: 11, lineHeight: 1.9 }}>
           <div><strong>الوحدة:</strong> {selectedUnit?.unitName ?? "—"}</div>
           <div><strong>المخزن/الفرع:</strong> {selectedUnit ? locationLabel(selectedUnit) : "—"}</div>
           <div><strong>الدفاتر:</strong> {unitJournals.length} من 4</div>
-          <div><strong>مواد التوقيع:</strong> {simulationComplete ? "الشهادة والمفتاح متطابقان" : "الشهادة أو تطابق المفتاح غير مكتمل"}</div>
-          <div><strong>الاتصال:</strong> {cfg?.lastConnectionStatus === "success" ? "ناجح" : "لم ينجح بعد"}</div>
+          <div><strong>البيئة:</strong> {ENVIRONMENT_COPY[environment].shortTitle}</div>
+          <div><strong>مواد التوقيع:</strong> {environment === "simulation" ? (simulationComplete ? "الشهادة والمفتاح متطابقان" : "الشهادة أو تطابق المفتاح غير مكتمل") : (environmentStatus?.certificatePresent ? "شهادة Production موجودة" : "لم تُهيأ شهادة Production")}</div>
+          <div><strong>الحالة:</strong> {environmentStatus?.registrationStatus === "operational" ? "مفعّلة" : "غير مفعّلة"}</div>
         </div>
         <div style={{ background: "#fff7ed", border: "1px solid #fdba74", borderRadius: 9, padding: 12, marginTop: 12, color: "#9a3412", fontSize: 11, lineHeight: 1.8 }}>
-          الإنتاج الفعلي محجوب حتى نجاح المطابقة واعتماد المسؤول. لا تُرسل فواتير حقيقية من هذه المرحلة قبل إتاحة بيئة الإنتاج رسميًا.
+          {environment === "production"
+            ? "لن تُرسل فواتير حقيقية قبل تهيئة اعتماد Production المستقل واجتياز بوابات الأمان والمطابقة."
+            : "اكتملت المحاكاة بشكل مستقل. لا يعني ذلك تفعيل الإنتاج؛ اختر الربط الفعلي لبدء مسار Production مستقل."}
         </div>
         <button
-          disabled={!productionComplete}
+          disabled={!linkingComplete}
           onClick={saveStep}
-          style={{ ...smallBtn, height: 32, marginTop: 12, background: productionComplete ? "#16a34a" : "#cbd5e1", color: "#fff", cursor: productionComplete ? "pointer" : "not-allowed" }}
+          style={{ ...smallBtn, height: 32, marginTop: 12, background: linkingComplete ? "#16a34a" : "#cbd5e1", color: "#fff", cursor: linkingComplete ? "pointer" : "not-allowed" }}
         >
-          {productionComplete ? "الانتقال إلى الإنتاج الفعلي" : "الانتقال إلى الإنتاج — غير متاح بعد"}
+          {environment === "production" ? "تأكيد اكتمال الربط الفعلي" : "إنهاء الاختبار التجريبي"}
         </button>
         {onOpenTechnical && <button onClick={onOpenTechnical} style={{ ...smallBtn, marginTop: 12, background: "#f1f5f9", color: "#334155", border: "1px solid #cbd5e1" }}>مراجعة إعدادات الربط</button>}
       </div>
@@ -3260,10 +3373,10 @@ function ActivationWizard({
 
   return (
     <div>
-      <div style={{ background: "linear-gradient(135deg,#1e4f7a,#2f6b96)", color: "#fff", borderRadius: 14, padding: "18px 20px", marginBottom: 14 }}>
+       <div style={{ background: `linear-gradient(135deg,${ENVIRONMENT_COPY[environment].color},${environment === "production" ? "#166534" : "#1d4ed8"})`, color: "#fff", borderRadius: 14, padding: "18px 20px", marginBottom: 14 }}>
         <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
           <div style={{ fontSize: 28 }}>🔗</div>
-          <div style={{ flex: 1 }}><div style={{ fontSize: 17, fontWeight: 800 }}>معالج التفعيل والربط</div><div style={{ color: "#dbeafe", fontSize: 11, marginTop: 3 }}>محتوى المرحلة الحالية فقط — احفظ للانتقال إلى المرحلة التالية.</div></div>
+           <div style={{ flex: 1 }}><div style={{ fontSize: 17, fontWeight: 800 }}>معالج التفعيل والربط</div><div style={{ color: "#e0f2fe", fontSize: 11, marginTop: 3 }}>{ENVIRONMENT_COPY[environment].shortTitle} — محتوى المرحلة الحالية فقط.</div></div>
           <div style={{ textAlign: "center" }}><div style={{ fontSize: 23, fontWeight: 800, color: "#f7d47b" }}>{progress}%</div><div style={{ color: "#dbeafe", fontSize: 10 }}>{completed} من {steps.length} مراحل</div></div>
         </div>
         <div style={{ height: 5, background: "rgba(255,255,255,.18)", borderRadius: 5, marginTop: 15 }}><div style={{ height: "100%", width: `${progress}%`, background: "#f2c75c", borderRadius: 5 }} /></div>
@@ -3280,7 +3393,7 @@ function ActivationWizard({
       {renderStep()}
       <div style={{ display: "flex", gap: 8, marginTop: 18, paddingTop: 13, borderTop: "1px solid #e2e8f0" }}>
         <button disabled={activeStep === (includeCompanyStep ? 1 : 2)} onClick={() => setActiveStep(step => Math.max(includeCompanyStep ? 1 : 2, step - 1))} style={{ ...smallBtn, height: 32, background: "#f1f5f9", color: "#475569", opacity: activeStep === (includeCompanyStep ? 1 : 2) ? .5 : 1 }}>السابق</button>
-        <button disabled={creatingUnit || saveReadinessM.isPending || activeStep > firstIncomplete} onClick={saveStep} style={{ ...smallBtn, height: 32, padding: "0 18px", background: "#D19C05", color: "#fff", opacity: creatingUnit || activeStep > firstIncomplete ? .55 : 1 }}>
+         <button disabled={creatingUnit || saveReadinessM.isPending || (environment !== "production" && activeStep > firstIncomplete)} onClick={saveStep} style={{ ...smallBtn, height: 32, padding: "0 18px", background: ENVIRONMENT_COPY[environment].color, color: "#fff", opacity: creatingUnit || saveReadinessM.isPending || (environment !== "production" && activeStep > firstIncomplete) ? .55 : 1 }}>
           {creatingUnit ? "جارٍ حفظ الوحدة..." : activeStep === 2 ? "حفظ الوحدة ومتابعة" : "حفظ ومتابعة"}
         </button>
          <button disabled={activeStep === 7 || activeStep >= firstIncomplete} onClick={() => setActiveStep(step => Math.min(7, step + 1))} style={{ ...smallBtn, height: 32, marginRight: "auto", background: "#f1f5f9", color: "#475569", opacity: activeStep === 7 || activeStep >= firstIncomplete ? .5 : 1 }}>التالي →</button>
@@ -3292,11 +3405,15 @@ function ActivationWizard({
 function LinkingUnitsManagement({
   cfg,
   units,
+  environment,
   onContinue,
+  onChangeEnvironment,
 }: {
   cfg: any;
   units: any[];
+  environment: LinkingEnvironment;
   onContinue: () => void;
+  onChangeEnvironment: () => void;
 }) {
   const [addingUnit, setAddingUnit] = useState(false);
   if (addingUnit) {
@@ -3304,6 +3421,7 @@ function LinkingUnitsManagement({
       <ActivationWizard
         cfg={cfg}
         units={units}
+        environment={environment}
         includeCompanyStep={false}
         onFinishedLinking={() => setAddingUnit(false)}
       />
@@ -3317,9 +3435,81 @@ function LinkingUnitsManagement({
           <div style={{ flex: 1 }}><div style={{ fontSize: 17, fontWeight: 800 }}>إدارة وحدات الربط</div><div style={{ color: "#dbeafe", fontSize: 11, marginTop: 3 }}>أدر الوحدات الحالية وأكمل دفاتر أي وحدة ناقصة دون إنشاء وحدة مكررة.</div></div>
           <button onClick={() => setAddingUnit(true)} style={{ ...smallBtn, height: 32, background: "#f2c75c", color: "#1e293b", fontWeight: 800 }}>＋ إضافة وحدة ربط جديدة</button>
           <button onClick={onContinue} style={{ ...smallBtn, height: 32, background: "#f2c75c", color: "#1e293b", fontWeight: 800 }}>متابعة معالج التفعيل</button>
+           <button onClick={onChangeEnvironment} style={{ ...smallBtn, height: 32, background: "rgba(255,255,255,.12)", color: "#fff", border: "1px solid rgba(255,255,255,.35)" }}>تغيير البيئة</button>
         </div>
       </div>
       <LinkingUnitsSection onActivate={onContinue} />
+    </div>
+  );
+}
+
+function EnvironmentSelection({
+  units,
+  onSelect,
+}: {
+  units: any[];
+  onSelect: (environment: LinkingEnvironment) => void;
+}) {
+  const simulationReady = units.some(unit => (
+    unit.environmentStatuses?.simulation?.registrationStatus === "operational"
+    || unit.environmentStatuses?.simulation?.certificatePresent
+  ));
+  const productionReady = units.some(unit => (
+    unit.environmentStatuses?.production?.registrationStatus === "operational"
+    || unit.environmentStatuses?.production?.certificatePresent
+  ));
+
+  return (
+    <div>
+      <SecTitle icon="🔗" title="اختيار نوع التفعيل" />
+      <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: "11px 14px", marginBottom: 14, color: "#475569", fontSize: 12, lineHeight: 1.8 }}>
+        اختر بيئة الربط قبل الدخول إلى المعالج. يمكن بدء الربط الفعلي مباشرة دون اجتياز الاختبار التجريبي، وتبقى بيانات كل بيئة مستقلة.
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1.1fr)", gap: 14, alignItems: "stretch" }}>
+        <div style={{ background: "#fff", border: "2px solid #86efac", borderRadius: 14, padding: 18, boxShadow: "0 8px 22px rgba(21,128,61,.10)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: 10, marginBottom: 10 }}>
+            <div>
+              <div style={{ fontSize: 22, marginBottom: 5 }}>🚀</div>
+              <div style={{ fontWeight: 900, fontSize: 16, color: "#166534" }}>{ENVIRONMENT_COPY.production.fullTitle}</div>
+            </div>
+            <span style={{ background: "#dcfce7", color: "#166534", border: "1px solid #86efac", borderRadius: 999, padding: "4px 9px", fontSize: 10, fontWeight: 800, whiteSpace: "nowrap" }}>إنتاج فعلي</span>
+          </div>
+          <div style={{ color: "#475569", fontSize: 12, lineHeight: 1.8, marginBottom: 11 }}>{ENVIRONMENT_COPY.production.description}</div>
+          <div style={{ background: "#fff7ed", border: "1px solid #fdba74", color: "#9a3412", borderRadius: 8, padding: "9px 10px", fontSize: 11, lineHeight: 1.75, marginBottom: 13 }}>
+            سيتم استخدام بيانات المنشأة الحقيقية وOTP صادر من منصة فاتورة الفعلية، وبعد اكتمال التهيئة تصبح الوحدة جاهزة لإرسال الفواتير الحقيقية.
+          </div>
+          <div style={{ fontSize: 10, color: productionReady ? "#166534" : "#64748b", marginBottom: 12 }}>
+            {productionReady ? "✓ توجد بيانات ربط فعلي محفوظة لهذه الوحدة" : "○ لا توجد بيانات ربط فعلي بعد"}
+          </div>
+          <button onClick={() => onSelect("production")} style={{ width: "100%", height: 38, background: "#15803d", color: "#fff", border: "none", borderRadius: 8, fontWeight: 800, fontSize: 12, cursor: "pointer" }}>
+            بدء الربط الفعلي
+          </button>
+        </div>
+
+        <div style={{ background: "#fff", border: "1px solid #93c5fd", borderRadius: 14, padding: 18 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: 10, marginBottom: 10 }}>
+            <div>
+              <div style={{ fontSize: 22, marginBottom: 5 }}>🧪</div>
+              <div style={{ fontWeight: 900, fontSize: 16, color: "#1d4ed8" }}>{ENVIRONMENT_COPY.simulation.fullTitle}</div>
+            </div>
+            <span style={{ background: "#dbeafe", color: "#1d4ed8", border: "1px solid #93c5fd", borderRadius: 999, padding: "4px 9px", fontSize: 10, fontWeight: 800, whiteSpace: "nowrap" }}>اختياري — للاختبار والدعم الفني</span>
+          </div>
+          <div style={{ color: "#475569", fontSize: 12, lineHeight: 1.8, marginBottom: 10 }}>{ENVIRONMENT_COPY.simulation.description}</div>
+          <ul style={{ margin: "0 0 12px", paddingRight: 18, color: "#475569", fontSize: 11, lineHeight: 1.85 }}>
+            <li>لا يتم إرسال فواتير حقيقية.</li>
+            <li>لا يتم تفعيل الوحدة في الإنتاج الفعلي.</li>
+            <li>تحتاج إلى OTP صادر من منصة Fatoora Simulation.</li>
+            <li>الشهادات وCSID الناتجة تخص بيئة المحاكاة فقط.</li>
+            <li>يمكن تجاوز هذا الاختيار والدخول مباشرة إلى الربط الفعلي.</li>
+          </ul>
+          <div style={{ fontSize: 10, color: simulationReady ? "#166534" : "#64748b", marginBottom: 12 }}>
+            {simulationReady ? "✓ الاختبار التجريبي مكتمل أو مهيأ لهذه الوحدة" : "○ لم يبدأ الاختبار التجريبي بعد"}
+          </div>
+          <button onClick={() => onSelect("simulation")} style={{ width: "100%", height: 38, background: "#2563eb", color: "#fff", border: "none", borderRadius: 8, fontWeight: 800, fontSize: 12, cursor: "pointer" }}>
+            بدء الاختبار التجريبي
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -3334,20 +3524,49 @@ function ActivationSection({
   const cfgQ = trpc.zatca.getConfig.useQuery();
   const unitsQ = trpc.zatca.listPosUnits.useQuery();
   const [wizardMode, setWizardMode] = useState<boolean | null>(null);
+  const [environment, setEnvironment] = useState<LinkingEnvironment | null>(null);
   const cfg = cfgQ.data;
   const units = unitsQ.data ?? [];
   useEffect(() => {
     if (wizardMode === null && !unitsQ.isLoading) setWizardMode(units.length === 0);
   }, [wizardMode, unitsQ.isLoading, units.length]);
   if (wizardMode === null || cfgQ.isLoading || unitsQ.isLoading) return <Skeleton height={280} />;
-  if (!wizardMode) return <LinkingUnitsManagement cfg={cfg} units={units} onContinue={() => setWizardMode(true)} />;
+  if (environment === null) {
+    return (
+      <EnvironmentSelection
+        units={units}
+        onSelect={nextEnvironment => {
+          setEnvironment(nextEnvironment);
+          setWizardMode(units.length === 0);
+        }}
+      />
+    );
+  }
+  if (!wizardMode) {
+    return (
+      <LinkingUnitsManagement
+        cfg={cfg}
+        units={units}
+        environment={environment}
+        onContinue={() => setWizardMode(true)}
+        onChangeEnvironment={() => {
+          setWizardMode(false);
+          setEnvironment(null);
+        }}
+      />
+    );
+  }
   return (
     <ActivationWizard
       cfg={cfg}
       units={units}
+      environment={environment}
       onOpenCompanyInfo={onOpenCompanyInfo}
       onOpenTechnical={onOpenTechnical}
-      onFinishedLinking={() => setWizardMode(false)}
+      onFinishedLinking={() => {
+        setWizardMode(false);
+        setEnvironment(null);
+      }}
     />
   );
 }
