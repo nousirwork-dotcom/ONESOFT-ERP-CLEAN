@@ -547,6 +547,13 @@
       "when": 1786319700000,
       "tag": "0077_tax_application_scope",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1786319800000,
+      "tag": "0078_zatca_compliance_tests",
+      "breakpoints": true
     }
   ]
 }

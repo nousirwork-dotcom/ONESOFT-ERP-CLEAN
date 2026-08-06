@@ -1330,6 +1330,42 @@ export const zatcaCsrRequests = pgTable('zatca_csr_requests', {
   updatedBy:   integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
 });
 
+// ─── 6b. ZATCA Compliance Matching Tests ─────────────────────────────────────
+// Results of official Compliance tests are separate from operational invoice
+// transactions and from local XML/transport diagnostics.
+export const zatcaComplianceTests = pgTable('zatca_compliance_tests', {
+  id:                serial('id').primaryKey(),
+  orgId:             integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  posUnitId:         integer('pos_unit_id').notNull().references(() => zatcaPosUnits.id, { onDelete: 'cascade' }),
+  deviceId:          integer('device_id').references(() => zatcaDevices.id, { onDelete: 'set null' }),
+  invoiceId:         integer('invoice_id').references(() => salesInvoices.id, { onDelete: 'set null' }),
+  testKey:           varchar('test_key', { length: 60 }).notNull(),
+  invoiceType:       varchar('invoice_type', { length: 20 }).notNull(),
+  documentType:      varchar('document_type', { length: 30 }).notNull(),
+  status:            varchar('status', { length: 30 }).notNull().default('not_started'),
+  httpStatus:        integer('http_status'),
+  requestId:         varchar('request_id', { length: 160 }),
+  invoiceUuid:       varchar('invoice_uuid', { length: 100 }),
+  invoiceHash:       varchar('invoice_hash', { length: 256 }),
+  xmlBeforeSigning:  text('xml_before_signing'),
+  xmlAfterSigning:   text('xml_after_signing'),
+  responsePayload:   jsonb('response_payload'),
+  warnings:          jsonb('warnings'),
+  errors:            jsonb('errors'),
+  attemptedAt:       timestamp('attempted_at'),
+  completedAt:       timestamp('completed_at'),
+  isActive:          boolean('is_active').notNull().default(true),
+  isDeleted:         boolean('is_deleted').notNull().default(false),
+  createdAt:         timestamp('created_at').notNull().defaultNow(),
+  updatedAt:         timestamp('updated_at').notNull().defaultNow(),
+  createdBy:         integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy:         integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
+}, (t) => ({
+  activeTestKeyUidx: uniqueIndex('zatca_compliance_tests_active_key_uidx')
+    .on(t.orgId, t.posUnitId, t.testKey)
+    .where(sql`${t.isActive} = true AND ${t.isDeleted} = false`),
+}));
+
 // ─── 7. ZATCA Invoice Transactions ───────────────────────────────────────────
 export const zatcaInvoiceTransactions = pgTable('zatca_invoice_transactions', {
   id:              serial('id').primaryKey(),
@@ -2082,6 +2118,7 @@ export type ZatcaCertificate         = typeof zatcaCertificates.$inferSelect;
 export type ZatcaCsid                = typeof zatcaCsid.$inferSelect;
 export type ZatcaKey                 = typeof zatcaKeys.$inferSelect;
 export type ZatcaCsrRequest          = typeof zatcaCsrRequests.$inferSelect;
+export type ZatcaComplianceTest      = typeof zatcaComplianceTests.$inferSelect;
 export type ZatcaInvoiceTransaction  = typeof zatcaInvoiceTransactions.$inferSelect;
 export type ZatcaRequestLog          = typeof zatcaRequestLog.$inferSelect;
 export type ZatcaResponseLog         = typeof zatcaResponseLog.$inferSelect;

@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { z } from 'zod';
 import { router, protectedProcedure, adminProcedure } from '../trpc.js';
 import { db } from '../db.js';
@@ -22,6 +23,7 @@ import {
   zatcaCsid,
   zatcaKeys,
   zatcaCsrRequests,
+  zatcaComplianceTests,
   zatcaReadinessSettings,
   stockVouchers,
 } from '../schema.js';
@@ -119,6 +121,8 @@ const REDACTED_CREDENTIAL = '••••••••••••••••';
 const POS_LINK_JOURNAL_TYPES = ['sales_invoice', 'sales_return', 'credit_note', 'debit_note'] as const;
 const PosLinkJournalTypeSchema = z.enum(POS_LINK_JOURNAL_TYPES);
 const READINESS_INVOICE_TYPES = ['simplified', 'standard', 'both'] as const;
+const COMPLIANCE_INVOICE_TYPES = ['simplified', 'standard'] as const;
+const COMPLIANCE_DOCUMENT_TYPES = ['sales_invoice', 'credit_note', 'debit_note'] as const;
 const JOURNAL_TYPE_LABELS: Record<string, string> = {
   sales_invoice: 'فاتورة مبيعات',
   sales_return: 'مردود مبيعات / إشعار دائن',
@@ -220,6 +224,54 @@ function safeRemoteResponse(response: { body: unknown; httpStatus: number | null
   });
 }
 
+function complianceTestKey(invoiceType: string, documentType: string): string {
+  return `${invoiceType}:${documentType}`;
+}
+
+function complianceResultParts(body: unknown): {
+  accepted: boolean;
+  warnings: Array<{ code: string; message: string }>;
+  errors: Array<{ code: string; message: string }>;
+} {
+  const root = body && typeof body === 'object' ? body as Record<string, unknown> : {};
+  const validation = root.validationResults && typeof root.validationResults === 'object'
+    ? root.validationResults as Record<string, unknown>
+    : {};
+  const toParts = (value: unknown, fallbackCode: string) => {
+    if (!Array.isArray(value)) return [];
+    return value.map((item, index) => {
+      const row = item && typeof item === 'object' ? item as Record<string, unknown> : {};
+      return {
+        code: String(row.code ?? row.errorCode ?? `${fallbackCode}_${index + 1}`),
+        message: String(row.message ?? row.errorMessage ?? row.description ?? item ?? ''),
+      };
+    });
+  };
+  const warnings = [
+    ...toParts(root.warnings, 'WARNING'),
+    ...toParts(validation.warningMessages, 'WARNING'),
+    ...toParts(validation.warnings, 'WARNING'),
+  ];
+  const errors = [
+    ...toParts(root.errors, 'ERROR'),
+    ...toParts(validation.errorMessages, 'ERROR'),
+    ...toParts(validation.errors, 'ERROR'),
+  ];
+  const status = String(
+    validation.status
+    ?? root.validationStatus
+    ?? root.status
+    ?? root.complianceStatus
+    ?? '',
+  ).toUpperCase();
+  const accepted = status === 'PASS'
+    || status === 'PASSED'
+    || status === 'WARNING'
+    || status === 'WARN'
+    || (status === '' && errors.length === 0 && root.validationResults != null);
+  return { accepted, warnings, errors };
+}
+
 async function getPosUnitForOrg(orgId: number, posUnitId: number) {
   const unit = await db.query.zatcaPosUnits.findFirst({
     where: and(
@@ -240,7 +292,7 @@ async function getZatcaReadiness(
   selectedWarehouseId?: ReadinessWarehouseId,
   selectedInvoiceType: typeof READINESS_INVOICE_TYPES[number] = 'both',
 ) {
-  const [org, locationRows, journalRows, simulationEnvironment, savedSettings, linkingUnits, operationalRows, stockRows] = await Promise.all([
+  const [org, locationRows, journalRows, simulationEnvironment, savedSettings, linkingUnits, operationalRows, stockRows, complianceRows] = await Promise.all([
     db.query.organizations.findFirst({
       where: eq(organizations.id, orgId),
       columns: {
@@ -350,6 +402,31 @@ async function getZatcaReadiness(
     })
       .from(stockVouchers)
       .where(eq(stockVouchers.orgId, orgId)),
+    db.select({
+      id: zatcaComplianceTests.id,
+      posUnitId: zatcaComplianceTests.posUnitId,
+      testKey: zatcaComplianceTests.testKey,
+      invoiceType: zatcaComplianceTests.invoiceType,
+      documentType: zatcaComplianceTests.documentType,
+      status: zatcaComplianceTests.status,
+      httpStatus: zatcaComplianceTests.httpStatus,
+      requestId: zatcaComplianceTests.requestId,
+      invoiceId: zatcaComplianceTests.invoiceId,
+      invoiceUuid: zatcaComplianceTests.invoiceUuid,
+      invoiceHash: zatcaComplianceTests.invoiceHash,
+      responsePayload: zatcaComplianceTests.responsePayload,
+      warnings: zatcaComplianceTests.warnings,
+      errors: zatcaComplianceTests.errors,
+      attemptedAt: zatcaComplianceTests.attemptedAt,
+      completedAt: zatcaComplianceTests.completedAt,
+    })
+      .from(zatcaComplianceTests)
+      .where(and(
+        eq(zatcaComplianceTests.orgId, orgId),
+        eq(zatcaComplianceTests.isActive, true),
+        eq(zatcaComplianceTests.isDeleted, false),
+      ))
+      .orderBy(desc(zatcaComplianceTests.updatedAt)),
   ]);
 
   if (!org) throw new TRPCError({ code: 'NOT_FOUND', message: 'المنشأة غير موجودة' });
@@ -454,6 +531,39 @@ async function getZatcaReadiness(
     };
   })));
   const operationalTestCompleted = operationalTests.every((test) => test.completed);
+  const complianceTestGroups = selectedInvoiceType === 'both'
+    ? COMPLIANCE_INVOICE_TYPES
+    : [selectedInvoiceType] as const;
+  const complianceTests = complianceTestGroups.flatMap((invoiceType) =>
+    COMPLIANCE_DOCUMENT_TYPES.map((documentType) => {
+      const row = linkingUnitId == null
+        ? undefined
+        : complianceRows.find(candidate =>
+            candidate.posUnitId === linkingUnitId
+            && candidate.testKey === complianceTestKey(invoiceType, documentType),
+          );
+      return {
+        testKey: complianceTestKey(invoiceType, documentType),
+        invoiceType,
+        documentType,
+        label: `${invoiceType === 'standard' ? 'قياسية' : 'مبسطة'} — ${documentType === 'sales_invoice' ? 'فاتورة' : documentType === 'credit_note' ? 'إشعار دائن' : 'إشعار مدين'}`,
+        status: row?.status ?? 'not_started',
+        completed: row?.status === 'passed' || row?.status === 'passed_with_warnings',
+        httpStatus: row?.httpStatus ?? null,
+        requestId: row?.requestId ?? null,
+        invoiceId: row?.invoiceId ?? null,
+        invoiceUuid: row?.invoiceUuid ?? null,
+        invoiceHash: row?.invoiceHash ?? null,
+        responsePayload: row?.responsePayload ?? null,
+        warnings: row?.warnings ?? [],
+        errors: row?.errors ?? [],
+        attemptedAt: row?.attemptedAt ?? null,
+        completedAt: row?.completedAt ?? null,
+      };
+    }),
+  );
+  const complianceTestCompleted = complianceTests.length > 0
+    && complianceTests.every((test) => test.completed);
   const simulationConfigured = cfg.environment === 'simulation'
     && cfg.apiBaseUrl === simulationEnvironmentValues().baseApiUrl
     && Boolean(simulationEnvironment);
@@ -541,6 +651,9 @@ async function getZatcaReadiness(
     allScreensReady,
     operationalTestCompleted,
     operationalTests,
+    localOperationalTestCompleted: operationalTestCompleted,
+    complianceTestCompleted,
+    complianceTests,
     preCsrReady: missingOrganizationFields.length === 0
       && Boolean(selectedWarehouse)
       && allJournalsPresent
@@ -1294,6 +1407,288 @@ export const zatcaRouter = router({
       };
     }),
 
+  runComplianceTests: adminProcedure
+    .input(z.object({
+      posUnitId: z.number().int().positive(),
+      invoiceType: z.enum(['simplified', 'standard', 'both']).default('both'),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      requireSimulationEncryptionKey();
+      const unit = await getPosUnitForOrg(ctx.user.orgId, input.posUnitId);
+      const environment = await db.query.zatcaEnvironments.findFirst({
+        where: and(
+          eq(zatcaEnvironments.orgId, ctx.user.orgId),
+          eq(zatcaEnvironments.name, 'Simulation'),
+          eq(zatcaEnvironments.isActive, true),
+          eq(zatcaEnvironments.isDeleted, false),
+        ),
+      });
+      if (!environment) {
+        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'بيئة Fatoora Simulation غير مهيأة' });
+      }
+
+      const device = await db.query.zatcaDevices.findFirst({
+        where: and(
+          eq(zatcaDevices.orgId, ctx.user.orgId),
+          eq(zatcaDevices.posUnitId, unit.id),
+          eq(zatcaDevices.environmentId, environment.id),
+          eq(zatcaDevices.isActive, true),
+          eq(zatcaDevices.isDeleted, false),
+        ),
+      });
+      if (!device?.currentCsidId) {
+        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'احصل على Compliance CSID قبل تشغيل الاختبارات' });
+      }
+
+      const csid = await db.query.zatcaCsid.findFirst({
+        where: and(
+          eq(zatcaCsid.id, device.currentCsidId),
+          eq(zatcaCsid.orgId, ctx.user.orgId),
+          eq(zatcaCsid.deviceId, device.id),
+          eq(zatcaCsid.status, 'active'),
+          eq(zatcaCsid.isActive, true),
+          eq(zatcaCsid.isDeleted, false),
+        ),
+      });
+      const certificate = csid?.certificateId == null
+        ? null
+        : await db.query.zatcaCertificates.findFirst({
+            where: and(
+              eq(zatcaCertificates.id, csid.certificateId),
+              eq(zatcaCertificates.orgId, ctx.user.orgId),
+              eq(zatcaCertificates.deviceId, device.id),
+              eq(zatcaCertificates.status, 'active'),
+              eq(zatcaCertificates.isActive, true),
+              eq(zatcaCertificates.isDeleted, false),
+            ),
+          });
+      const signingKey = await db.query.zatcaKeys.findFirst({
+        where: and(
+          eq(zatcaKeys.orgId, ctx.user.orgId),
+          eq(zatcaKeys.deviceId, device.id),
+          eq(zatcaKeys.status, 'active'),
+          eq(zatcaKeys.isActive, true),
+          eq(zatcaKeys.isDeleted, false),
+        ),
+        orderBy: desc(zatcaKeys.createdAt),
+      });
+      if (!csid?.complianceCsid || !certificate?.complianceSecretEncrypted) {
+        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'بيانات اعتماد Compliance CSID غير مكتملة داخليًا' });
+      }
+      if (!certificate.publicCertificate || !signingKey?.privateKeyEncrypted) {
+        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'شهادة أو مفتاح Compliance غير موجود للتوقيع' });
+      }
+
+      const org = await db.query.organizations.findFirst({
+        where: eq(organizations.id, ctx.user.orgId),
+        columns: { name: true, nameEn: true, taxNumber: true, commercialReg: true, zatcaConfig: true },
+      });
+      if (!org) throw new TRPCError({ code: 'NOT_FOUND', message: 'المنشأة غير موجودة' });
+      const cfg = canonicalizeZatcaConfig(org.zatcaConfig, org);
+      const invoiceTypes = input.invoiceType === 'both'
+        ? COMPLIANCE_INVOICE_TYPES
+        : [input.invoiceType] as const;
+      const results: Array<Record<string, unknown>> = [];
+
+      const saveRow = async (values: Record<string, unknown>) => {
+        const existing = await db.query.zatcaComplianceTests.findFirst({
+          where: and(
+            eq(zatcaComplianceTests.orgId, ctx.user.orgId),
+            eq(zatcaComplianceTests.posUnitId, unit.id),
+            eq(zatcaComplianceTests.testKey, String(values.testKey)),
+            eq(zatcaComplianceTests.isActive, true),
+            eq(zatcaComplianceTests.isDeleted, false),
+          ),
+        });
+        if (existing) {
+          await db.update(zatcaComplianceTests).set({
+            ...values,
+            updatedAt: new Date(),
+            updatedBy: ctx.user.id,
+          } as any).where(eq(zatcaComplianceTests.id, existing.id));
+        } else {
+          await db.insert(zatcaComplianceTests).values({
+            ...values,
+            orgId: ctx.user.orgId,
+            posUnitId: unit.id,
+            deviceId: device.id,
+            createdBy: ctx.user.id,
+            updatedBy: ctx.user.id,
+          } as any);
+        }
+      };
+
+      for (const invoiceType of invoiceTypes) {
+        for (const documentType of COMPLIANCE_DOCUMENT_TYPES) {
+          const testKey = complianceTestKey(invoiceType, documentType);
+          const invoiceKind = documentType === 'sales_invoice' ? 'sale' : documentType;
+          const invoice = await db.query.salesInvoices.findFirst({
+            where: and(
+              eq(salesInvoices.orgId, ctx.user.orgId),
+              eq(salesInvoices.warehouseId, unit.warehouseId),
+              eq(salesInvoices.invoiceType, invoiceKind as any),
+              eq(salesInvoices.zatcaInvoiceType, invoiceType),
+              eq(salesInvoices.isPosted, true),
+              or(eq(salesInvoices.status, 'confirmed'), eq(salesInvoices.status, 'paid')),
+            ),
+            orderBy: desc(salesInvoices.updatedAt),
+          });
+          const attemptedAt = new Date();
+
+          if (!invoice) {
+            const errors = [{ code: 'NO_ELIGIBLE_INVOICE', message: `لا توجد فاتورة مرحّلة مؤهلة لاختبار ${testKey}` }];
+            await saveRow({
+              testKey, invoiceType, documentType, status: 'failed',
+              invoiceId: null, attemptedAt, completedAt: new Date(),
+              warnings: [], errors,
+            });
+            results.push({ testKey, status: 'failed', warnings: [], errors });
+            continue;
+          }
+
+          const originalInvoiceId = invoice.refInvoiceId ?? invoice.sourceDocumentId;
+          const originalInvoice = invoiceKind === 'sale' || originalInvoiceId == null
+            ? null
+            : await db.query.salesInvoices.findFirst({
+                where: and(eq(salesInvoices.id, originalInvoiceId), eq(salesInvoices.orgId, ctx.user.orgId)),
+                columns: { invoiceNumber: true, zatcaUuid: true, invoiceDate: true },
+              });
+          if (invoiceKind !== 'sale' && (!originalInvoice?.zatcaUuid || !originalInvoice.invoiceNumber)) {
+            const errors = [{ code: 'MISSING_ORIGINAL_INVOICE', message: 'الإشعار الدائن/المدين يحتاج فاتورة أصلية تحمل UUID رسميًا' }];
+            await saveRow({
+              testKey, invoiceType, documentType, status: 'failed',
+              invoiceId: invoice.id, attemptedAt, completedAt: new Date(),
+              warnings: [], errors,
+            });
+            results.push({ testKey, invoiceId: invoice.id, status: 'failed', warnings: [], errors });
+            continue;
+          }
+
+          const items = await db.select({
+            id: salesInvoiceItems.id,
+            productName: salesInvoiceItems.productName,
+            quantity: salesInvoiceItems.quantity,
+            unit: salesInvoiceItems.unit,
+            unitPrice: salesInvoiceItems.unitPrice,
+            total: salesInvoiceItems.total,
+            taxAmount: salesInvoiceItems.taxAmount,
+            taxPercent: salesInvoiceItems.taxPercent,
+            discountAmount: salesInvoiceItems.discountAmount,
+          }).from(salesInvoiceItems).where(and(
+            eq(salesInvoiceItems.invoiceId, invoice.id),
+            eq(salesInvoiceItems.orgId, ctx.user.orgId),
+          )).orderBy(asc(salesInvoiceItems.sortOrder));
+
+          const uuid = crypto.randomUUID();
+          let signed: ReturnType<typeof buildAndSignSimulationInvoice>;
+          try {
+            signed = buildAndSignSimulationInvoice({
+              invoice,
+              items,
+              seller: {
+                nameAr: String(invoice.sellerLegalName ?? cfg.legalName ?? org.name ?? ''),
+                nameEn: String(cfg.englishName ?? cfg.legalName ?? org.name ?? ''),
+                vatNumber: String(invoice.sellerTaxNumber ?? cfg.vatNumber ?? org.taxNumber ?? ''),
+                crNumber: cfg.commercialReg || org.commercialReg || undefined,
+                street: String(cfg.street ?? ''),
+                building: String(cfg.buildingNumber ?? ''),
+                district: String(cfg.district ?? ''),
+                city: String(cfg.city ?? ''),
+                postalCode: String(cfg.postalCode ?? ''),
+                countryCode: String(cfg.countryCode ?? 'SA'),
+              },
+              uuid,
+              invoiceCounter: 1,
+              previousInvoiceHash: invoice.zatcaPih ?? '',
+              submissionType: invoiceType === 'standard' ? 'clearance' : 'reporting',
+              privateKeyPem: decrypt(signingKey.privateKeyEncrypted),
+              certificatePem: certificate.publicCertificate,
+              originalInvoice: originalInvoice ? {
+                invoiceNumber: originalInvoice.invoiceNumber,
+                uuid: originalInvoice.zatcaUuid!,
+                invoiceDate: originalInvoice.invoiceDate,
+              } : undefined,
+            });
+          } catch (error) {
+            const errors = [{ code: 'XML_SIGNING_FAILED', message: error instanceof Error ? error.message : 'تعذر إنشاء أو توقيع XML' }];
+            await saveRow({
+              testKey, invoiceType, documentType, status: 'failed',
+              invoiceId: invoice.id, invoiceUuid: uuid, attemptedAt, completedAt: new Date(),
+              warnings: [], errors,
+            });
+            results.push({ testKey, invoiceId: invoice.id, status: 'failed', warnings: [], errors });
+            continue;
+          }
+
+          await saveRow({
+            testKey, invoiceType, documentType, status: 'submitting',
+            invoiceId: invoice.id, invoiceUuid: uuid, invoiceHash: signed.invoiceHash,
+            xmlBeforeSigning: signed.unsignedXml, xmlAfterSigning: signed.signedXml,
+            attemptedAt, warnings: [], errors: [], completedAt: null,
+          });
+
+          let response;
+          try {
+            response = await postFatooraSimulation({
+              apiPath: '/compliance/invoices',
+              body: { invoiceHash: signed.invoiceHash, uuid, invoice: signed.invoiceBase64 },
+              binarySecurityToken: decrypt(csid.complianceCsid),
+              secret: decrypt(certificate.complianceSecretEncrypted),
+              clearance: invoiceType === 'standard',
+              clearanceStatus: invoiceType === 'standard' ? '1' : '0',
+              correlationId: uuid,
+              idempotencyKey: `onesoft-compliance-${unit.id}-${testKey}`,
+            });
+          } catch {
+            response = { url: getSimulationUrl('/compliance/invoices'), httpStatus: null, requestId: null, body: null };
+          }
+
+          const parts = complianceResultParts(response.body);
+          const passed = response.httpStatus != null
+            && response.httpStatus >= 200
+            && response.httpStatus < 300
+            && parts.accepted
+            && parts.errors.length === 0;
+          const errors = passed ? parts.errors : (
+            parts.errors.length ? parts.errors : [{ code: 'COMPLIANCE_REJECTED', message: 'لم تُرجع الهيئة قبولًا لاختبار المطابقة' }]
+          );
+          const status = passed
+            ? (parts.warnings.length ? 'passed_with_warnings' : 'passed')
+            : 'failed';
+          const requestId = response.requestId
+            ?? (response.body && typeof response.body === 'object'
+              ? String((response.body as Record<string, unknown>).requestID ?? (response.body as Record<string, unknown>).requestId ?? '') || null
+              : null);
+          const safeResponse = safeRemoteResponse(response);
+          await saveRow({
+            testKey, invoiceType, documentType, status, invoiceId: invoice.id,
+            invoiceUuid: uuid, invoiceHash: signed.invoiceHash,
+            xmlBeforeSigning: signed.unsignedXml, xmlAfterSigning: signed.signedXml,
+            httpStatus: response.httpStatus, requestId, responsePayload: safeResponse,
+            warnings: parts.warnings, errors, attemptedAt, completedAt: new Date(),
+          });
+          await db.insert(zatcaRequestLog).values({
+            orgId: ctx.user.orgId, url: response.url, httpMethod: 'POST',
+            headers: { 'Accept-Version': 'V2', Authorization: '[REDACTED]' },
+            requestBody: JSON.stringify({ invoiceHash: signed.invoiceHash, uuid, invoice: '[BASE64_SIGNED_XML]' }),
+            requestTime: attemptedAt, createdBy: ctx.user.id, updatedBy: ctx.user.id,
+          });
+          await db.insert(zatcaResponseLog).values({
+            orgId: ctx.user.orgId, httpStatus: response.httpStatus,
+            responseBody: JSON.stringify(safeResponse), responseTime: new Date(),
+            createdBy: ctx.user.id, updatedBy: ctx.user.id,
+          });
+          results.push({ testKey, invoiceId: invoice.id, status, httpStatus: response.httpStatus, requestId, warnings: parts.warnings, errors });
+        }
+      }
+
+      return {
+        ok: results.every(result => result.status === 'passed' || result.status === 'passed_with_warnings'),
+        results,
+        message: 'اكتملت محاولات اختبارات المطابقة الرسمية؛ راجع رد الهيئة لكل اختبار',
+      };
+    }),
+
   requestSimulationOperationalCsid: adminProcedure
     .input(z.object({
       posUnitId: z.number().int().positive(),
@@ -1303,7 +1698,7 @@ export const zatcaRouter = router({
       requireSimulationEncryptionKey();
       const unit = await getPosUnitForOrg(ctx.user.orgId, input.posUnitId);
       const readiness = await getZatcaReadiness(ctx.user.orgId, unit.warehouseId, 'both');
-      if (!readiness.operationalTestCompleted) {
+      if (!readiness.complianceTestCompleted) {
         throw new TRPCError({
           code: 'PRECONDITION_FAILED',
           message: 'لا يمكن طلب CSID التشغيلي قبل نجاح اختبارات المطابقة الرسمية',
@@ -1532,11 +1927,32 @@ export const zatcaRouter = router({
           columns: { id: true, status: true, issueDate: true, expiryDate: true },
         }),
       ]);
+      const csidPresence = device.currentCsidId == null
+        ? null
+        : (await db.select({
+            complianceCsidPresent: sql<boolean>`${zatcaCsid.complianceCsid} IS NOT NULL AND ${zatcaCsid.complianceCsid} <> ''`,
+            operationalCsidPresent: sql<boolean>`${zatcaCsid.productionCsid} IS NOT NULL AND ${zatcaCsid.productionCsid} <> ''`,
+          }).from(zatcaCsid).where(and(
+            eq(zatcaCsid.id, device.currentCsidId),
+            eq(zatcaCsid.orgId, ctx.user.orgId),
+            eq(zatcaCsid.isActive, true),
+            eq(zatcaCsid.isDeleted, false),
+          )).limit(1))[0] ?? null;
       return {
         environment: 'Simulation',
         device,
         csr,
-        csid,
+        csid: csid
+          ? {
+              id: csid.id,
+              status: csid.status,
+              issueDate: csid.issueDate,
+              expiryDate: csid.expiryDate,
+            }
+          : null,
+        complianceCsidPresent: Boolean(csidPresence?.complianceCsidPresent),
+        operationalCsidPresent: Boolean(csidPresence?.operationalCsidPresent),
+        certificateKind: csidPresence?.operationalCsidPresent ? 'operational' : csidPresence?.complianceCsidPresent ? 'compliance' : null,
         operationalReady: device.registrationStatus === 'operational',
         endpoint: getSimulationUrl('/compliance'),
         secretsReturned: false,

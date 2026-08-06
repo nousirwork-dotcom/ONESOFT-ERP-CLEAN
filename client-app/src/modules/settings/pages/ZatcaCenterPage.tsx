@@ -10,7 +10,7 @@ import { toast } from "sonner";
 // ─── أنواع ────────────────────────────────────────────────────────────────────
 type Section =
   | "activation" | "followup" | "dashboard" | "readiness" | "units" | "otp-sim" | "env" | "devices" | "certs" | "keys"
-  | "xmlcheck"  | "csr" | "register" | "csid" | "test"
+  | "xmlcheck"  | "csr" | "register" | "csid" | "test" | "compliance"
   | "send"      | "tracking" | "uncertain" | "oplogs" | "errlogs" | "diag" | "reports"
   | "support";
 
@@ -1532,8 +1532,17 @@ function DevicesSection() {
 // ══════════════════════════════════════════════════════════════════════════════
 function CertsSection() {
   const cfgQ = trpc.zatca.getConfig.useQuery();
+  const unitsQ = trpc.zatca.listPosUnits.useQuery();
   const cfg  = cfgQ.data;
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
+  const certUnitId = unitsQ.data?.[0]?.id ?? null;
+  const onboardingQ = trpc.zatca.getSimulationOnboardingStatus.useQuery(
+    { posUnitId: certUnitId ?? 0 },
+    { enabled: Boolean(certUnitId) },
+  );
+  const complianceCsidPresent = Boolean(onboardingQ.data?.complianceCsidPresent);
+  const operationalCsidPresent = Boolean(onboardingQ.data?.operationalCsidPresent);
+  const anyCsidPresent = complianceCsidPresent || operationalCsidPresent;
 
   const certDays = cfg?.certExpiryDate ? Math.ceil((new Date(cfg.certExpiryDate).getTime() - Date.now()) / 86400000) : null;
   const certDot: "ok"|"warn"|"error"|"none" = certDays === null ? "none" : certDays <= 0 ? "error" : certDays <= 30 ? "warn" : "ok";
@@ -1551,25 +1560,30 @@ function CertsSection() {
     },
     {
       label: "Public Certificate", icon: "📋", desc: "الشهادة العامة الصادرة من هيئة الزكاة",
-      status: cfg?.csid ? "active" : "missing",
+      status: anyCsidPresent ? "active" : "missing",
       date: cfg?.certExpiryDate ? new Date(cfg.certExpiryDate).toLocaleDateString("ar-SA") : null, issuer: "ZATCA CA",
       details: {
-        fingerprint:        cfg?.csid ? "SHA-256: xx:xx:...(مشفّر)" : "—",
+        fingerprint:        anyCsidPresent ? "SHA-256: xx:xx:...(مشفّر)" : "—",
         subject:            cfg?.legalName ? `CN=${cfg.legalName}, O=${cfg.legalName}, C=SA` : "—",
-        serialNumber:       cfg?.csid ? "0x1A2B3C (مثال)" : "—",
+        serialNumber:       anyCsidPresent ? "0x1A2B3C (مثال)" : "—",
         signatureAlgorithm: "SHA256WithECDSA",
         validFrom:          "—",
         validTo:            cfg?.certExpiryDate ? new Date(cfg.certExpiryDate).toLocaleDateString("ar-SA") : "—",
       },
     },
     {
-      label: "CSID", icon: "🔑", desc: "معرّف شهادة الاتصال — مُعطى من الهيئة",
-      status: cfg?.csid ? "active" : "missing", date: null, issuer: "ZATCA",
+      label: "Compliance CSID", icon: "🔑", desc: "معرّف شهادة المطابقة — صادر من Fatoora Simulation",
+      status: complianceCsidPresent ? "active" : "missing", date: null, issuer: "ZATCA",
+      details: { fingerprint: "—", subject: "—", serialNumber: "—", signatureAlgorithm: "—", validFrom: "—", validTo: "—" },
+    },
+    {
+      label: "Operational CSID", icon: "🚀", desc: "معرّف الشهادة التشغيلية — لا يُطلب قبل نجاح المطابقة الرسمية",
+      status: operationalCsidPresent ? "active" : "pending", date: null, issuer: "ZATCA",
       details: { fingerprint: "—", subject: "—", serialNumber: "—", signatureAlgorithm: "—", validFrom: "—", validTo: "—" },
     },
     {
       label: "Secret Key", icon: "🗝️", desc: "المفتاح السري للتوثيق — مشفّر AES-256-GCM",
-      status: cfg?.csid ? "active" : "missing", date: null, issuer: "ZATCA",
+      status: anyCsidPresent ? "active" : "missing", date: null, issuer: "ZATCA",
       details: { fingerprint: "—", subject: "—", serialNumber: "—", signatureAlgorithm: "AES-256-GCM", validFrom: "—", validTo: "—" },
     },
   ];
@@ -1584,9 +1598,9 @@ function CertsSection() {
 
       {/* حالة الشهادة */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 16 }}>
-        <StatusCard label="حالة الشهادة"        value={cfg?.csid ? "صالحة ✓" : "غير موجودة"} dot={cfg?.csid ? "ok" : "none"} sub={cfg?.csid ? "شهادة X.509 من ZATCA" : "أنشئ CSR وسجّل الجهاز"} />
+        <StatusCard label="حالة الشهادة"        value={anyCsidPresent ? "صالحة ✓" : "غير موجودة"} dot={anyCsidPresent ? "ok" : "none"} sub={anyCsidPresent ? "شهادة X.509 من ZATCA" : "أنشئ CSR وسجّل الجهاز"} />
         <StatusCard label="تاريخ الانتهاء"       value={cfg?.certExpiryDate ? new Date(cfg.certExpiryDate).toLocaleDateString("ar-SA") : "—"} dot={certDot} sub={certDays !== null ? (certDays > 0 ? `${certDays} يوم متبقٍ` : "منتهية — تجديد فوري!") : "لم تُحدَّد"} />
-        <StatusCard label="الجهة المصدرة / النوع" value={cfg?.csid ? "ZATCA CA" : "—"} dot={cfg?.csid ? "ok" : "none"} sub={cfg?.environment === "production" ? "شهادة إنتاج" : cfg?.environment === "sandbox" ? "شهادة اختبار" : "—"} />
+        <StatusCard label="الجهة المصدرة / النوع" value={anyCsidPresent ? "ZATCA CA" : "—"} dot={anyCsidPresent ? "ok" : "none"} sub={operationalCsidPresent ? "Operational CSID" : complianceCsidPresent ? "Compliance CSID" : "—"} />
       </div>
 
       {certDot === "warn" && (
@@ -1986,6 +2000,99 @@ function TestSection() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// اختبارات المطابقة الرسمية — Compliance CSID فقط
+// ══════════════════════════════════════════════════════════════════════════════
+function ComplianceTestsSection({
+  posUnitId: initialPosUnitId = null,
+  invoiceType = "both",
+  warehouseId,
+}: {
+  posUnitId?: number | null;
+  invoiceType?: "simplified" | "standard" | "both";
+  warehouseId?: number | null;
+} = {}) {
+  const unitsQ = trpc.zatca.listPosUnits.useQuery();
+  const utils = trpc.useUtils();
+  const [posUnitId, setPosUnitId] = useState<number | null>(initialPosUnitId);
+  const selectedUnitId = posUnitId ?? initialPosUnitId ?? unitsQ.data?.[0]?.id ?? null;
+  const selectedUnit = (unitsQ.data ?? []).find(unit => unit.id === selectedUnitId);
+  const readinessWarehouseId = warehouseId ?? selectedUnit?.warehouseId ?? null;
+  const readinessQ = trpc.zatca.getReadiness.useQuery(
+    { warehouseId: readinessWarehouseId ?? undefined, invoiceType },
+    { enabled: Boolean(readinessWarehouseId) },
+  );
+  const runM = trpc.zatca.runComplianceTests.useMutation({
+    onSuccess: async (result) => {
+      await readinessQ.refetch();
+      await utils.zatca.getReadiness.invalidate();
+      result.ok ? toast.success(result.message) : toast.warning(result.message);
+    },
+    onError: (error) => toast.error(error.message),
+  });
+  const tests = (readinessQ.data?.complianceTests ?? []) as unknown as Array<{
+    testKey: string;
+    label: string;
+    status: string;
+    completed: boolean;
+    httpStatus: number | null;
+    requestId: string | null;
+    warnings: Array<{ code?: string; message?: string }>;
+    errors: Array<{ code?: string; message?: string }>;
+    attemptedAt: string | Date | null;
+  }>;
+  const statusText: Record<string, string> = {
+    not_started: "لم يبدأ",
+    submitting: "جارٍ الإرسال",
+    passed: "ناجح",
+    passed_with_warnings: "ناجح مع تحذيرات",
+    failed: "فشل",
+  };
+  const statusColor = (status: string) =>
+    status === "passed" || status === "passed_with_warnings" ? "#166534" : status === "failed" ? "#b91c1c" : "#64748b";
+
+  return (
+    <div style={{ maxWidth: 820 }}>
+      <SecTitle icon="📋" title="اختبارات المطابقة الرسمية" />
+      <div style={{ background: "#fffbeb", border: "1px solid #facc15", color: "#854d0e", borderRadius: 9, padding: 12, fontSize: 11, lineHeight: 1.8, marginBottom: 14 }}>
+        هذه الاختبارات ترسل XML موقّعًا فعليًا إلى <code>/compliance/invoices</code> باستخدام Compliance CSID. فحص XML المحلي أو اختبار الاتصال لا يُحسب نجاحًا للمطابقة.
+      </div>
+      {(!initialPosUnitId || unitsQ.data && unitsQ.data.length > 1) && (
+        <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 9, padding: 12, marginBottom: 12 }}>
+          <label style={lbl}>وحدة EGS لاختبارات المطابقة</label>
+          <select value={selectedUnitId ?? ""} onChange={e => setPosUnitId(Number(e.target.value) || null)} style={{ ...fld, maxWidth: 460 }}>
+            <option value="">اختر وحدة الربط</option>
+            {(unitsQ.data ?? []).map(unit => <option key={unit.id} value={unit.id}>{unit.unitCode} — {unit.unitName} — {unit.warehouseName ?? "بدون مخزن"}</option>)}
+          </select>
+        </div>
+      )}
+      <div style={{ display: "grid", gap: 8 }}>
+        {tests.map(test => (
+          <div key={test.testKey} style={{ background: "#fff", border: `1px solid ${test.completed ? "#bbf7d0" : test.status === "failed" ? "#fecaca" : "#e2e8f0"}`, borderRadius: 9, padding: "10px 12px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+              <span style={{ width: 22, height: 22, borderRadius: "50%", display: "grid", placeItems: "center", background: test.completed ? "#dcfce7" : test.status === "failed" ? "#fee2e2" : "#f1f5f9", color: statusColor(test.status), fontWeight: 800 }}>{test.completed ? "✓" : test.status === "failed" ? "!" : "—"}</span>
+              <strong style={{ flex: 1, fontSize: 12 }}>{test.label}</strong>
+              <span style={{ color: statusColor(test.status), fontSize: 11, fontWeight: 800 }}>{statusText[test.status] ?? test.status}</span>
+              {test.httpStatus != null && <span style={{ fontFamily: "monospace", fontSize: 10, color: "#64748b" }}>HTTP {test.httpStatus}</span>}
+            </div>
+            {test.requestId && <div style={{ marginTop: 5, fontSize: 10, color: "#64748b" }}>Request ID: <span style={{ fontFamily: "monospace" }}>{test.requestId}</span></div>}
+            {test.errors?.length > 0 && <div style={{ marginTop: 6, color: "#b91c1c", fontSize: 10 }}>{test.errors.map((e, i) => <div key={i}>❌ {e.code}: {e.message}</div>)}</div>}
+            {test.warnings?.length > 0 && <div style={{ marginTop: 6, color: "#a16207", fontSize: 10 }}>{test.warnings.map((e, i) => <div key={i}>⚠️ {e.code}: {e.message}</div>)}</div>}
+          </div>
+        ))}
+      </div>
+      <button
+        onClick={() => selectedUnitId && runM.mutate({ posUnitId: selectedUnitId, invoiceType })}
+        disabled={!selectedUnitId || runM.isPending}
+        style={{ ...smallBtn, height: 38, padding: "0 20px", marginTop: 14, background: selectedUnitId && !runM.isPending ? "#1d4ed8" : "#cbd5e1", color: "#fff", cursor: selectedUnitId && !runM.isPending ? "pointer" : "not-allowed" }}
+      >
+        {runM.isPending ? "⏳ جارٍ إنشاء XML وتوقيعه وإرساله..." : "▶ تشغيل اختبارات المطابقة الرسمية / إعادة المحاولة"}
+      </button>
+      {!selectedUnitId && <div style={{ marginTop: 8, color: "#b91c1c", fontSize: 11 }}>اختر وحدة EGS قبل تشغيل الاختبارات.</div>}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // 11. إرسال الفواتير
 // ══════════════════════════════════════════════════════════════════════════════
 function SendSection() {
@@ -2357,6 +2464,12 @@ function LogsSection({ errorsOnly = false }: { errorsOnly?: boolean }) {
 function DiagSection() {
   const cfgQ   = trpc.zatca.getConfig.useQuery();
   const statsQ = trpc.zatca.getStats.useQuery();
+  const unitsQ = trpc.zatca.listPosUnits.useQuery();
+  const diagnosticUnitId = unitsQ.data?.[0]?.id ?? null;
+  const onboardingQ = trpc.zatca.getSimulationOnboardingStatus.useQuery(
+    { posUnitId: diagnosticUnitId ?? 0 },
+    { enabled: Boolean(diagnosticUnitId) },
+  );
   const testM  = trpc.zatca.testConnection.useMutation();
   const cfg = cfgQ.data;
   const s   = statsQ.data;
@@ -2365,8 +2478,9 @@ function DiagSection() {
     { id: "vat",    label: "صحة الرقم الضريبي",     dot: !!cfg?.vatNumber && /^3\d{13}3$/.test(cfg?.vatNumber ?? "") ? "ok" as const : "error" as const, detail: cfg?.vatNumber || "غير محدد" },
     { id: "name",   label: "اسم المنشأة",             dot: !!cfg?.legalName ? "ok" as const : "warn" as const, detail: cfg?.legalName || "غير محدد" },
     { id: "addr",   label: "اكتمال العنوان",          dot: !!(cfg?.street && cfg?.city) ? "ok" as const : "warn" as const, detail: cfg?.street ? `${cfg.street}، ${cfg.city}` : "غير مكتمل" },
-    { id: "csid",   label: "CSID",                   dot: !!cfg?.csid ? "ok" as const : "error" as const, detail: cfg?.csid ? "موجود ✓" : "مفقود" },
-    { id: "cert",   label: "صلاحية الشهادة",          dot: !!(cfg?.certExpiryDate && (s?.certDaysLeft ?? 0) > 0) ? "ok" as const : s?.certDaysLeft !== null && (s?.certDaysLeft ?? 0) > 0 ? "ok" as const : "error" as const, detail: s?.certDaysLeft != null ? `${s!.certDaysLeft} يوم متبقٍ` : "غير محدد" },
+    { id: "compliance-csid", label: "Compliance CSID", dot: onboardingQ.data?.complianceCsidPresent ? "ok" as const : "error" as const, detail: onboardingQ.data?.complianceCsidPresent ? "موجود للمطابقة ✓" : "مفقود" },
+    { id: "operational-csid", label: "CSID التشغيلي", dot: onboardingQ.data?.operationalCsidPresent ? "ok" as const : "warn" as const, detail: onboardingQ.data?.operationalCsidPresent ? "موجود للتشغيل ✓" : "غير مطلوب حتى نجاح المطابقة" },
+    { id: "cert",   label: "صلاحية الشهادة (Compliance/تشغيلية)", dot: !!(cfg?.certExpiryDate && (s?.certDaysLeft ?? 0) > 0) ? "ok" as const : s?.certDaysLeft !== null && (s?.certDaysLeft ?? 0) > 0 ? "ok" as const : "error" as const, detail: s?.certDaysLeft != null ? `${s!.certDaysLeft} يوم متبقٍ` : "غير محدد" },
     { id: "env",    label: "تهيئة البيئة",            dot: !!cfg?.apiBaseUrl ? "ok" as const : "error" as const, detail: cfg?.environment === "production" ? "إنتاج ✓" : "اختبار" },
     { id: "enabled",label: "تفعيل المنظومة",          dot: !!cfg?.enabled ? "ok" as const : "warn" as const, detail: cfg?.enabled ? "مُفعَّلة ✓" : "غير مُفعَّلة" },
     { id: "conn",   label: "آخر اختبار اتصال",       dot: (cfg as any)?.lastConnectionStatus === "success" ? "ok" as const : "none" as const, detail: cfg?.lastConnectionTest ? new Date(cfg.lastConnectionTest).toLocaleString("ar-SA") : "لم يُختبر" },
@@ -2720,7 +2834,7 @@ function ActivationWizard({
   const invoiceTypeSaved = readiness?.savedSettings?.invoiceType === invoiceType
     && (!selectedUnitId || readiness.savedSettings?.zatcaPosUnitId === selectedUnitId);
   const simulationComplete = Boolean(simulationStatusQ.data?.csid?.id);
-  const testsComplete = simulationComplete && Boolean(readiness?.operationalTestCompleted);
+  const testsComplete = simulationComplete && Boolean(readiness?.complianceTestCompleted);
   const operationalComplete = simulationComplete && Boolean(simulationStatusQ.data?.operationalReady);
   const productionComplete = Boolean(cfg?.enabled && cfg?.environment === "production");
   const allSteps = [
@@ -3053,24 +3167,12 @@ function ActivationWizard({
     }
     if (activeStep === 4) return <OtpSimulationSection initialPosUnitId={selectedUnitId} />;
     if (activeStep === 5) {
-      const tests = (readiness?.operationalTests ?? []) as any[];
       return (
-        <div>
-          <SecTitle icon="📋" title="اختبارات المطابقة" />
-          <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 9, padding: 11, marginBottom: 13, color: "#1e40af", fontSize: 11, lineHeight: 1.7 }}>
-            تظهر هنا الاختبارات الرسمية بعد الحصول على Compliance CSID. لا تُعد المرحلة ناجحة قبل إتمام الاختبارات.
-          </div>
-          <div style={{ display: "grid", gap: 7 }}>
-            {(tests.length ? tests : requiredJournalTypes.map(type => ({ docType: type, label: journalTypeLabel(type), completed: false }))).map((test: any) => (
-              <div key={test.docType} style={{ display: "flex", alignItems: "center", gap: 9, border: "1px solid #e2e8f0", borderRadius: 8, padding: "9px 11px", background: "#fff" }}>
-                <span style={{ width: 20, height: 20, borderRadius: "50%", display: "grid", placeItems: "center", background: test.completed ? "#dcfce7" : "#f1f5f9", color: test.completed ? "#16a34a" : "#64748b", fontSize: 11 }}>{test.completed ? "✓" : "—"}</span>
-                <strong style={{ flex: 1, fontSize: 11 }}>{test.label}</strong>
-                <span style={{ fontSize: 10, color: test.completed ? "#16a34a" : "#64748b" }}>{test.completed ? "ناجح" : "لم يبدأ"}</span>
-              </div>
-            ))}
-          </div>
-          {onOpenTechnical && <button onClick={onOpenTechnical} style={{ ...smallBtn, marginTop: 12, background: "#f1f5f9", color: "#334155", border: "1px solid #cbd5e1" }}>فتح أدوات المطابقة المتقدمة</button>}
-        </div>
+        <ComplianceTestsSection
+          posUnitId={selectedUnitId}
+          invoiceType={invoiceType}
+          warehouseId={selectedWarehouseNumber}
+        />
       );
     }
     if (activeStep === 6) {
@@ -3364,8 +3466,8 @@ export default function ZatcaCenterPage({
 
   function renderSection() {
     switch (active) {
-      case "activation": return <ActivationSection onOpenCompanyInfo={onOpenCompanyInfo} onOpenTechnical={canOpenTechnical ? () => { setTechnicalOpen(true); setActive("diag"); } : undefined} />;
-      case "followup":   return <FollowupSection onOpenTechnical={canOpenTechnical ? () => { setTechnicalOpen(true); setActive("diag"); } : undefined} />;
+      case "activation": return <ActivationSection onOpenCompanyInfo={onOpenCompanyInfo} onOpenTechnical={canOpenTechnical ? () => { setTechnicalOpen(true); setActive("compliance"); } : undefined} />;
+      case "followup":   return <FollowupSection onOpenTechnical={canOpenTechnical ? () => { setTechnicalOpen(true); setActive("compliance"); } : undefined} />;
       case "dashboard": return <DashboardSection onStartSetup={() => setShowWizard(true)} onNavigate={navigateTo} />;
       case "readiness": return <ReadinessSection onNavigate={navigateTo} onOpenCompanyInfo={onOpenCompanyInfo} />;
       case "units":     return <LinkingUnitsSection onActivate={() => setActive("otp-sim")} />;
@@ -3379,6 +3481,7 @@ export default function ZatcaCenterPage({
       case "register":  return <RegisterSection />;
       case "csid":      return <CsidSection />;
       case "test":      return <TestSection />;
+      case "compliance": return <ComplianceTestsSection />;
       case "send":      return <SendSection />;
       case "tracking":  return <TrackingSection />;
       case "uncertain": return <UncertainSection />;
