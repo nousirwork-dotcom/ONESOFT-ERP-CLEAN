@@ -400,7 +400,6 @@ async function getZatcaReadiness(
       unitCode: zatcaPosUnits.unitCode,
       unitName: zatcaPosUnits.unitName,
       warehouseId: zatcaPosUnits.warehouseId,
-      status: zatcaPosUnits.status,
     }).from(zatcaPosUnits).where(and(
       eq(zatcaPosUnits.orgId, orgId),
       eq(zatcaPosUnits.isActive, true),
@@ -774,7 +773,6 @@ export const zatcaRouter = router({
       id: zatcaPosUnits.id,
       unitCode: zatcaPosUnits.unitCode,
       unitName: zatcaPosUnits.unitName,
-      status: zatcaPosUnits.status,
       oneSoftStatus: zatcaPosUnits.oneSoftStatus,
       lifecycleUpdatedAt: zatcaPosUnits.lifecycleUpdatedAt,
       lifecycleReason: zatcaPosUnits.lifecycleReason,
@@ -1255,6 +1253,7 @@ export const zatcaRouter = router({
             .set({
               unitCode: input.unitCode,
               unitName: input.unitName,
+              status: 'linked',
               updatedBy: ctx.user.id,
               updatedAt: new Date(),
             })
@@ -1269,6 +1268,7 @@ export const zatcaRouter = router({
             warehouseId: journal.warehouseId,
             unitCode: input.unitCode,
             unitName: input.unitName,
+            status: 'linked',
             createdBy: ctx.user.id,
             updatedBy: ctx.user.id,
           }).returning();
@@ -1295,7 +1295,6 @@ export const zatcaRouter = router({
       id: z.number().int().positive(),
       unitCode: z.string().trim().min(1).max(50).optional(),
       unitName: z.string().trim().min(1).max(255).optional(),
-      status: z.string().trim().min(1).max(30).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       await getPosUnitForOrg(ctx.user.orgId, input.id);
@@ -1303,7 +1302,6 @@ export const zatcaRouter = router({
         .set({
           ...(input.unitCode !== undefined ? { unitCode: input.unitCode } : {}),
           ...(input.unitName !== undefined ? { unitName: input.unitName } : {}),
-          ...(input.status !== undefined ? { status: input.status } : {}),
           updatedBy: ctx.user.id,
           updatedAt: new Date(),
         })
@@ -1791,29 +1789,70 @@ export const zatcaRouter = router({
         throw new TRPCError({ code: 'CONFLICT', message: 'الدفتر مرتبط بالفعل بوحدة ربط أخرى' });
       }
 
-      const [updated] = await db.update(documentJournals)
-        .set({ zatcaPosUnitId: unit.id, updatedAt: new Date() })
-        .where(and(
-          eq(documentJournals.id, journal.id),
-          eq(documentJournals.orgId, ctx.user.orgId),
-          eq(documentJournals.isActive, true),
-        ))
-        .returning();
-      return updated;
+       return db.transaction(async (tx) => {
+         const [updated] = await tx.update(documentJournals)
+           .set({ zatcaPosUnitId: unit.id, updatedAt: new Date() })
+           .where(and(
+             eq(documentJournals.id, journal.id),
+             eq(documentJournals.orgId, ctx.user.orgId),
+             eq(documentJournals.isActive, true),
+           ))
+           .returning();
+         if (!updated) throw new TRPCError({ code: 'NOT_FOUND', message: 'دفتر المستند غير موجود' });
+
+         await tx.update(zatcaPosUnits)
+           .set({ status: 'linked', updatedAt: new Date(), updatedBy: ctx.user.id })
+           .where(and(
+             eq(zatcaPosUnits.id, unit.id),
+             eq(zatcaPosUnits.orgId, ctx.user.orgId),
+           ));
+         return updated;
+       });
     }),
 
   unlinkJournalFromPosUnit: adminProcedure
     .input(z.object({ journalId: z.number().int().positive() }))
     .mutation(async ({ ctx, input }) => {
-      const [updated] = await db.update(documentJournals)
-        .set({ zatcaPosUnitId: null, updatedAt: new Date() })
-        .where(and(
-          eq(documentJournals.id, input.journalId),
-          eq(documentJournals.orgId, ctx.user.orgId),
-        ))
-        .returning();
-      if (!updated) throw new TRPCError({ code: 'NOT_FOUND', message: 'دفتر المستند غير موجود' });
-      return updated;
+       return db.transaction(async (tx) => {
+         const journal = await tx.query.documentJournals.findFirst({
+           where: and(
+             eq(documentJournals.id, input.journalId),
+             eq(documentJournals.orgId, ctx.user.orgId),
+           ),
+           columns: { id: true, zatcaPosUnitId: true },
+         });
+         if (!journal) throw new TRPCError({ code: 'NOT_FOUND', message: 'دفتر المستند غير موجود' });
+
+         const [updated] = await tx.update(documentJournals)
+           .set({ zatcaPosUnitId: null, updatedAt: new Date() })
+           .where(and(
+             eq(documentJournals.id, input.journalId),
+             eq(documentJournals.orgId, ctx.user.orgId),
+           ))
+           .returning();
+         if (!updated) throw new TRPCError({ code: 'NOT_FOUND', message: 'دفتر المستند غير موجود' });
+
+         if (journal.zatcaPosUnitId != null) {
+           const [linked] = await tx.select({ count: count() })
+             .from(documentJournals)
+             .where(and(
+               eq(documentJournals.orgId, ctx.user.orgId),
+               eq(documentJournals.zatcaPosUnitId, journal.zatcaPosUnitId),
+               eq(documentJournals.isActive, true),
+             ));
+           await tx.update(zatcaPosUnits)
+             .set({
+               status: Number(linked?.count ?? 0) > 0 ? 'linked' : 'unlinked',
+               updatedAt: new Date(),
+               updatedBy: ctx.user.id,
+             })
+             .where(and(
+               eq(zatcaPosUnits.id, journal.zatcaPosUnitId),
+               eq(zatcaPosUnits.orgId, ctx.user.orgId),
+             ));
+         }
+         return updated;
+       });
     }),
 
   // ── تهيئة EGS في Fatoora Simulation ───────────────────────────────────────

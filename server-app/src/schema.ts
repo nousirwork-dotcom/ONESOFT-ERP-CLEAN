@@ -771,6 +771,9 @@ export const zatcaPosUnits = pgTable('zatca_pos_units', {
   warehouseId: integer('warehouse_id').notNull().references(() => warehouses.id, { onDelete: 'restrict' }),
   unitCode:    varchar('unit_code', { length: 50 }).notNull(),
   unitName:    varchar('unit_name', { length: 255 }).notNull(),
+  // Legacy compatibility projection only. The source of truth for whether a
+  // unit is linked is document_journals.zatca_pos_unit_id; lifecycle guards
+  // use the journal relationship plus oneSoftStatus/device lifecycle.
   status:      varchar('status', { length: 30 }).notNull().default('unlinked'),
   oneSoftStatus: varchar('onesoft_status', { length: 30 }).notNull().default('active'),
   lifecycleUpdatedAt: timestamp('lifecycle_updated_at'),
