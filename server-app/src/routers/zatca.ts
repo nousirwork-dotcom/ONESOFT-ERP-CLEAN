@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { z } from 'zod';
-import { router, protectedProcedure, adminProcedure } from '../trpc.js';
+import { router, protectedProcedure, adminProcedure, superAdminProcedure } from '../trpc.js';
 import { db } from '../db.js';
 import {
   organizations,
@@ -1358,7 +1358,7 @@ export const zatcaRouter = router({
     .input(z.object({
       posUnitId: z.number().int().positive(),
       environment: z.enum(['simulation', 'production']),
-      action: z.enum(['pause', 'resume', 'refresh', 'archive']),
+      action: z.enum(['refresh', 'archive']),
       reason: z.string().trim().max(1000).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -1393,17 +1393,15 @@ export const zatcaRouter = router({
       if (device.lifecycleStatus === 'cancelled_from_fatoora' || device.lifecycleStatus === 'archived') {
         throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'لا يمكن تعديل بيئة ملغاة أو مؤرشفة' });
       }
+      if (input.action === 'archive' && input.environment === 'production' && device.lifecycleStatus === 'active') {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'لا يمكن أرشفة Production ما زالت نشطة لدى منصة فاتورة؛ نفّذ الإلغاء الخارجي ثم أكّد الإلغاء أولًا',
+        });
+      }
 
-      const nextStatus = input.action === 'pause'
-        ? 'paused'
-        : input.action === 'resume'
-          ? 'active'
-          : input.action === 'archive'
-            ? 'archived'
-            : device.lifecycleStatus;
-      const action = input.action === 'pause' ? 'pause_environment'
-        : input.action === 'resume' ? 'resume_environment'
-          : input.action === 'archive' ? 'archive_environment' : 'refresh_environment';
+      const nextStatus = input.action === 'archive' ? 'archived' : device.lifecycleStatus;
+      const action = input.action === 'archive' ? 'archive_environment' : 'refresh_environment';
       if (input.action === 'archive') {
         const [pendingInvoices, pendingTransactions, pendingQueue] = await Promise.all([
           db.select({ id: salesInvoices.id })
@@ -1460,6 +1458,72 @@ export const zatcaRouter = router({
           previousStatus: device.lifecycleStatus,
           nextStatus,
           reason: input.reason ?? null,
+          actorUserId: ctx.user.id,
+          actorUsername: actorName,
+        });
+      });
+      return { ok: true, status: nextStatus, environment: input.environment };
+    }),
+
+  // إجراءات طوارئ داخلية فقط — غير متاحة لمسؤولي المنشأة أو نسخة العميل.
+  setUnitEnvironmentLifecycleInternal: superAdminProcedure
+    .input(z.object({
+      posUnitId: z.number().int().positive(),
+      environment: z.enum(['simulation', 'production']),
+      action: z.enum(['pause', 'resume']),
+      reason: z.string().trim().min(1).max(1000),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const unit = await db.query.zatcaPosUnits.findFirst({
+        where: and(
+          eq(zatcaPosUnits.id, input.posUnitId),
+          eq(zatcaPosUnits.isActive, true),
+          eq(zatcaPosUnits.isDeleted, false),
+        ),
+      });
+      if (!unit) throw new TRPCError({ code: 'NOT_FOUND', message: 'وحدة الربط غير موجودة' });
+      if (unit.oneSoftStatus === 'archived') {
+        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'وحدة الربط مؤرشفة ولا يمكن تعديل بيئتها' });
+      }
+
+      const environmentName = input.environment === 'simulation' ? 'Simulation' : 'Production';
+      const env = await db.query.zatcaEnvironments.findFirst({
+        where: and(eq(zatcaEnvironments.orgId, unit.orgId), eq(zatcaEnvironments.name, environmentName)),
+      });
+      if (!env) throw new TRPCError({ code: 'NOT_FOUND', message: `بيئة ${environmentName} غير مهيأة` });
+      const device = await db.query.zatcaDevices.findFirst({
+        where: and(
+          eq(zatcaDevices.orgId, unit.orgId),
+          eq(zatcaDevices.posUnitId, input.posUnitId),
+          eq(zatcaDevices.environmentId, env.id),
+          eq(zatcaDevices.isActive, true),
+          eq(zatcaDevices.isDeleted, false),
+        ),
+      });
+      if (!device) throw new TRPCError({ code: 'PRECONDITION_FAILED', message: `لا توجد وحدة EGS في بيئة ${environmentName}` });
+      if (device.lifecycleStatus === 'cancelled_from_fatoora' || device.lifecycleStatus === 'archived') {
+        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'لا يمكن تعديل بيئة ملغاة أو مؤرشفة' });
+      }
+
+      const nextStatus = input.action === 'pause' ? 'paused' : 'active';
+      const now = new Date();
+      const actorName = (ctx.user.name ?? ctx.user.username ?? 'Super Admin').trim();
+      await db.transaction(async (tx) => {
+        await tx.update(zatcaDevices).set({
+          lifecycleStatus: nextStatus,
+          lifecycleUpdatedAt: now,
+          lifecycleUpdatedBy: ctx.user.id,
+          updatedAt: now,
+        }).where(eq(zatcaDevices.id, device.id));
+        await tx.insert(zatcaUnitLifecycleEvents).values({
+          orgId: unit.orgId,
+          posUnitId: input.posUnitId,
+          deviceId: device.id,
+          environmentId: env.id,
+          action: input.action === 'pause' ? 'pause_environment' : 'resume_environment',
+          previousStatus: device.lifecycleStatus,
+          nextStatus,
+          reason: input.reason,
           actorUserId: ctx.user.id,
           actorUsername: actorName,
         });
@@ -1597,11 +1661,11 @@ export const zatcaRouter = router({
       return { ok: true, status: 'archived' };
     }),
 
-  setUnitLifecycle: adminProcedure
+  setUnitLifecycleInternal: superAdminProcedure
     .input(z.object({
       posUnitId: z.number().int().positive(),
       action: z.enum(['pause', 'resume']),
-      reason: z.string().trim().max(1000).optional(),
+      reason: z.string().trim().min(1).max(1000),
     }))
     .mutation(async ({ ctx, input }) => {
       const unit = await db.query.zatcaPosUnits.findFirst({
@@ -1618,13 +1682,13 @@ export const zatcaRouter = router({
       }
       const nextStatus = input.action === 'pause' ? 'paused' : 'active';
       const now = new Date();
-      const actorName = (ctx.user.name ?? ctx.user.username ?? 'مستخدم').trim();
+      const actorName = (ctx.user.name ?? ctx.user.username ?? 'Super Admin').trim();
       await db.transaction(async (tx) => {
         await tx.update(zatcaPosUnits).set({
           oneSoftStatus: nextStatus,
           lifecycleUpdatedAt: now,
           lifecycleUpdatedBy: ctx.user.id,
-          lifecycleReason: input.reason ?? null,
+          lifecycleReason: input.reason,
           updatedAt: now,
         }).where(eq(zatcaPosUnits.id, unit.id));
         await tx.insert(zatcaUnitLifecycleEvents).values({
@@ -1633,7 +1697,7 @@ export const zatcaRouter = router({
           action: input.action === 'pause' ? 'pause_unit' : 'resume_unit',
           previousStatus: unit.oneSoftStatus,
           nextStatus,
-          reason: input.reason ?? null,
+          reason: input.reason,
           actorUserId: ctx.user.id,
           actorUsername: actorName,
         });
