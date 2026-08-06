@@ -185,8 +185,9 @@ export const setupRouter = router({
 
       logger.info('setup', 'first-run wizard started');
 
-      // إنشاء المؤسسة — وضع تجريبي (trial) 30 يومًا
-      const trialExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      // إنشاء المؤسسة — وضع تجريبي لمدة 3 أشهر تقويمية
+      const trialExpiry = new Date();
+      trialExpiry.setMonth(trialExpiry.getMonth() + 3);
       const [org] = await db.insert(organizations).values({
         code:             'TRIAL',
         name:             input.company.name,

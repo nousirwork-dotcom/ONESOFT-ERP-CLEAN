@@ -54,10 +54,10 @@ const MOCKS: Record<string, { label: string; btnColor: string; status: MockStatu
       valid: true, error: null,
       payload: {
         org_id: "ORG-TRIAL-0001", customer_name: "مؤسسة الاختبار التجريبية",
-        package_name: "Trial 30 يوم",
+         package_name: "Trial 3 أشهر",
         max_users: 3, max_branches: 1, max_pos: 1, max_devices: 2,
         enabled_modules: ["sales", "purchases", "inventory", "accounting", "reports"],
-        start_date: "2026-07-01", expiry_date: "2026-07-22",
+         start_date: "2026-07-01", expiry_date: "2026-10-01",
         license_id: "TRL-2026-0001", activation_id: "ACT-TRIAL-001",
         issued_by: "OneSoft ERP", license_type: "trial",
         desktop_allowed: true, web_allowed: false, offline_allowed: false,

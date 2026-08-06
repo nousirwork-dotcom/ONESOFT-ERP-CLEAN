@@ -3,7 +3,7 @@
  *
  * ensureDefaultAdmin():
  *   - يعمل مرة واحدة فقط عندما يكون جدول المستخدمين فارغاً (قاعدة بيانات جديدة).
- *   - يُنشئ مؤسسة تجريبية (30 يوماً) إن لم توجد مؤسسة صالحة.
+ *   - يُنشئ مؤسسة تجريبية لمدة 3 أشهر تقويمية إن لم توجد مؤسسة صالحة.
  *   - يُنشئ مستخدم ADMIN بكلمة مرور فارغة (password_status='not_set') وصلاحيات مدير كاملة.
  *
  * إعادة التثبيت مع قاعدة بيانات موجودة:
@@ -33,14 +33,15 @@ export async function ensureDefaultAdmin(): Promise<void> {
     if (userCount > 0) return;
 
     // ── تأكد من وجود مؤسسة صالحة ──────────────────────────────────────────
-    // نفضّل أي مؤسسة موجودة غير SYSTEM، وإلا نُنشئ مؤسسة تجريبية 30 يوماً
+    // نفضّل أي مؤسسة موجودة غير SYSTEM، وإلا نُنشئ مؤسسة تجريبية لمدة 3 أشهر
     const existing = await db.query.organizations.findMany({
       columns: { id: true, code: true },
     });
     let org = existing.find(o => o.code !== 'SYSTEM') ?? null;
 
     if (!org) {
-      const trialExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      const trialExpiry = new Date();
+      trialExpiry.setMonth(trialExpiry.getMonth() + 3);
       const [created] = await db.insert(organizations).values({
         code:               'TRIAL',
         name:               'مؤسستي',
@@ -55,7 +56,7 @@ export async function ensureDefaultAdmin(): Promise<void> {
         maxUsers:           5,
       }).returning({ id: organizations.id, code: organizations.code });
       org = created;
-      logger.info('bootstrap', `default trial org created (code=${created.code}, 30d)`);
+      logger.info('bootstrap', `default trial org created (code=${created.code}, 3 calendar months)`);
     }
 
     // ── أنشئ مستخدم ADMIN بكلمة مرور فارغة ────────────────────────────────
