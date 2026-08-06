@@ -222,7 +222,10 @@ export function buildAndSignSimulationInvoice(
     privateKeyPem: input.privateKeyPem,
     certificatePem: normalizedCertificate,
     qrData: {
-      sellerName: input.seller.nameEn,
+      // The XML supplier RegistrationName is the Arabic name. QR tag 1 must
+      // use the same value; sending the English display name causes Fatoora
+      // to reject the invoice with sellerName_QRCODE_INVALID.
+      sellerName: input.seller.nameAr,
       vatNumber: input.seller.vatNumber,
       timestamp: iso,
       totalWithVat: total.toFixed(2),

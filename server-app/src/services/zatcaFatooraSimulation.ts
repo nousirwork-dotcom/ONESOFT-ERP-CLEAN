@@ -45,6 +45,75 @@ export type FatooraResponse = {
   body: Record<string, unknown> | string | null;
 };
 
+/**
+ * The Simulation /compliance response returns the Compliance certificate in
+ * binarySecurityToken. It is a Base64-encoded DER X.509 certificate, while
+ * the invoice signer expects PEM. Keep the transport token unchanged for
+ * Basic auth and normalize only the certificate copy.
+ */
+export function complianceCertificatePem(
+  binarySecurityToken: string,
+  privateKeyPem?: string,
+): string {
+  const value = binarySecurityToken.trim();
+  if (!value) throw new Error('شهادة Compliance غير مستلمة');
+
+  let certificate: crypto.X509Certificate;
+  try {
+    if (value.includes('BEGIN CERTIFICATE')) {
+      certificate = new crypto.X509Certificate(value);
+    } else {
+      let decoded = Buffer.from(value.replace(/\s+/g, ''), 'base64');
+      if (!decoded.length) throw new Error('شهادة Compliance فارغة');
+
+      // Some Simulation responses contain the DER certificate encoded as
+      // Base64 twice. Accept that transport quirk, but never decode
+      // unbounded/arbitrary content.
+      for (let layer = 0; layer < 2 && decoded[0] !== 0x30; layer += 1) {
+        const text = decoded.toString('utf8').trim();
+        if (text.includes('BEGIN CERTIFICATE')) {
+          certificate = new crypto.X509Certificate(text);
+          break;
+        }
+        if (!/^[A-Za-z0-9+/=\s]+$/.test(text) || text.length < 32) {
+          throw new Error('صيغة شهادة Compliance غير صالحة');
+        }
+        decoded = Buffer.from(text.replace(/\s+/g, ''), 'base64');
+      }
+
+      if (!certificate) {
+        if (decoded[0] !== 0x30) throw new Error('صيغة شهادة Compliance غير صالحة');
+        const pem = [
+          '-----BEGIN CERTIFICATE-----',
+          decoded.toString('base64').match(/.{1,64}/g)?.join('\n') ?? '',
+          '-----END CERTIFICATE-----',
+        ].join('\n');
+        certificate = new crypto.X509Certificate(pem);
+      }
+    }
+  } catch {
+    throw new Error('تعذر قراءة شهادة Compliance بصيغة X.509');
+  }
+
+  if (privateKeyPem?.trim()) {
+    try {
+      const certificatePublicKey = certificate.publicKey.export({ type: 'spki', format: 'der' });
+      const privateKeyPublicKey = crypto.createPublicKey(privateKeyPem).export({
+        type: 'spki',
+        format: 'der',
+      });
+      if (!Buffer.from(certificatePublicKey).equals(Buffer.from(privateKeyPublicKey))) {
+        throw new Error('شهادة Compliance لا تطابق المفتاح الخاص المحفوظ');
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('لا تطابق')) throw error;
+      throw new Error('تعذر مطابقة شهادة Compliance بالمفتاح الخاص المحفوظ');
+    }
+  }
+
+  return certificate.toString();
+}
+
 export function getSimulationUrl(apiPath: SimulationApiPath): string {
   return `${FATOORA_SIMULATION_BASE}${apiPath}`;
 }

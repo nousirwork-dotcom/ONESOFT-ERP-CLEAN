@@ -46,6 +46,7 @@ import {
 import { enqueueZatcaSubmission } from '../services/zatcaQueue.js';
 import {
   generateSimulationCsr,
+  complianceCertificatePem,
   postFatooraSimulation,
   getSimulationUrl,
   probeFatooraSimulation,
@@ -1291,14 +1292,36 @@ export const zatcaRouter = router({
       const requestId = String(rawBody.requestID ?? rawBody.requestId ?? response.requestId ?? '') || null;
       const binarySecurityToken = String(rawBody.binarySecurityToken ?? '');
       const secret = String(rawBody.secret ?? '');
-      const certificateValue = String(rawBody.certificate ?? rawBody.certificateContent ?? '');
       const successful = response.httpStatus != null
         && response.httpStatus >= 200
         && response.httpStatus < 300
         && Boolean(binarySecurityToken && secret);
 
+      const key = await db.query.zatcaKeys.findFirst({
+        where: and(
+          eq(zatcaKeys.orgId, ctx.user.orgId),
+          eq(zatcaKeys.deviceId, device.id),
+          eq(zatcaKeys.isActive, true),
+          eq(zatcaKeys.isDeleted, false),
+          eq(zatcaKeys.status, 'active'),
+        ),
+        orderBy: desc(zatcaKeys.createdAt),
+      });
+      let certificateValue = '';
+      let certificateError: string | null = null;
+      if (successful) {
+        try {
+          certificateValue = complianceCertificatePem(
+            binarySecurityToken,
+            key?.privateKeyEncrypted ? decrypt(key.privateKeyEncrypted) : '',
+          );
+        } catch (error) {
+          certificateError = error instanceof Error ? error.message : 'تعذر التحقق من شهادة Compliance';
+        }
+      }
+
       await db.update(zatcaCsrRequests).set({
-        status: successful ? 'compliance_received' : 'compliance_failed',
+        status: successful && certificateValue ? 'compliance_received' : 'compliance_incomplete',
         response: JSON.stringify(safeResponse),
         updatedAt: new Date(),
         updatedBy: ctx.user.id,
@@ -1323,7 +1346,7 @@ export const zatcaRouter = router({
         updatedBy: ctx.user.id,
       });
 
-      if (!successful) {
+      if (!successful || !certificateValue) {
         await db.insert(zatcaLogs).values({
           orgId: ctx.user.orgId,
           eventType: 'simulation_compliance_csid',
@@ -1333,26 +1356,20 @@ export const zatcaRouter = router({
           userName: (ctx.user as any).name ?? 'مسؤول',
           requestBody: JSON.stringify({ csrRequestId: csrRequest.id }),
           responseBody: JSON.stringify(safeResponse),
-          errorMessage: 'لم تُقبل استجابة Compliance CSID أو لم تصل نتيجة صالحة',
+          errorMessage: certificateError
+            ?? 'لم تُقبل استجابة Compliance CSID أو لم تصل نتيجة صالحة',
         });
         return {
           ok: false,
           requestId,
           httpStatus: response.httpStatus,
           result: safeResponse,
-          message: 'لم يتم إنشاء Compliance CSID؛ راجع رد Fatoora Simulation',
+          message: certificateError
+            ? 'وصل Compliance CSID لكن شهادة التوقيع لم تجتز التحقق؛ لم تُنشأ بيانات اعتماد جديدة'
+            : 'لم يتم إنشاء Compliance CSID؛ راجع رد Fatoora Simulation',
         };
       }
 
-      const key = await db.query.zatcaKeys.findFirst({
-        where: and(
-          eq(zatcaKeys.orgId, ctx.user.orgId),
-          eq(zatcaKeys.deviceId, device.id),
-          eq(zatcaKeys.isActive, true),
-          eq(zatcaKeys.isDeleted, false),
-        ),
-        orderBy: desc(zatcaKeys.createdAt),
-      });
       const [certificate] = await db.insert(zatcaCertificates).values({
         orgId: ctx.user.orgId,
         deviceId: device.id,
@@ -1411,6 +1428,7 @@ export const zatcaRouter = router({
     .input(z.object({
       posUnitId: z.number().int().positive(),
       invoiceType: z.enum(['simplified', 'standard', 'both']).default('both'),
+      documentType: z.enum(['sales_invoice', 'credit_note', 'debit_note']).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       requireSimulationEncryptionKey();
@@ -1478,6 +1496,17 @@ export const zatcaRouter = router({
       if (!certificate.publicCertificate || !signingKey?.privateKeyEncrypted) {
         throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'شهادة أو مفتاح Compliance غير موجود للتوقيع' });
       }
+      try {
+        complianceCertificatePem(
+          certificate.publicCertificate,
+          decrypt(signingKey.privateKeyEncrypted),
+        );
+      } catch {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'شهادة أو مفتاح Compliance غير صالحين أو غير متطابقين للتوقيع',
+        });
+      }
 
       const org = await db.query.organizations.findFirst({
         where: eq(organizations.id, ctx.user.orgId),
@@ -1519,7 +1548,10 @@ export const zatcaRouter = router({
       };
 
       for (const invoiceType of invoiceTypes) {
-        for (const documentType of COMPLIANCE_DOCUMENT_TYPES) {
+        const documentTypes = input.documentType
+          ? [input.documentType] as const
+          : COMPLIANCE_DOCUMENT_TYPES;
+        for (const documentType of documentTypes) {
           const testKey = complianceTestKey(invoiceType, documentType);
           const invoiceKind = documentType === 'sales_invoice' ? 'sale' : documentType;
           const invoice = await db.query.salesInvoices.findFirst({
@@ -1924,7 +1956,7 @@ export const zatcaRouter = router({
             eq(zatcaCsid.isActive, true),
             eq(zatcaCsid.isDeleted, false),
           ),
-          columns: { id: true, status: true, issueDate: true, expiryDate: true },
+          columns: { id: true, certificateId: true, status: true, issueDate: true, expiryDate: true },
         }),
       ]);
       const csidPresence = device.currentCsidId == null
@@ -1938,6 +1970,43 @@ export const zatcaRouter = router({
             eq(zatcaCsid.isActive, true),
             eq(zatcaCsid.isDeleted, false),
           )).limit(1))[0] ?? null;
+      const certificate = csid?.id == null
+        ? null
+        : csid.certificateId == null
+          ? null
+          : await db.query.zatcaCertificates.findFirst({
+              where: and(
+                eq(zatcaCertificates.id, csid.certificateId),
+                eq(zatcaCertificates.orgId, ctx.user.orgId),
+                eq(zatcaCertificates.deviceId, device.id),
+                eq(zatcaCertificates.isActive, true),
+                eq(zatcaCertificates.isDeleted, false),
+              ),
+            });
+      const signingKey = csidPresence?.complianceCsidPresent
+        ? await db.query.zatcaKeys.findFirst({
+            where: and(
+              eq(zatcaKeys.orgId, ctx.user.orgId),
+              eq(zatcaKeys.deviceId, device.id),
+              eq(zatcaKeys.status, 'active'),
+              eq(zatcaKeys.isActive, true),
+              eq(zatcaKeys.isDeleted, false),
+            ),
+            orderBy: desc(zatcaKeys.createdAt),
+          })
+        : null;
+      let signingMaterialsReady = false;
+      if (certificate?.publicCertificate && signingKey?.privateKeyEncrypted) {
+        try {
+          complianceCertificatePem(
+            certificate.publicCertificate,
+            decrypt(signingKey.privateKeyEncrypted),
+          );
+          signingMaterialsReady = true;
+        } catch {
+          signingMaterialsReady = false;
+        }
+      }
       return {
         environment: 'Simulation',
         device,
@@ -1951,6 +2020,8 @@ export const zatcaRouter = router({
             }
           : null,
         complianceCsidPresent: Boolean(csidPresence?.complianceCsidPresent),
+        certificatePresent: Boolean(certificate?.publicCertificate),
+        signingMaterialsReady,
         operationalCsidPresent: Boolean(csidPresence?.operationalCsidPresent),
         certificateKind: csidPresence?.operationalCsidPresent ? 'operational' : csidPresence?.complianceCsidPresent ? 'compliance' : null,
         operationalReady: device.registrationStatus === 'operational',

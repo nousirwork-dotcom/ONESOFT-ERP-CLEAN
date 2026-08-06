@@ -2833,7 +2833,7 @@ function ActivationWizard({
   );
   const invoiceTypeSaved = readiness?.savedSettings?.invoiceType === invoiceType
     && (!selectedUnitId || readiness.savedSettings?.zatcaPosUnitId === selectedUnitId);
-  const simulationComplete = Boolean(simulationStatusQ.data?.csid?.id);
+  const simulationComplete = Boolean(simulationStatusQ.data?.signingMaterialsReady);
   const testsComplete = simulationComplete && Boolean(readiness?.complianceTestCompleted);
   const operationalComplete = simulationComplete && Boolean(simulationStatusQ.data?.operationalReady);
   const productionComplete = Boolean(cfg?.enabled && cfg?.environment === "production");
@@ -2841,7 +2841,7 @@ function ActivationWizard({
     { id: 1, icon: "🏢", title: "بيانات المنشأة", detail: "بيانات القراءة فقط من معلومات المؤسسة", done: companyComplete },
     { id: 2, icon: "🧩", title: "وحدة الربط والدفاتر", detail: "الوحدة والدفاتر الأربعة لنفس المخزن/الفرع", done: unitComplete },
     { id: 3, icon: "🧾", title: "نوع الفواتير", detail: "مبسطة أو قياسية أو كلاهما", done: invoiceTypeSaved },
-    { id: 4, icon: "🌐", title: "المحاكاة الرسمية", detail: "OTP ثم EC/CSR ثم Compliance CSID", done: simulationComplete },
+    { id: 4, icon: "🌐", title: "المحاكاة الرسمية", detail: "OTP ثم EC/CSR ثم شهادة Compliance ومفتاح متطابقان", done: simulationComplete },
     { id: 5, icon: "📋", title: "اختبارات المطابقة", detail: "بعد الحصول على Compliance CSID", done: testsComplete },
     { id: 6, icon: "🔑", title: "CSID التشغيلي", detail: "بعد نجاح اختبارات المطابقة", done: operationalComplete },
     { id: 7, icon: "🚀", title: "الإنتاج الفعلي", detail: "بعد CSID التشغيلي واعتماد المسؤول", done: productionComplete },
@@ -3193,7 +3193,7 @@ function ActivationWizard({
           <div><strong>الوحدة:</strong> {selectedUnit?.unitName ?? "—"}</div>
           <div><strong>المخزن/الفرع:</strong> {selectedUnit ? locationLabel(selectedUnit) : "—"}</div>
           <div><strong>الدفاتر:</strong> {unitJournals.length} من 4</div>
-          <div><strong>الشهادة:</strong> {simulationComplete ? "موجودة" : "غير مكتملة"}</div>
+          <div><strong>مواد التوقيع:</strong> {simulationComplete ? "الشهادة والمفتاح متطابقان" : "الشهادة أو تطابق المفتاح غير مكتمل"}</div>
           <div><strong>الاتصال:</strong> {cfg?.lastConnectionStatus === "success" ? "ناجح" : "لم ينجح بعد"}</div>
         </div>
         <div style={{ background: "#fff7ed", border: "1px solid #fdba74", borderRadius: 9, padding: 12, marginTop: 12, color: "#9a3412", fontSize: 11, lineHeight: 1.8 }}>
