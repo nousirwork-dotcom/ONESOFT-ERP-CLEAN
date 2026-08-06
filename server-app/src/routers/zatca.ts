@@ -24,6 +24,8 @@ import {
   zatcaKeys,
   zatcaCsrRequests,
   zatcaComplianceTests,
+  zatcaComplianceFixtures,
+  zatcaComplianceFixtureItems,
   zatcaReadinessSettings,
   stockVouchers,
 } from '../schema.js';
@@ -229,6 +231,36 @@ function complianceTestKey(invoiceType: string, documentType: string): string {
   return `${invoiceType}:${documentType}`;
 }
 
+const COMPLIANCE_STATUS_COMPLETED = ['passed', 'passed_with_warnings', 'completed_previously'] as const;
+const COMPLIANCE_FIXTURE_DOCUMENTS = [
+  ['sales_invoice', 'sale'],
+  ['credit_note', 'credit_note'],
+  ['debit_note', 'debit_note'],
+] as const;
+
+function isComplianceCompleted(status: string | null | undefined): boolean {
+  return COMPLIANCE_STATUS_COMPLETED.includes(status as typeof COMPLIANCE_STATUS_COMPLETED[number]);
+}
+
+function isPreviouslyCompletedResponse(response: { httpStatus: number | null; body: unknown }): boolean {
+  if (response.httpStatus !== 406) return false;
+  const root = response.body && typeof response.body === 'object' ? response.body as Record<string, unknown> : {};
+  const validation = root.validationResults && typeof root.validationResults === 'object'
+    ? root.validationResults as Record<string, unknown>
+    : {};
+  const messages = [
+    ...(Array.isArray(validation.errorMessages) ? validation.errorMessages : []),
+    ...(Array.isArray(root.errors) ? root.errors : []),
+  ].map(item => {
+    const row = item && typeof item === 'object' ? item as Record<string, unknown> : {};
+    return `${String(row.code ?? '')} ${String(row.message ?? item ?? '')}`.toLowerCase();
+  });
+  return messages.some(message =>
+    message.includes('submitted before')
+    || message.includes('compliance check already completed'),
+  );
+}
+
 function complianceResultParts(body: unknown): {
   accepted: boolean;
   warnings: Array<{ code: string; message: string }>;
@@ -293,7 +325,7 @@ async function getZatcaReadiness(
   selectedWarehouseId?: ReadinessWarehouseId,
   selectedInvoiceType: typeof READINESS_INVOICE_TYPES[number] = 'both',
 ) {
-  const [org, locationRows, journalRows, simulationEnvironment, savedSettings, linkingUnits, operationalRows, stockRows, complianceRows] = await Promise.all([
+  const [org, locationRows, journalRows, simulationEnvironment, savedSettings, linkingUnits, operationalRows, stockRows, complianceRows, fixtureRows] = await Promise.all([
     db.query.organizations.findFirst({
       where: eq(organizations.id, orgId),
       columns: {
@@ -413,6 +445,7 @@ async function getZatcaReadiness(
       httpStatus: zatcaComplianceTests.httpStatus,
       requestId: zatcaComplianceTests.requestId,
       invoiceId: zatcaComplianceTests.invoiceId,
+      fixtureId: zatcaComplianceTests.fixtureId,
       invoiceUuid: zatcaComplianceTests.invoiceUuid,
       invoiceHash: zatcaComplianceTests.invoiceHash,
       responsePayload: zatcaComplianceTests.responsePayload,
@@ -428,6 +461,20 @@ async function getZatcaReadiness(
         eq(zatcaComplianceTests.isDeleted, false),
       ))
       .orderBy(desc(zatcaComplianceTests.updatedAt)),
+    db.select({
+      id: zatcaComplianceFixtures.id,
+      posUnitId: zatcaComplianceFixtures.posUnitId,
+      invoiceType: zatcaComplianceFixtures.invoiceType,
+      documentType: zatcaComplianceFixtures.documentType,
+      invoiceNumber: zatcaComplianceFixtures.invoiceNumber,
+      zatcaUuid: zatcaComplianceFixtures.zatcaUuid,
+    })
+      .from(zatcaComplianceFixtures)
+      .where(and(
+        eq(zatcaComplianceFixtures.orgId, orgId),
+        eq(zatcaComplianceFixtures.isActive, true),
+        eq(zatcaComplianceFixtures.isDeleted, false),
+      )),
   ]);
 
   if (!org) throw new TRPCError({ code: 'NOT_FOUND', message: 'المنشأة غير موجودة' });
@@ -543,13 +590,41 @@ async function getZatcaReadiness(
             candidate.posUnitId === linkingUnitId
             && candidate.testKey === complianceTestKey(invoiceType, documentType),
           );
+      const fixture = linkingUnitId == null
+        ? undefined
+        : fixtureRows.find(candidate =>
+            candidate.posUnitId === linkingUnitId
+            && candidate.invoiceType === invoiceType
+            && candidate.documentType === documentType,
+          );
+      const previouslyCompleted = row?.status === 'failed'
+        && Array.isArray(row.errors)
+        && row.errors.some((error) => {
+          const item = error && typeof error === 'object' ? error as Record<string, unknown> : {};
+          const text = `${String(item.code ?? '')} ${String(item.message ?? '')}`.toLowerCase();
+          return text.includes('submitted before') || text.includes('compliance check already completed');
+        });
+      const noEligibleDocument = row?.status === 'failed'
+        && Array.isArray(row.errors)
+        && row.errors.some((error) => {
+          const item = error && typeof error === 'object' ? error as Record<string, unknown> : {};
+          return String(item.code ?? '').toUpperCase() === 'NO_ELIGIBLE_INVOICE';
+        });
+      const effectiveStatus = previouslyCompleted
+        ? 'completed_previously'
+        : noEligibleDocument
+          ? 'not_eligible'
+          : (row?.status ?? 'not_started');
       return {
         testKey: complianceTestKey(invoiceType, documentType),
         invoiceType,
         documentType,
         label: `${invoiceType === 'standard' ? 'قياسية' : 'مبسطة'} — ${documentType === 'sales_invoice' ? 'فاتورة' : documentType === 'credit_note' ? 'إشعار دائن' : 'إشعار مدين'}`,
-        status: row?.status ?? 'not_started',
-        completed: row?.status === 'passed' || row?.status === 'passed_with_warnings',
+        status: effectiveStatus,
+        completed: isComplianceCompleted(effectiveStatus),
+        fixtureReady: Boolean(fixture),
+        fixtureId: fixture?.id ?? null,
+        fixtureNumber: fixture?.invoiceNumber ?? null,
         httpStatus: row?.httpStatus ?? null,
         requestId: row?.requestId ?? null,
         invoiceId: row?.invoiceId ?? null,
@@ -557,7 +632,10 @@ async function getZatcaReadiness(
         invoiceHash: row?.invoiceHash ?? null,
         responsePayload: row?.responsePayload ?? null,
         warnings: row?.warnings ?? [],
-        errors: row?.errors ?? [],
+        errors: previouslyCompleted || noEligibleDocument ? [] : (row?.errors ?? []),
+        eligibilityReason: noEligibleDocument
+          ? 'لا يوجد مستند اختبار مؤهل. جهّز مستندات المطابقة التجريبية أولًا.'
+          : null,
         attemptedAt: row?.attemptedAt ?? null,
         completedAt: row?.completedAt ?? null,
       };
@@ -565,6 +643,8 @@ async function getZatcaReadiness(
   );
   const complianceTestCompleted = complianceTests.length > 0
     && complianceTests.every((test) => test.completed);
+  const complianceFixtureReadyCount = complianceTests.filter((test) => test.fixtureReady).length;
+  const complianceFixtureTotal = complianceTests.length;
   const simulationConfigured = cfg.environment === 'simulation'
     && cfg.apiBaseUrl === simulationEnvironmentValues().baseApiUrl
     && Boolean(simulationEnvironment);
@@ -655,6 +735,8 @@ async function getZatcaReadiness(
     localOperationalTestCompleted: operationalTestCompleted,
     complianceTestCompleted,
     complianceTests,
+    complianceFixtureReadyCount,
+    complianceFixtureTotal,
     preCsrReady: missingOrganizationFields.length === 0
       && Boolean(selectedWarehouse)
       && allJournalsPresent
@@ -789,6 +871,91 @@ export const zatcaRouter = router({
       input?.warehouseId,
       input?.invoiceType ?? 'both',
     )),
+
+  prepareComplianceFixtures: adminProcedure
+    .input(z.object({
+      posUnitId: z.number().int().positive(),
+      invoiceType: z.enum(['simplified', 'standard', 'both']).default('both'),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const unit = await getPosUnitForOrg(ctx.user.orgId, input.posUnitId);
+      const invoiceTypes = input.invoiceType === 'both'
+        ? COMPLIANCE_INVOICE_TYPES
+        : [input.invoiceType] as const;
+      const created: Array<Record<string, unknown>> = [];
+      const fixtureByKey = new Map<string, any>();
+
+      for (const invoiceType of invoiceTypes) {
+        for (const [documentType] of COMPLIANCE_FIXTURE_DOCUMENTS) {
+          const key = complianceTestKey(invoiceType, documentType);
+          const existing = await db.query.zatcaComplianceFixtures.findFirst({
+            where: and(
+              eq(zatcaComplianceFixtures.orgId, ctx.user.orgId),
+              eq(zatcaComplianceFixtures.posUnitId, unit.id),
+              eq(zatcaComplianceFixtures.invoiceType, invoiceType),
+              eq(zatcaComplianceFixtures.documentType, documentType),
+              eq(zatcaComplianceFixtures.isActive, true),
+              eq(zatcaComplianceFixtures.isDeleted, false),
+            ),
+          });
+          if (existing) {
+            fixtureByKey.set(key, existing);
+            continue;
+          }
+
+          const [fixture] = await db.insert(zatcaComplianceFixtures).values({
+            orgId: ctx.user.orgId,
+            posUnitId: unit.id,
+            invoiceType,
+            documentType,
+            invoiceNumber: `SIM-${unit.unitCode}-${invoiceType}-${documentType}`.slice(0, 100),
+            invoiceDate: new Date(),
+            customerName: invoiceType === 'standard' ? 'عميل اختبار المطابقة' : 'مستهلك نهائي',
+            customerTaxNumber: invoiceType === 'standard' ? '311111111111113' : null,
+            zatcaUuid: crypto.randomUUID(),
+            createdBy: ctx.user.id,
+            updatedBy: ctx.user.id,
+          }).returning();
+          fixtureByKey.set(key, fixture);
+          created.push({ testKey: key, fixtureId: fixture.id, invoiceNumber: fixture.invoiceNumber });
+
+          await db.insert(zatcaComplianceFixtureItems).values({
+            fixtureId: fixture.id,
+            productName: 'بند اختبار المطابقة',
+            quantity: '1',
+            unit: 'C62',
+            unitPrice: '100',
+            total: '115',
+            taxAmount: '15',
+            taxPercent: '15',
+            discountAmount: '0',
+            sortOrder: 0,
+          });
+        }
+      }
+
+      for (const invoiceType of invoiceTypes) {
+        const source = fixtureByKey.get(complianceTestKey(invoiceType, 'sales_invoice'));
+        for (const [documentType] of COMPLIANCE_FIXTURE_DOCUMENTS) {
+          if (documentType === 'sales_invoice') continue;
+          const fixture = fixtureByKey.get(complianceTestKey(invoiceType, documentType));
+          if (fixture?.sourceFixtureId == null && source?.id != null) {
+            await db.update(zatcaComplianceFixtures)
+              .set({ sourceFixtureId: source.id, updatedAt: new Date(), updatedBy: ctx.user.id })
+              .where(eq(zatcaComplianceFixtures.id, fixture.id));
+          }
+        }
+      }
+
+      return {
+        ok: true,
+        created,
+        totalReady: invoiceTypes.length * COMPLIANCE_FIXTURE_DOCUMENTS.length,
+        message: created.length
+          ? `تم تجهيز ${created.length} مستندات مطابقة معزولة للمحاكاة`
+          : 'مستندات المطابقة التجريبية جاهزة مسبقًا',
+      };
+    }),
 
   saveReadinessSettings: protectedProcedure
     .input(z.object({
@@ -1429,6 +1596,7 @@ export const zatcaRouter = router({
       posUnitId: z.number().int().positive(),
       invoiceType: z.enum(['simplified', 'standard', 'both']).default('both'),
       documentType: z.enum(['sales_invoice', 'credit_note', 'debit_note']).optional(),
+      rerunCompleted: z.boolean().default(false),
     }))
     .mutation(async ({ ctx, input }) => {
       requireSimulationEncryptionKey();
@@ -1553,74 +1721,153 @@ export const zatcaRouter = router({
           : COMPLIANCE_DOCUMENT_TYPES;
         for (const documentType of documentTypes) {
           const testKey = complianceTestKey(invoiceType, documentType);
-          const invoiceKind = documentType === 'sales_invoice' ? 'sale' : documentType;
-          const invoice = await db.query.salesInvoices.findFirst({
+          const existingTest = await db.query.zatcaComplianceTests.findFirst({
             where: and(
-              eq(salesInvoices.orgId, ctx.user.orgId),
-              eq(salesInvoices.warehouseId, unit.warehouseId),
-              eq(salesInvoices.invoiceType, invoiceKind as any),
-              eq(salesInvoices.zatcaInvoiceType, invoiceType),
-              eq(salesInvoices.isPosted, true),
-              or(eq(salesInvoices.status, 'confirmed'), eq(salesInvoices.status, 'paid')),
+              eq(zatcaComplianceTests.orgId, ctx.user.orgId),
+              eq(zatcaComplianceTests.posUnitId, unit.id),
+              eq(zatcaComplianceTests.testKey, testKey),
+              eq(zatcaComplianceTests.isActive, true),
+              eq(zatcaComplianceTests.isDeleted, false),
             ),
-            orderBy: desc(salesInvoices.updatedAt),
           });
-          const attemptedAt = new Date();
-
-          if (!invoice) {
-            const errors = [{ code: 'NO_ELIGIBLE_INVOICE', message: `لا توجد فاتورة مرحّلة مؤهلة لاختبار ${testKey}` }];
-            await saveRow({
-              testKey, invoiceType, documentType, status: 'failed',
-              invoiceId: null, attemptedAt, completedAt: new Date(),
-              warnings: [], errors,
+          const previouslyCompleted = existingTest?.status === 'failed'
+            && Array.isArray(existingTest.errors)
+            && existingTest.errors.some((error) => {
+              const item = error && typeof error === 'object' ? error as Record<string, unknown> : {};
+              const text = `${String(item.code ?? '')} ${String(item.message ?? '')}`.toLowerCase();
+              return text.includes('submitted before') || text.includes('compliance check already completed');
             });
-            results.push({ testKey, status: 'failed', warnings: [], errors });
+          const alreadyCompleted = Boolean(existingTest && (
+            isComplianceCompleted(existingTest.status) || previouslyCompleted
+          ));
+          if (alreadyCompleted && !input.rerunCompleted) {
+            const status = previouslyCompleted ? 'completed_previously' : existingTest!.status;
+            if (previouslyCompleted) {
+              await saveRow({
+                testKey,
+                invoiceType,
+                documentType,
+                status,
+                invoiceId: existingTest?.invoiceId ?? null,
+                fixtureId: existingTest?.fixtureId ?? null,
+                httpStatus: existingTest?.httpStatus ?? null,
+                requestId: existingTest?.requestId ?? null,
+                warnings: existingTest?.warnings ?? [],
+                errors: [],
+                attemptedAt: existingTest?.attemptedAt ?? null,
+                completedAt: existingTest?.completedAt ?? new Date(),
+              });
+            }
+            results.push({
+              testKey,
+              status,
+              skipped: true,
+              completed: true,
+              httpStatus: existingTest?.httpStatus ?? null,
+              requestId: existingTest?.requestId ?? null,
+              warnings: existingTest?.warnings ?? [],
+              errors: [],
+              message: previouslyCompleted
+                ? 'مكتمل سابقًا — لم تتم إعادة الإرسال'
+                : 'ناجح سابقًا — لم تتم إعادة الإرسال',
+            });
             continue;
           }
 
-          const originalInvoiceId = invoice.refInvoiceId ?? invoice.sourceDocumentId;
-          const originalInvoice = invoiceKind === 'sale' || originalInvoiceId == null
-            ? null
-            : await db.query.salesInvoices.findFirst({
-                where: and(eq(salesInvoices.id, originalInvoiceId), eq(salesInvoices.orgId, ctx.user.orgId)),
+          const fixture = await db.query.zatcaComplianceFixtures.findFirst({
+            where: and(
+              eq(zatcaComplianceFixtures.orgId, ctx.user.orgId),
+              eq(zatcaComplianceFixtures.posUnitId, unit.id),
+              eq(zatcaComplianceFixtures.invoiceType, invoiceType),
+              eq(zatcaComplianceFixtures.documentType, documentType),
+              eq(zatcaComplianceFixtures.isActive, true),
+              eq(zatcaComplianceFixtures.isDeleted, false),
+            ),
+          });
+          const attemptedAt = new Date();
+
+          // Compliance tests must never borrow a commercial invoice. Fixtures
+          // are isolated from posting, stock, and document-journal numbering.
+          if (!fixture) {
+            const message = 'لا يوجد مستند اختبار مؤهل. جهّز مستندات المطابقة التجريبية أولًا.';
+            await saveRow({
+              testKey, invoiceType, documentType, status: 'not_eligible',
+              invoiceId: null, fixtureId: null, attemptedAt, completedAt: new Date(),
+              warnings: [], errors: [],
+            });
+            results.push({
+              testKey,
+              status: 'not_eligible',
+              skipped: true,
+              completed: false,
+              warnings: [],
+              errors: [],
+              eligibilityReason: message,
+            });
+            continue;
+          }
+
+          const originalFixture = fixture?.sourceFixtureId
+            ? await db.query.zatcaComplianceFixtures.findFirst({
+                where: and(
+                  eq(zatcaComplianceFixtures.id, fixture.sourceFixtureId),
+                  eq(zatcaComplianceFixtures.orgId, ctx.user.orgId),
+                ),
                 columns: { invoiceNumber: true, zatcaUuid: true, invoiceDate: true },
-              });
-          if (invoiceKind !== 'sale' && (!originalInvoice?.zatcaUuid || !originalInvoice.invoiceNumber)) {
+              })
+            : null;
+          const originalFixtureForDocument = documentType === 'sales_invoice' ? null : originalFixture;
+          if (documentType !== 'sales_invoice' && (!originalFixtureForDocument?.zatcaUuid || !originalFixtureForDocument.invoiceNumber)) {
             const errors = [{ code: 'MISSING_ORIGINAL_INVOICE', message: 'الإشعار الدائن/المدين يحتاج فاتورة أصلية تحمل UUID رسميًا' }];
             await saveRow({
               testKey, invoiceType, documentType, status: 'failed',
-              invoiceId: invoice.id, attemptedAt, completedAt: new Date(),
+              invoiceId: null, fixtureId: fixture.id, attemptedAt, completedAt: new Date(),
               warnings: [], errors,
             });
-            results.push({ testKey, invoiceId: invoice.id, status: 'failed', warnings: [], errors });
+            results.push({ testKey, invoiceId: null, fixtureId: fixture.id, status: 'failed', warnings: [], errors });
             continue;
           }
 
           const items = await db.select({
-            id: salesInvoiceItems.id,
-            productName: salesInvoiceItems.productName,
-            quantity: salesInvoiceItems.quantity,
-            unit: salesInvoiceItems.unit,
-            unitPrice: salesInvoiceItems.unitPrice,
-            total: salesInvoiceItems.total,
-            taxAmount: salesInvoiceItems.taxAmount,
-            taxPercent: salesInvoiceItems.taxPercent,
-            discountAmount: salesInvoiceItems.discountAmount,
-          }).from(salesInvoiceItems).where(and(
-            eq(salesInvoiceItems.invoiceId, invoice.id),
-            eq(salesInvoiceItems.orgId, ctx.user.orgId),
-          )).orderBy(asc(salesInvoiceItems.sortOrder));
+            id: zatcaComplianceFixtureItems.id,
+            productName: zatcaComplianceFixtureItems.productName,
+            quantity: zatcaComplianceFixtureItems.quantity,
+            unit: zatcaComplianceFixtureItems.unit,
+            unitPrice: zatcaComplianceFixtureItems.unitPrice,
+            total: zatcaComplianceFixtureItems.total,
+            taxAmount: zatcaComplianceFixtureItems.taxAmount,
+            taxPercent: zatcaComplianceFixtureItems.taxPercent,
+            discountAmount: zatcaComplianceFixtureItems.discountAmount,
+          }).from(zatcaComplianceFixtureItems)
+            .where(eq(zatcaComplianceFixtureItems.fixtureId, fixture.id))
+            .orderBy(asc(zatcaComplianceFixtureItems.sortOrder));
+
+          const submissionInvoice = {
+            invoiceNumber: fixture.invoiceNumber,
+            invoiceType: documentType === 'sales_invoice' ? 'sale' : documentType,
+            invoiceDate: fixture.invoiceDate,
+            customerName: fixture.customerName,
+            customerTaxNumber: fixture.customerTaxNumber,
+            currency: 'SAR',
+            subtotal: fixture.subtotal,
+            discountAmount: fixture.discountAmount,
+            taxAmount: fixture.taxAmount,
+            total: fixture.total,
+            notes: fixture.notes,
+            refInvoiceId: null,
+            zatcaPih: null,
+          };
 
           const uuid = crypto.randomUUID();
           let signed: ReturnType<typeof buildAndSignSimulationInvoice>;
           try {
             signed = buildAndSignSimulationInvoice({
-              invoice,
+              invoice: submissionInvoice,
               items,
               seller: {
-                nameAr: String(invoice.sellerLegalName ?? cfg.legalName ?? org.name ?? ''),
+                nameAr: String(cfg.legalName ?? org.name ?? ''),
                 nameEn: String(cfg.englishName ?? cfg.legalName ?? org.name ?? ''),
-                vatNumber: String(invoice.sellerTaxNumber ?? cfg.vatNumber ?? org.taxNumber ?? ''),
+                vatNumber: String(cfg.vatNumber ?? org.taxNumber ?? ''),
                 crNumber: cfg.commercialReg || org.commercialReg || undefined,
                 street: String(cfg.street ?? ''),
                 building: String(cfg.buildingNumber ?? ''),
@@ -1631,30 +1878,30 @@ export const zatcaRouter = router({
               },
               uuid,
               invoiceCounter: 1,
-              previousInvoiceHash: invoice.zatcaPih ?? '',
+              previousInvoiceHash: submissionInvoice.zatcaPih ?? '',
               submissionType: invoiceType === 'standard' ? 'clearance' : 'reporting',
               privateKeyPem: decrypt(signingKey.privateKeyEncrypted),
               certificatePem: certificate.publicCertificate,
-              originalInvoice: originalInvoice ? {
-                invoiceNumber: originalInvoice.invoiceNumber,
-                uuid: originalInvoice.zatcaUuid!,
-                invoiceDate: originalInvoice.invoiceDate,
+              originalInvoice: originalFixtureForDocument ? {
+                invoiceNumber: originalFixtureForDocument.invoiceNumber,
+                uuid: originalFixtureForDocument.zatcaUuid!,
+                invoiceDate: originalFixtureForDocument.invoiceDate,
               } : undefined,
             });
           } catch (error) {
             const errors = [{ code: 'XML_SIGNING_FAILED', message: error instanceof Error ? error.message : 'تعذر إنشاء أو توقيع XML' }];
             await saveRow({
               testKey, invoiceType, documentType, status: 'failed',
-              invoiceId: invoice.id, invoiceUuid: uuid, attemptedAt, completedAt: new Date(),
+              invoiceId: null, fixtureId: fixture.id, invoiceUuid: uuid, attemptedAt, completedAt: new Date(),
               warnings: [], errors,
             });
-            results.push({ testKey, invoiceId: invoice.id, status: 'failed', warnings: [], errors });
+            results.push({ testKey, invoiceId: null, fixtureId: fixture.id, status: 'failed', warnings: [], errors });
             continue;
           }
 
           await saveRow({
             testKey, invoiceType, documentType, status: 'submitting',
-            invoiceId: invoice.id, invoiceUuid: uuid, invoiceHash: signed.invoiceHash,
+            invoiceId: null, fixtureId: fixture.id, invoiceUuid: uuid, invoiceHash: signed.invoiceHash,
             xmlBeforeSigning: signed.unsignedXml, xmlAfterSigning: signed.signedXml,
             attemptedAt, warnings: [], errors: [], completedAt: null,
           });
@@ -1675,25 +1922,32 @@ export const zatcaRouter = router({
             response = { url: getSimulationUrl('/compliance/invoices'), httpStatus: null, requestId: null, body: null };
           }
 
+          const previouslyCompletedResponse = isPreviouslyCompletedResponse(response);
           const parts = complianceResultParts(response.body);
           const passed = response.httpStatus != null
             && response.httpStatus >= 200
             && response.httpStatus < 300
             && parts.accepted
             && parts.errors.length === 0;
-          const errors = passed ? parts.errors : (
+          const errors = previouslyCompletedResponse
+            ? []
+            : (passed ? parts.errors : (
             parts.errors.length ? parts.errors : [{ code: 'COMPLIANCE_REJECTED', message: 'لم تُرجع الهيئة قبولًا لاختبار المطابقة' }]
-          );
-          const status = passed
-            ? (parts.warnings.length ? 'passed_with_warnings' : 'passed')
-            : 'failed';
+          ));
+          const status = previouslyCompletedResponse
+            ? 'completed_previously'
+            : (passed
+              ? (parts.warnings.length ? 'passed_with_warnings' : 'passed')
+              : 'failed');
           const requestId = response.requestId
             ?? (response.body && typeof response.body === 'object'
               ? String((response.body as Record<string, unknown>).requestID ?? (response.body as Record<string, unknown>).requestId ?? '') || null
               : null);
           const safeResponse = safeRemoteResponse(response);
           await saveRow({
-            testKey, invoiceType, documentType, status, invoiceId: invoice.id,
+            testKey, invoiceType, documentType, status,
+            invoiceId: null,
+            fixtureId: fixture.id,
             invoiceUuid: uuid, invoiceHash: signed.invoiceHash,
             xmlBeforeSigning: signed.unsignedXml, xmlAfterSigning: signed.signedXml,
             httpStatus: response.httpStatus, requestId, responsePayload: safeResponse,
@@ -1710,12 +1964,28 @@ export const zatcaRouter = router({
             responseBody: JSON.stringify(safeResponse), responseTime: new Date(),
             createdBy: ctx.user.id, updatedBy: ctx.user.id,
           });
-          results.push({ testKey, invoiceId: invoice.id, status, httpStatus: response.httpStatus, requestId, warnings: parts.warnings, errors });
+          results.push({
+            testKey,
+            invoiceId: null,
+            fixtureId: fixture.id,
+            status,
+            completed: status === 'completed_previously' || isComplianceCompleted(status),
+            httpStatus: response.httpStatus,
+            requestId,
+            warnings: parts.warnings,
+            errors,
+            message: previouslyCompletedResponse ? 'مكتمل سابقًا — لم تعتبره الهيئة اختبارًا جديدًا' : undefined,
+          });
         }
       }
 
       return {
-        ok: results.every(result => result.status === 'passed' || result.status === 'passed_with_warnings'),
+        ok: results.every(result =>
+          result.status === 'passed'
+          || result.status === 'passed_with_warnings'
+          || result.status === 'completed_previously'
+          || result.status === 'not_eligible',
+        ),
         results,
         message: 'اكتملت محاولات اختبارات المطابقة الرسمية؛ راجع رد الهيئة لكل اختبار',
       };

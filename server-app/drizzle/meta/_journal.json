@@ -554,6 +554,13 @@
       "when": 1786319800000,
       "tag": "0078_zatca_compliance_tests",
       "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1786319900000,
+      "tag": "0079_zatca_compliance_fixtures",
+      "breakpoints": true
     }
   ]
 }

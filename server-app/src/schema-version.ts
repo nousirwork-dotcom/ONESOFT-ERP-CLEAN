@@ -5,4 +5,4 @@
  * constant to match the new filename (without the .sql extension), then
  * run `pnpm migrate` so the live database is stamped with the new version.
  */
-export const REQUIRED_SCHEMA_VERSION = '0078_zatca_compliance_tests';
+export const REQUIRED_SCHEMA_VERSION = '0079_zatca_compliance_fixtures';

@@ -2021,6 +2021,14 @@ function ComplianceTestsSection({
     { warehouseId: readinessWarehouseId ?? undefined, invoiceType },
     { enabled: Boolean(readinessWarehouseId) },
   );
+  const prepareM = trpc.zatca.prepareComplianceFixtures.useMutation({
+    onSuccess: async (result) => {
+      await readinessQ.refetch();
+      await utils.zatca.getReadiness.invalidate();
+      toast.success(result.message);
+    },
+    onError: (error) => toast.error(error.message),
+  });
   const runM = trpc.zatca.runComplianceTests.useMutation({
     onSuccess: async (result) => {
       await readinessQ.refetch();
@@ -2034,6 +2042,8 @@ function ComplianceTestsSection({
     label: string;
     status: string;
     completed: boolean;
+    fixtureReady: boolean;
+    fixtureNumber: string | null;
     httpStatus: number | null;
     requestId: string | null;
     warnings: Array<{ code?: string; message?: string }>;
@@ -2045,16 +2055,32 @@ function ComplianceTestsSection({
     submitting: "جارٍ الإرسال",
     passed: "ناجح",
     passed_with_warnings: "ناجح مع تحذيرات",
+    completed_previously: "مكتمل سابقًا",
+    not_eligible: "لا يوجد مستند مؤهل",
     failed: "فشل",
   };
   const statusColor = (status: string) =>
-    status === "passed" || status === "passed_with_warnings" ? "#166534" : status === "failed" ? "#b91c1c" : "#64748b";
+    status === "passed" || status === "passed_with_warnings" || status === "completed_previously"
+      ? "#166534"
+      : status === "failed"
+        ? "#b91c1c"
+        : status === "not_eligible"
+          ? "#a16207"
+          : "#64748b";
+  const incompleteTests = tests.filter(test => !test.completed).length;
+  const fixtureReadyCount = readinessQ.data?.complianceFixtureReadyCount
+    ?? tests.filter(test => test.fixtureReady).length;
+  const fixtureTotal = readinessQ.data?.complianceFixtureTotal ?? tests.length;
 
   return (
     <div style={{ maxWidth: 820 }}>
       <SecTitle icon="📋" title="اختبارات المطابقة الرسمية" />
       <div style={{ background: "#fffbeb", border: "1px solid #facc15", color: "#854d0e", borderRadius: 9, padding: 12, fontSize: 11, lineHeight: 1.8, marginBottom: 14 }}>
         هذه الاختبارات ترسل XML موقّعًا فعليًا إلى <code>/compliance/invoices</code> باستخدام Compliance CSID. فحص XML المحلي أو اختبار الاتصال لا يُحسب نجاحًا للمطابقة.
+      </div>
+      <div style={{ background: fixtureReadyCount === fixtureTotal && fixtureTotal > 0 ? "#f0fdf4" : "#f8fafc", border: `1px solid ${fixtureReadyCount === fixtureTotal && fixtureTotal > 0 ? "#bbf7d0" : "#e2e8f0"}`, borderRadius: 9, padding: "9px 12px", marginBottom: 12, fontSize: 11, color: "#334155" }}>
+        مستندات المطابقة المعزولة الجاهزة: <strong style={{ color: fixtureReadyCount === fixtureTotal && fixtureTotal > 0 ? "#166534" : "#a16207" }}>{fixtureReadyCount} / {fixtureTotal}</strong>
+        <span style={{ marginInlineStart: 10, color: "#64748b" }}>لا تدخل هذه المستندات في الحسابات أو المخزون أو أرقام الدفاتر التجارية.</span>
       </div>
       {(!initialPosUnitId || unitsQ.data && unitsQ.data.length > 1) && (
         <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 9, padding: 12, marginBottom: 12 }}>
@@ -2067,26 +2093,47 @@ function ComplianceTestsSection({
       )}
       <div style={{ display: "grid", gap: 8 }}>
         {tests.map(test => (
-          <div key={test.testKey} style={{ background: "#fff", border: `1px solid ${test.completed ? "#bbf7d0" : test.status === "failed" ? "#fecaca" : "#e2e8f0"}`, borderRadius: 9, padding: "10px 12px" }}>
+          <div key={test.testKey} style={{ background: "#fff", border: `1px solid ${test.completed ? "#bbf7d0" : test.status === "failed" ? "#fecaca" : test.status === "not_eligible" ? "#fde68a" : "#e2e8f0"}`, borderRadius: 9, padding: "10px 12px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-              <span style={{ width: 22, height: 22, borderRadius: "50%", display: "grid", placeItems: "center", background: test.completed ? "#dcfce7" : test.status === "failed" ? "#fee2e2" : "#f1f5f9", color: statusColor(test.status), fontWeight: 800 }}>{test.completed ? "✓" : test.status === "failed" ? "!" : "—"}</span>
+              <span style={{ width: 22, height: 22, borderRadius: "50%", display: "grid", placeItems: "center", background: test.completed ? "#dcfce7" : test.status === "failed" ? "#fee2e2" : test.status === "not_eligible" ? "#fef3c7" : "#f1f5f9", color: statusColor(test.status), fontWeight: 800 }}>{test.completed ? "✓" : test.status === "failed" ? "!" : test.status === "not_eligible" ? "…" : "—"}</span>
               <strong style={{ flex: 1, fontSize: 12 }}>{test.label}</strong>
               <span style={{ color: statusColor(test.status), fontSize: 11, fontWeight: 800 }}>{statusText[test.status] ?? test.status}</span>
               {test.httpStatus != null && <span style={{ fontFamily: "monospace", fontSize: 10, color: "#64748b" }}>HTTP {test.httpStatus}</span>}
             </div>
+            <div style={{ marginTop: 5, display: "flex", gap: 12, flexWrap: "wrap", fontSize: 10, color: test.fixtureReady ? "#166534" : "#a16207" }}>
+              <span>{test.fixtureReady ? "✓ مستند مطابقة معزول جاهز" : "⚠ المستند التجريبي غير مجهز"}</span>
+              {test.fixtureNumber && <span>رقم الاختبار: <strong>{test.fixtureNumber}</strong></span>}
+            </div>
             {test.requestId && <div style={{ marginTop: 5, fontSize: 10, color: "#64748b" }}>Request ID: <span style={{ fontFamily: "monospace" }}>{test.requestId}</span></div>}
+            {test.status === "not_eligible" && <div style={{ marginTop: 6, color: "#a16207", fontSize: 10 }}>لا يوجد مستند اختبار مؤهل. استخدم «تجهيز مستندات المطابقة» أولًا.</div>}
             {test.errors?.length > 0 && <div style={{ marginTop: 6, color: "#b91c1c", fontSize: 10 }}>{test.errors.map((e, i) => <div key={i}>❌ {e.code}: {e.message}</div>)}</div>}
             {test.warnings?.length > 0 && <div style={{ marginTop: 6, color: "#a16207", fontSize: 10 }}>{test.warnings.map((e, i) => <div key={i}>⚠️ {e.code}: {e.message}</div>)}</div>}
           </div>
         ))}
       </div>
-      <button
-        onClick={() => selectedUnitId && runM.mutate({ posUnitId: selectedUnitId, invoiceType })}
-        disabled={!selectedUnitId || runM.isPending}
-        style={{ ...smallBtn, height: 38, padding: "0 20px", marginTop: 14, background: selectedUnitId && !runM.isPending ? "#1d4ed8" : "#cbd5e1", color: "#fff", cursor: selectedUnitId && !runM.isPending ? "pointer" : "not-allowed" }}
-      >
-        {runM.isPending ? "⏳ جارٍ إنشاء XML وتوقيعه وإرساله..." : "▶ تشغيل اختبارات المطابقة الرسمية / إعادة المحاولة"}
-      </button>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
+        <button
+          onClick={() => selectedUnitId && prepareM.mutate({ posUnitId: selectedUnitId, invoiceType })}
+          disabled={!selectedUnitId || prepareM.isPending || runM.isPending}
+          style={{ ...smallBtn, height: 38, padding: "0 16px", background: selectedUnitId && !prepareM.isPending && !runM.isPending ? "#0f766e" : "#cbd5e1", color: "#fff", cursor: selectedUnitId && !prepareM.isPending && !runM.isPending ? "pointer" : "not-allowed" }}
+        >
+          {prepareM.isPending ? "⏳ جارٍ تجهيز المستندات..." : "＋ تجهيز مستندات المطابقة"}
+        </button>
+        <button
+          onClick={() => selectedUnitId && runM.mutate({ posUnitId: selectedUnitId, invoiceType, rerunCompleted: false })}
+          disabled={!selectedUnitId || runM.isPending || prepareM.isPending || incompleteTests === 0}
+          style={{ ...smallBtn, height: 38, padding: "0 16px", background: selectedUnitId && !runM.isPending && !prepareM.isPending && incompleteTests > 0 ? "#1d4ed8" : "#cbd5e1", color: "#fff", cursor: selectedUnitId && !runM.isPending && !prepareM.isPending && incompleteTests > 0 ? "pointer" : "not-allowed" }}
+        >
+          {runM.isPending ? "⏳ جارٍ إنشاء XML وتوقيعه وإرساله..." : `▶ تشغيل الاختبارات الناقصة فقط (${incompleteTests})`}
+        </button>
+        <button
+          onClick={() => selectedUnitId && runM.mutate({ posUnitId: selectedUnitId, invoiceType, rerunCompleted: true })}
+          disabled={!selectedUnitId || runM.isPending || prepareM.isPending}
+          style={{ ...smallBtn, height: 38, padding: "0 16px", background: selectedUnitId && !runM.isPending && !prepareM.isPending ? "#64748b" : "#cbd5e1", color: "#fff", cursor: selectedUnitId && !runM.isPending && !prepareM.isPending ? "pointer" : "not-allowed" }}
+        >
+          إعادة اختبار مكتمل (اختياري)
+        </button>
+      </div>
       {!selectedUnitId && <div style={{ marginTop: 8, color: "#b91c1c", fontSize: 11 }}>اختر وحدة EGS قبل تشغيل الاختبارات.</div>}
     </div>
   );

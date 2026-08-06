@@ -1339,6 +1339,9 @@ export const zatcaComplianceTests = pgTable('zatca_compliance_tests', {
   posUnitId:         integer('pos_unit_id').notNull().references(() => zatcaPosUnits.id, { onDelete: 'cascade' }),
   deviceId:          integer('device_id').references(() => zatcaDevices.id, { onDelete: 'set null' }),
   invoiceId:         integer('invoice_id').references(() => salesInvoices.id, { onDelete: 'set null' }),
+  // Kept as an isolated reference to the fixture table; the SQL migration
+  // adds the database FK without creating a module-initialization cycle here.
+  fixtureId:         integer('fixture_id'),
   testKey:           varchar('test_key', { length: 60 }).notNull(),
   invoiceType:       varchar('invoice_type', { length: 20 }).notNull(),
   documentType:      varchar('document_type', { length: 30 }).notNull(),
@@ -1365,6 +1368,54 @@ export const zatcaComplianceTests = pgTable('zatca_compliance_tests', {
     .on(t.orgId, t.posUnitId, t.testKey)
     .where(sql`${t.isActive} = true AND ${t.isDeleted} = false`),
 }));
+
+// ─── 6c. Isolated ZATCA compliance fixtures ───────────────────────────────────
+// These documents exist only for official Simulation compliance tests. They
+// never enter sales posting, inventory, numbering journals, or commercial
+// invoice lists.
+export const zatcaComplianceFixtures = pgTable('zatca_compliance_fixtures', {
+  id:                serial('id').primaryKey(),
+  orgId:             integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  posUnitId:         integer('pos_unit_id').notNull().references(() => zatcaPosUnits.id, { onDelete: 'cascade' }),
+  sourceFixtureId:   integer('source_fixture_id'),
+  invoiceType:       varchar('invoice_type', { length: 20 }).notNull(),
+  documentType:      varchar('document_type', { length: 30 }).notNull(),
+  invoiceNumber:     varchar('invoice_number', { length: 100 }).notNull(),
+  invoiceDate:       timestamp('invoice_date').notNull(),
+  customerName:      varchar('customer_name', { length: 500 }),
+  customerTaxNumber: varchar('customer_tax_number', { length: 100 }),
+  subtotal:          decimal('subtotal', { precision: 18, scale: 4 }).notNull().default('100'),
+  discountAmount:    decimal('discount_amount', { precision: 18, scale: 4 }).notNull().default('0'),
+  taxAmount:         decimal('tax_amount', { precision: 18, scale: 4 }).notNull().default('15'),
+  total:             decimal('total', { precision: 18, scale: 4 }).notNull().default('115'),
+  notes:             text('notes'),
+  zatcaUuid:         varchar('zatca_uuid', { length: 100 }).notNull(),
+  isActive:          boolean('is_active').notNull().default(true),
+  isDeleted:         boolean('is_deleted').notNull().default(false),
+  createdAt:         timestamp('created_at').notNull().defaultNow(),
+  updatedAt:         timestamp('updated_at').notNull().defaultNow(),
+  createdBy:         integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy:         integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
+}, (t) => ({
+  activeFixtureKeyUidx: uniqueIndex('zatca_compliance_fixtures_active_key_uidx')
+    .on(t.orgId, t.posUnitId, t.invoiceType, t.documentType)
+    .where(sql`${t.isActive} = true AND ${t.isDeleted} = false`),
+}));
+
+export const zatcaComplianceFixtureItems = pgTable('zatca_compliance_fixture_items', {
+  id:             serial('id').primaryKey(),
+  fixtureId:      integer('fixture_id').notNull().references(() => zatcaComplianceFixtures.id, { onDelete: 'cascade' }),
+  productName:    varchar('product_name', { length: 500 }).notNull(),
+  quantity:       decimal('quantity', { precision: 18, scale: 4 }).notNull().default('1'),
+  unit:           varchar('unit', { length: 100 }).notNull().default('C62'),
+  unitPrice:      decimal('unit_price', { precision: 18, scale: 4 }).notNull().default('100'),
+  total:          decimal('total', { precision: 18, scale: 4 }).notNull().default('115'),
+  taxAmount:      decimal('tax_amount', { precision: 18, scale: 4 }).notNull().default('15'),
+  taxPercent:     decimal('tax_percent', { precision: 5, scale: 2 }).notNull().default('15'),
+  discountAmount: decimal('discount_amount', { precision: 18, scale: 4 }).notNull().default('0'),
+  sortOrder:      integer('sort_order').notNull().default(0),
+  createdAt:      timestamp('created_at').notNull().defaultNow(),
+});
 
 // ─── 7. ZATCA Invoice Transactions ───────────────────────────────────────────
 export const zatcaInvoiceTransactions = pgTable('zatca_invoice_transactions', {
