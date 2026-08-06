@@ -15,7 +15,9 @@ function getCommitSha(): string {
   catch { return "unknown"; }
 }
 const BUILD_COMMIT     = getCommitSha();
-const BUILD_CACHE_NAME = `onesoft-erp-${BUILD_DATE_ID}-${BUILD_COMMIT}`;
+// Include the build timestamp so a dev restart cannot reuse a Service Worker
+// cache created by an older uncommitted frontend source tree.
+const BUILD_CACHE_NAME = `onesoft-erp-${BUILD_DATE_ID}-${BUILD_COMMIT}-${BUILD_TIMESTAMP}`;
 
 // ── Plugin: inject SW cache name into public/sw.js ────────────────────────────
 const swCachePlugin = {
