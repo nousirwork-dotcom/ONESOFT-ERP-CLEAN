@@ -1384,6 +1384,14 @@ export const zatcaComplianceFixtures = pgTable('zatca_compliance_fixtures', {
   invoiceDate:       timestamp('invoice_date').notNull(),
   customerName:      varchar('customer_name', { length: 500 }),
   customerTaxNumber: varchar('customer_tax_number', { length: 100 }),
+  customerAddress:   jsonb('customer_address').$type<{
+    street: string;
+    building: string;
+    district: string;
+    city: string;
+    postalCode: string;
+    countryCode: string;
+  } | null>(),
   subtotal:          decimal('subtotal', { precision: 18, scale: 4 }).notNull().default('100'),
   discountAmount:    decimal('discount_amount', { precision: 18, scale: 4 }).notNull().default('0'),
   taxAmount:         decimal('tax_amount', { precision: 18, scale: 4 }).notNull().default('15'),

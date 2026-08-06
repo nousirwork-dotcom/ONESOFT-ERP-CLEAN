@@ -55,6 +55,7 @@ import {
 } from '../services/zatcaFatooraSimulation.js';
 import { buildAndSignSimulationInvoice } from '../services/zatcaInvoiceSubmission.js';
 import { decrypt, encrypt } from '../config-crypto.js';
+import { DEFAULT_COMPLIANCE_PREVIOUS_INVOICE_HASH, normalizeZatcaPostalCode } from '@talha7k/zatca';
 
 // ─── Zod Schemas ──────────────────────────────────────────────────────────────
 
@@ -899,6 +900,29 @@ export const zatcaRouter = router({
             ),
           });
           if (existing) {
+            if (invoiceType === 'standard') {
+              await db.update(zatcaComplianceFixtures)
+                .set({
+                  customerName: 'شركة عميل المطابقة القياسية',
+                  customerTaxNumber: '311111111111113',
+                  customerAddress: {
+                    street: 'شارع الاختبار',
+                    building: '1234',
+                    district: 'حي الاختبار',
+                    city: 'الرياض',
+                    postalCode: '12211',
+                    countryCode: 'SA',
+                  },
+                  notes: documentType === 'credit_note'
+                    ? 'سبب الإصدار: تصحيح قيمة الفاتورة الأصلية'
+                    : documentType === 'debit_note'
+                      ? 'سبب الإصدار: إضافة قيمة مستحقة على الفاتورة الأصلية'
+                      : null,
+                  updatedAt: new Date(),
+                  updatedBy: ctx.user.id,
+                })
+                .where(eq(zatcaComplianceFixtures.id, existing.id));
+            }
             fixtureByKey.set(key, existing);
             continue;
           }
@@ -910,8 +934,23 @@ export const zatcaRouter = router({
             documentType,
             invoiceNumber: `SIM-${unit.unitCode}-${invoiceType}-${documentType}`.slice(0, 100),
             invoiceDate: new Date(),
-            customerName: invoiceType === 'standard' ? 'عميل اختبار المطابقة' : 'مستهلك نهائي',
+            customerName: invoiceType === 'standard' ? 'شركة عميل المطابقة القياسية' : 'مستهلك نهائي',
             customerTaxNumber: invoiceType === 'standard' ? '311111111111113' : null,
+            customerAddress: invoiceType === 'standard' ? {
+              street: 'شارع الاختبار',
+              building: '1234',
+              district: 'حي الاختبار',
+              city: 'الرياض',
+              postalCode: '12211',
+              countryCode: 'SA',
+            } : null,
+            notes: invoiceType === 'standard'
+              ? documentType === 'credit_note'
+                ? 'سبب الإصدار: تصحيح قيمة الفاتورة الأصلية'
+                : documentType === 'debit_note'
+                  ? 'سبب الإصدار: إضافة قيمة مستحقة على الفاتورة الأصلية'
+                  : null
+              : null,
             zatcaUuid: crypto.randomUUID(),
             createdBy: ctx.user.id,
             updatedBy: ctx.user.id,
@@ -1686,6 +1725,8 @@ export const zatcaRouter = router({
         ? COMPLIANCE_INVOICE_TYPES
         : [input.invoiceType] as const;
       const results: Array<Record<string, unknown>> = [];
+      let standardPreviousHash = DEFAULT_COMPLIANCE_PREVIOUS_INVOICE_HASH;
+      let standardInvoiceCounter = 0;
 
       const saveRow = async (values: Record<string, unknown>) => {
         const existing = await db.query.zatcaComplianceTests.findFirst({
@@ -1848,6 +1889,7 @@ export const zatcaRouter = router({
             invoiceDate: fixture.invoiceDate,
             customerName: fixture.customerName,
             customerTaxNumber: fixture.customerTaxNumber,
+            customerAddress: invoiceType === 'standard' ? fixture.customerAddress : null,
             currency: 'SAR',
             subtotal: fixture.subtotal,
             discountAmount: fixture.discountAmount,
@@ -1855,10 +1897,14 @@ export const zatcaRouter = router({
             total: fixture.total,
             notes: fixture.notes,
             refInvoiceId: null,
-            zatcaPih: null,
+             zatcaPih: invoiceType === 'standard' ? standardPreviousHash : null,
           };
 
-          const uuid = crypto.randomUUID();
+           const uuid = invoiceType === 'standard' ? fixture.zatcaUuid : crypto.randomUUID();
+           const isStandardFixture = invoiceType === 'standard';
+           const invoiceCounter = isStandardFixture
+             ? ++standardInvoiceCounter
+             : 1;
           let signed: ReturnType<typeof buildAndSignSimulationInvoice>;
           try {
             signed = buildAndSignSimulationInvoice({
@@ -1873,13 +1919,18 @@ export const zatcaRouter = router({
                 building: String(cfg.buildingNumber ?? ''),
                 district: String(cfg.district ?? ''),
                 city: String(cfg.city ?? ''),
-                postalCode: String(cfg.postalCode ?? ''),
-                countryCode: String(cfg.countryCode ?? 'SA'),
+                 postalCode: isStandardFixture
+                   ? normalizeZatcaPostalCode(String(cfg.postalCode ?? ''))
+                   : String(cfg.postalCode ?? ''),
+                 countryCode: isStandardFixture
+                   ? String(cfg.countryCode || 'SA')
+                   : String(cfg.countryCode ?? 'SA'),
               },
               uuid,
-              invoiceCounter: 1,
-              previousInvoiceHash: submissionInvoice.zatcaPih ?? '',
+               invoiceCounter,
+               previousInvoiceHash: submissionInvoice.zatcaPih ?? '',
               submissionType: invoiceType === 'standard' ? 'clearance' : 'reporting',
+               profileIdOverride: isStandardFixture ? 'reporting:1.0' : undefined,
               privateKeyPem: decrypt(signingKey.privateKeyEncrypted),
               certificatePem: certificate.publicCertificate,
               originalInvoice: originalFixtureForDocument ? {
@@ -1898,6 +1949,9 @@ export const zatcaRouter = router({
             results.push({ testKey, invoiceId: null, fixtureId: fixture.id, status: 'failed', warnings: [], errors });
             continue;
           }
+           if (isStandardFixture) {
+             standardPreviousHash = signed.invoiceHash;
+           }
 
           await saveRow({
             testKey, invoiceType, documentType, status: 'submitting',
@@ -2136,7 +2190,6 @@ export const zatcaRouter = router({
           message: 'لم يتم إنشاء CSID التشغيلي؛ راجع رد Fatoora Simulation',
         };
       }
-
       await db.transaction(async (tx) => {
         await tx.update(zatcaCsid).set({
           productionCsid: encrypt(operationalToken),

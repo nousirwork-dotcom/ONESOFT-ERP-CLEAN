@@ -25,6 +25,14 @@ type InvoiceInput = {
   invoiceDate: Date | string | null;
   customerName: string | null;
   customerTaxNumber: string | null;
+  customerAddress?: {
+    street: string;
+    building: string;
+    district: string;
+    city: string;
+    postalCode: string;
+    countryCode: string;
+  } | null;
   currency: string | null;
   subtotal: string | number | null;
   discountAmount: string | number | null;
@@ -55,6 +63,7 @@ export type BuildSignedInvoiceInput = {
   invoiceCounter: number;
   previousInvoiceHash: string;
   submissionType: 'reporting' | 'clearance';
+  profileIdOverride?: 'reporting:1.0' | 'clearance:1.0';
   privateKeyPem: string;
   certificatePem: string;
   originalInvoice?: {
@@ -162,7 +171,8 @@ export function buildAndSignSimulationInvoice(
     issueTime: time,
     invoiceTypeCode,
     invoiceTypeCodeName,
-    profileId: input.submissionType === 'clearance' ? 'clearance:1.0' : 'reporting:1.0',
+    profileId: input.profileIdOverride
+      ?? (input.submissionType === 'clearance' ? 'clearance:1.0' : 'reporting:1.0'),
     currencyCode: currency,
     invoiceCounter: input.invoiceCounter,
     previousInvoiceHash: input.previousInvoiceHash,
@@ -183,6 +193,7 @@ export function buildAndSignSimulationInvoice(
     customer: {
       name: input.invoice.customerName || 'مستهلك نهائي',
       vatNumber: input.invoice.customerTaxNumber || '',
+      ...(input.invoice.customerAddress ? { address: input.invoice.customerAddress } : {}),
     },
     lineExtensionAmount: subtotal,
     taxExclusiveAmount: taxExclusive,
