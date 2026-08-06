@@ -3612,10 +3612,24 @@ function EnvironmentSelection({
   units: any[];
   onSelect: (environment: LinkingEnvironment) => void;
 }) {
-  const simulationReady = units.some(unit => (
-    unit.environmentStatuses?.simulation?.registrationStatus === "operational"
-    || unit.environmentStatuses?.simulation?.certificatePresent
-  ));
+  const simulationComplete = units.some(unit => {
+    const simulation = unit.environmentStatuses?.simulation;
+    const tests = unit.environmentCompliance?.simulation ?? [];
+    const completedTests = tests.filter((test: any) => (
+      test.status === "passed"
+      || test.status === "passed_with_warnings"
+      || test.status === "completed_previously"
+    ));
+    return Boolean(
+      simulation
+      && simulation.registrationStatus === "operational"
+      && simulation.complianceCsidPresent
+      && simulation.operationalCsidPresent
+      && simulation.certificatePresent
+      && tests.length >= 6
+      && completedTests.length === tests.length,
+    );
+  });
   const productionReady = units.some(unit => (
     unit.environmentStatuses?.production?.registrationStatus === "operational"
     || unit.environmentStatuses?.production?.certificatePresent
@@ -3670,11 +3684,13 @@ function EnvironmentSelection({
             <li>الشهادات وCSID الناتجة تخص بيئة المحاكاة فقط.</li>
             <li>يمكن تجاوز هذا الاختيار والدخول مباشرة إلى الربط الفعلي.</li>
           </ul>
-          <div style={{ fontSize: 10, color: simulationReady ? "#166534" : "#64748b", marginBottom: 12 }}>
-            {simulationReady ? "✓ الاختبار التجريبي مكتمل أو مهيأ لهذه الوحدة" : "○ لم يبدأ الاختبار التجريبي بعد"}
+          <div style={{ fontSize: 10, color: simulationComplete ? "#166534" : "#64748b", marginBottom: 12 }}>
+            {simulationComplete
+              ? "✓ مكتمل — الوحدة مهيأة في Fatoora Simulation"
+              : "○ لم يبدأ الاختبار التجريبي بعد"}
           </div>
           <button onClick={() => onSelect("simulation")} style={{ width: "100%", height: 38, background: "#2563eb", color: "#fff", border: "none", borderRadius: 8, fontWeight: 800, fontSize: 12, cursor: "pointer" }}>
-            بدء الاختبار التجريبي
+            {simulationComplete ? "إدارة الربط التجريبي" : "بدء الاختبار التجريبي"}
           </button>
         </div>
       </div>
