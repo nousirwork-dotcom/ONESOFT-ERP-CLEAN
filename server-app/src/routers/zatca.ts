@@ -32,7 +32,6 @@ import {
 } from '../schema.js';
 import { eq, and, desc, count, sql, gte, lte, like, or, asc, notInArray, inArray, isNull } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
-import { logger } from '../logger.js';
 import { resolveZatcaContext, type ZatcaEnvironment } from '../services/zatcaContext.js';
 import {
   ZATCA_LIFECYCLE_STATES,
@@ -770,10 +769,6 @@ export const zatcaRouter = router({
   // هذا كيان فني داخل مركز ZATCA فقط؛ لا ينشئ نقطة بيع تشغيلية جديدة.
   // يبدأ إنشاء المجموعة من دفتر، ويُستنتج المخزن منه للتحقق فقط.
   listPosUnits: protectedProcedure.query(async ({ ctx }) => {
-    logger.info('zatca', 'listPosUnits request', {
-      userId: ctx.user.id,
-      organizationId: ctx.user.orgId,
-    });
     const units = await db.select({
       id: zatcaPosUnits.id,
       unitCode: zatcaPosUnits.unitCode,
@@ -943,16 +938,6 @@ export const zatcaRouter = router({
           })),
         },
       };
-    });
-    logger.info('zatca', 'listPosUnits result', {
-      userId: ctx.user.id,
-      organizationId: ctx.user.orgId,
-      unitsReturned: result.length,
-      unitCodes: result.map((unit) => unit.unitCode),
-      simulationComplete: result.map((unit) => ({
-        unitCode: unit.unitCode,
-        simulationComplete: unit.simulationComplete,
-      })),
     });
     return result;
   }),

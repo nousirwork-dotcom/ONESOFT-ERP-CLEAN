@@ -3610,15 +3610,11 @@ function EnvironmentSelection({
   onSelect,
   isLoading = false,
   hasError = false,
-  errorCode = null,
-  errorMessage = null,
 }: {
   units?: any[];
   onSelect: (environment: LinkingEnvironment) => void;
   isLoading?: boolean;
   hasError?: boolean;
-  errorCode?: string | null;
-  errorMessage?: string | null;
 }) {
   const loadedUnits = units ?? [];
   const getSimulationState = (unit: any) => {
@@ -3641,15 +3637,6 @@ function EnvironmentSelection({
     );
   };
   const simulationComplete = loadedUnits.some(getSimulationState);
-  const diagnosticUnit = loadedUnits.find(unit => unit.unitCode === "EGS-342") ?? loadedUnits[0] ?? null;
-  const diagnosticSimulation = diagnosticUnit?.environmentStatuses?.simulation ?? null;
-  const diagnosticTests = diagnosticUnit?.environmentCompliance?.simulation ?? [];
-  const diagnosticCompletedTests = diagnosticTests.filter((test: any) => (
-    ["passed", "passed_with_warnings", "completed_previously"].includes(
-      String(test.status ?? "").toLowerCase(),
-    )
-  ));
-  const diagnosticComplete = diagnosticUnit ? getSimulationState(diagnosticUnit) : false;
   const productionReady = loadedUnits.some(unit => (
     unit.environmentStatuses?.production?.registrationStatus === "operational"
     || unit.environmentStatuses?.production?.certificatePresent
@@ -3713,25 +3700,6 @@ function EnvironmentSelection({
               ? "✓ مكتمل — الوحدة مهيأة في Fatoora Simulation"
               : "○ لم يبدأ الاختبار التجريبي بعد"}
           </div>
-          {import.meta.env.DEV && (
-            <div dir="ltr" style={{ background: "#0f172a", color: "#e2e8f0", borderRadius: 7, padding: "8px 10px", marginBottom: 12, fontFamily: "monospace", fontSize: 10, lineHeight: 1.65, whiteSpace: "pre-wrap" }}>
-              <strong style={{ color: "#93c5fd" }}>DEV DIAGNOSTIC</strong>
-              {"\n"}units: {isLoading || hasError ? "—" : String(loadedUnits.length)}
-              {"\n"}unitCode: {diagnosticUnit?.unitCode ?? "—"}
-              {"\n"}simulationComplete: {isLoading || hasError ? "—" : String(diagnosticComplete)}
-              {"\n"}registrationStatus: {diagnosticSimulation?.registrationStatus ?? "—"}
-              {"\n"}hasComplianceCsid: {diagnosticSimulation ? String(Boolean(diagnosticSimulation.complianceCsidPresent)) : "—"}
-              {"\n"}hasOperationalCsid: {diagnosticSimulation ? String(Boolean(diagnosticSimulation.operationalCsidPresent)) : "—"}
-              {"\n"}hasCertificate: {diagnosticSimulation ? String(Boolean(diagnosticSimulation.certificatePresent)) : "—"}
-              {"\n"}tests: {diagnosticTests.length ? `${diagnosticCompletedTests.length}/${diagnosticTests.length}` : "—"}
-              {hasError && (
-                <>
-                  {"\n"}errorCode: {errorCode ?? "UNKNOWN"}
-                  {"\n"}errorMessage: {errorMessage ?? "—"}
-                </>
-              )}
-            </div>
-          )}
           <button onClick={() => onSelect("simulation")} style={{ width: "100%", height: 38, background: "#2563eb", color: "#fff", border: "none", borderRadius: 8, fontWeight: 800, fontSize: 12, cursor: "pointer" }}>
             {isLoading || hasError ? "إعادة المحاولة" : simulationComplete ? "إدارة الربط التجريبي" : "بدء الاختبار التجريبي"}
           </button>
@@ -3769,8 +3737,6 @@ function ActivationSection({
         units={units}
         isLoading={unitsQ.isLoading}
         hasError={Boolean(unitsQ.error)}
-        errorCode={unitsQ.error ? String((unitsQ.error as any).data?.code ?? "UNKNOWN") : null}
-        errorMessage={unitsQ.error ? String(unitsQ.error.message ?? "تعذر قراءة حالة الربط") : null}
         onSelect={nextEnvironment => {
           if (unitsQ.isLoading || unitsQ.error) {
             void unitsQ.refetch();

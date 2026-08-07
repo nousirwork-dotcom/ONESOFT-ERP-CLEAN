@@ -264,16 +264,6 @@ app.get('/download/backup', async (req, res) => {
 app.use('/api/trpc', createExpressMiddleware({
   router: appRouter,
   createContext: ({ req, res }) => createContext({ req, res }),
-  onError: ({ path, error, ctx }) => {
-    if (path === 'zatca.listPosUnits') {
-      logger.error('zatca', 'listPosUnits failed', {
-        userId: ctx?.user?.id ?? null,
-        organizationId: ctx?.user?.orgId ?? null,
-        code: error.code,
-        message: error.message,
-      });
-    }
-  },
 }));
 
 // ─── Static Files (React Build - Production Only) ─────────────────────────────
