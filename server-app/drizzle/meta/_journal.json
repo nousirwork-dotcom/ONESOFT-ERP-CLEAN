@@ -589,6 +589,13 @@
       "when": 1786320300000,
       "tag": "0083_zatca_unit_status_sync",
       "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1786086600000,
+      "tag": "0084_zatca_pos_units_lifecycle_repair",
+      "breakpoints": true
     }
   ]
 }

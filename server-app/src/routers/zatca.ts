@@ -773,12 +773,9 @@ export const zatcaRouter = router({
       id: zatcaPosUnits.id,
       unitCode: zatcaPosUnits.unitCode,
       unitName: zatcaPosUnits.unitName,
-      // Development databases may still have the pre-0082 shape. Keep this
-      // read path compatible without mutating the database: the legacy
-      // `status` projection is the only lifecycle-like value available there.
-      oneSoftStatus: zatcaPosUnits.status,
-      lifecycleUpdatedAt: sql<Date | null>`NULL`,
-      lifecycleReason: sql<string | null>`NULL`,
+      oneSoftStatus: zatcaPosUnits.oneSoftStatus,
+      lifecycleUpdatedAt: zatcaPosUnits.lifecycleUpdatedAt,
+      lifecycleReason: zatcaPosUnits.lifecycleReason,
       warehouseId: zatcaPosUnits.warehouseId,
       warehouseName: warehouses.name,
       branchName: branches.name,
