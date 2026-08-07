@@ -100,6 +100,8 @@ const smallBtn: React.CSSProperties = { height: 24, padding: "0 8px", border: "n
 const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> = {
   not_submitted:         { label: "لم تُرسَل",                    color: "#6b7280", bg: "#f3f4f6" },
   ready_to_submit:       { label: "جاهزة للإرسال",                color: "#475569", bg: "#f1f5f9" },
+  reporting_pending:     { label: "تم الإصدار — بانتظار الإبلاغ", color: "#2563eb", bg: "#dbeafe" },
+  clearance_pending:     { label: "تم الإصدار — بانتظار التخليص", color: "#2563eb", bg: "#dbeafe" },
   submitting:            { label: "جاري الإرسال",                 color: "#7c3aed", bg: "#ede9fe" },
   submitted_pending:     { label: "أُرسل — بانتظار الرد",         color: "#d97706", bg: "#fef3c7" },
   cleared:               { label: "مقبولة — تخليص",                color: "#16a34a", bg: "#dcfce7" },
@@ -2393,7 +2395,7 @@ function SendSection() {
         </div>
       </div>
       <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-        {["", "ready_to_submit", "submitting", "submitted_pending", "cleared", "reported", "accepted_with_warnings", "rejected", "connection_issue", "retry_pending", "uncertain"].map(s => (
+        {["", "ready_to_submit", "reporting_pending", "clearance_pending", "submitting", "submitted_pending", "cleared", "reported", "accepted_with_warnings", "rejected", "connection_issue", "retry_pending", "uncertain"].map(s => (
           <button key={s} onClick={() => { setFilterStatus(s); setPage(1); }}
             style={{ height: 26, padding: "0 12px", borderRadius: 12, border: `1px solid ${filterStatus === s ? "#D19C05" : "#e2e8f0"}`, background: filterStatus === s ? "#D19C05" : "#fff", color: filterStatus === s ? "#fff" : "#374151", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
             {s === "" ? "الكل" : (STATUS_MAP[s]?.label ?? s)}

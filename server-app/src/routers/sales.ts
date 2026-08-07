@@ -8,6 +8,7 @@ import { TRPCError } from '@trpc/server';
 import { validateSalesInvoiceWarehouseContext } from '../lib/salesWarehouseValidation.js';
 import { resolveInvoiceTaxItems } from '../lib/invoiceTaxValidation.js';
 import { assertSalesJournalUnitCanBeUsed } from '../services/zatcaUnitLifecycle.js';
+import { issueZatcaDocument } from '../services/zatcaDocumentIssuance.js';
 
 // ── تحقق أن جميع بنود الفاتورة تُشير إلى أصناف مسجلة في النظام ──────────────────
 async function validateInvoiceItems(items: { productId?: number; productName: string; productCode?: string }[], orgId: number) {
@@ -549,11 +550,11 @@ export const salesRouter = router({
         }
 
         let invoice: typeof salesInvoices.$inferSelect;
+        const organization = await tx.query.organizations.findFirst({
+          where: eq(organizations.id, orgId),
+          columns: { name: true, nameEn: true, taxNumber: true, commercialReg: true, zatcaConfig: true },
+        });
         try {
-          const organization = await tx.query.organizations.findFirst({
-            where: eq(organizations.id, orgId),
-            columns: { name: true, taxNumber: true },
-          });
           const [row] = await tx.insert(salesInvoices).values({
             ...invoiceData,
             warehouseId: resolvedWarehouseId,
@@ -614,28 +615,58 @@ export const salesRouter = router({
 
         // ── ترحيل تلقائي داخل نفس transaction الحفظ ───────────────────────────
         // المسودة لا تُرحّل ولا تُنشئ حركات مخزون أو قيود محاسبية.
+        let postedResult: { entryNumber: string } | null = null;
         if (!isDraft) {
           try {
-            const posted = await autoPostSalesInvoice(invoice.id, orgId, ctx.user.id, tx);
-            if (posted) {
-              return {
-                invoice,
-                finalInvoiceNumber,
-                isPosted: true,
-                autoPostedEntryNumber: posted.entryNumber,
-              };
-            }
+            postedResult = await autoPostSalesInvoice(invoice.id, orgId, ctx.user.id, tx);
           } catch (e) {
             console.error('[sales.create] autoPostSalesInvoice error — rolling back:', e);
             throw e;
           }
         }
 
+        // الإصدار المحلي يأتي بعد الدفع والترحيل، لكنه ما زال داخل نفس
+        // transaction؛ ففشل TrustedClock/XML/التوقيع يلغي الآثار التجارية كلها.
+        if (!isDraft && invoiceData.journalId) {
+          const journalLink = await tx.query.documentJournals.findFirst({
+            where: and(
+              eq(documentJournals.id, invoiceData.journalId),
+              eq(documentJournals.orgId, orgId),
+            ),
+            columns: { zatcaPosUnitId: true },
+          });
+          if (journalLink?.zatcaPosUnitId) {
+            const issued = await issueZatcaDocument({
+              tx,
+              invoice,
+              items: items.map((item, index) => ({
+                id: index + 1,
+                productName: item.productName,
+                quantity: item.quantity,
+                unit: item.unit ?? null,
+                unitPrice: item.unitPrice,
+                total: item.total,
+                taxAmount: item.taxAmount,
+                taxPercent: item.taxPercent,
+                discountAmount: item.discountAmount,
+              })),
+              organization: organization!,
+              user: {
+                id: ctx.user.id,
+                orgId,
+                role: ctx.user.role,
+                userGroupId: ctx.user.userGroupId,
+              },
+            });
+            invoice = { ...invoice, ...issued.invoiceFields };
+          }
+        }
+
         return {
           invoice,
           finalInvoiceNumber,
-          isPosted: false,
-          autoPostedEntryNumber: undefined,
+          isPosted: Boolean(postedResult),
+          autoPostedEntryNumber: postedResult?.entryNumber,
         };
       });
 
@@ -855,10 +886,10 @@ export const salesRouter = router({
           }
         }
 
-        const organization = isFinalizing
+         const organization = isFinalizing
           ? await tx.query.organizations.findFirst({
               where: eq(organizations.id, ctx.user.orgId),
-              columns: { name: true, taxNumber: true },
+               columns: { name: true, nameEn: true, taxNumber: true, commercialReg: true, zatcaConfig: true },
             })
           : null;
         await tx.update(salesInvoices).set({
@@ -911,19 +942,66 @@ export const salesRouter = router({
         }
 
         // ── الترحيل التلقائي عند تحويل المسودة إلى مستند نهائي ─────────────────────
+        let postedResult: { entryNumber: string } | null = null;
         if (isFinalizing) {
           try {
-            const posted = await autoPostSalesInvoice(id, ctx.user.orgId, ctx.user.id, tx);
-            if (posted) {
-              return { finalInvoiceNumber, isPosted: true, autoPostedEntryNumber: posted.entryNumber };
-            }
+            postedResult = await autoPostSalesInvoice(id, ctx.user.orgId, ctx.user.id, tx);
           } catch (e) {
             console.error('[sales.update] autoPostSalesInvoice error — rolling back:', e);
             throw e;
           }
         }
 
-        return { finalInvoiceNumber, isPosted: false, autoPostedEntryNumber: undefined };
+        // الإصدار المحلي عند تحويل مسودة إلى مستند نهائي فقط. الفواتير
+        // النهائية القديمة لا تمر هنا ولا يُعاد إصدارها.
+        if (isFinalizing && finalJournalId && organization) {
+          const journalLink = await tx.query.documentJournals.findFirst({
+            where: and(
+              eq(documentJournals.id, finalJournalId),
+              eq(documentJournals.orgId, ctx.user.orgId),
+            ),
+            columns: { zatcaPosUnitId: true },
+          });
+          if (journalLink?.zatcaPosUnitId) {
+            const finalizedInvoice = await tx.query.salesInvoices.findFirst({
+              where: and(
+                eq(salesInvoices.id, id),
+                eq(salesInvoices.orgId, ctx.user.orgId),
+              ),
+            });
+            const invoiceItems = await tx.query.salesInvoiceItems.findMany({
+              where: and(
+                eq(salesInvoiceItems.invoiceId, id),
+                eq(salesInvoiceItems.orgId, ctx.user.orgId),
+              ),
+              orderBy: (row, { asc }) => [asc(row.sortOrder)],
+            });
+            if (!finalizedInvoice) {
+              throw new TRPCError({
+                code: 'NOT_FOUND',
+                message: 'المستند غير موجود بعد التحويل النهائي',
+              });
+            }
+            await issueZatcaDocument({
+              tx,
+              invoice: finalizedInvoice,
+              items: invoiceItems,
+              organization,
+              user: {
+                id: ctx.user.id,
+                orgId: ctx.user.orgId,
+                role: ctx.user.role,
+                userGroupId: ctx.user.userGroupId,
+              },
+            });
+          }
+        }
+
+        return {
+          finalInvoiceNumber,
+          isPosted: Boolean(postedResult),
+          autoPostedEntryNumber: postedResult?.entryNumber,
+        };
       });
 
       return { success: true, invoiceNumber: isFinalizing ? finalInvoiceNumber : undefined, isPosted, autoPostedEntryNumber };

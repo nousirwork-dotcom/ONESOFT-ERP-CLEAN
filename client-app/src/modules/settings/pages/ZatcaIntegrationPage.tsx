@@ -15,6 +15,8 @@ type ZatcaTab = "settings" | "monitor" | "invoices" | "logs" | "errors" | "xmlch
 // ─── مساعدات العرض ────────────────────────────────────────────────────────────
 const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> = {
   not_submitted: { label: "لم تُرسَل",    color: "#6b7280", bg: "#f3f4f6" },
+  reporting_pending: { label: "تم الإصدار — بانتظار الإبلاغ", color: "#2563eb", bg: "#dbeafe" },
+  clearance_pending: { label: "تم الإصدار — بانتظار التخليص", color: "#2563eb", bg: "#dbeafe" },
   pending:       { label: "في الانتظار",  color: "#d97706", bg: "#fef3c7" },
   cleared:       { label: "مُخلَّصة",     color: "#16a34a", bg: "#dcfce7" },
   reported:      { label: "مُبلَّغة",     color: "#0ea5e9", bg: "#e0f2fe" },

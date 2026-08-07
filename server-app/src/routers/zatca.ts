@@ -64,11 +64,8 @@ import {
 } from '../services/zatcaFatooraSimulation.js';
 import { buildAndSignZatcaInvoice } from '../services/zatcaInvoiceSubmission.js';
 import {
-  commitTrustedIssuance,
-  reserveTrustedIssuance,
   recheckTrustedClock,
   trustedTimeForIsolatedFixture,
-  TrustedClockError,
   isTrustedClockDocumentType,
 } from '../services/trustedClock.js';
 import { decrypt, encrypt } from '../config-crypto.js';
@@ -208,6 +205,8 @@ const ZatcaMockOutcomeSchema = z.enum([
 function lifecycleMessage(state: ZatcaLifecycleState): string {
   const messages: Record<ZatcaLifecycleState, string> = {
     ready_to_submit: 'الفاتورة جاهزة للإرسال',
+    reporting_pending: 'تم الإصدار المحلي؛ الفاتورة بانتظار الإبلاغ',
+    clearance_pending: 'تم الإصدار المحلي؛ الفاتورة بانتظار التخليص',
     submitting: 'جاري إرسال الطلب',
     submitted_pending: 'تم إرسال الطلب ولم تصل نتيجة نهائية بعد',
     cleared: 'نتيجة Mock: محاكاة تخليص — ليست نتيجة رسمية من الهيئة',
@@ -3282,6 +3281,19 @@ export const zatcaRouter = router({
           message: 'لا يمكن إعادة إصدار QR/XML أو توقيع فاتورة قديمة: لقطة اسم المنشأة والرقم الضريبي غير محفوظة لهذه الفاتورة.',
         });
       }
+      if (
+        !inv.zatcaXml
+        || !inv.zatcaHash
+        || !inv.zatcaQrCode
+        || !inv.zatcaIssueTimestamp
+        || !inv.zatcaUuid
+        || !inv.zatcaInvoiceCounter
+      ) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'لا يمكن الإرسال قبل الإصدار المحلي عند الحفظ النهائي؛ لم يتم إنشاء Snapshot لهذه الفاتورة.',
+        });
+      }
 
       const persistedInvoiceType = inv.zatcaInvoiceType === 'standard' ? 'standard' : 'simplified';
       const operation: ZatcaOperation = persistedInvoiceType === 'standard' ? 'clearance' : 'reporting';
@@ -3311,7 +3323,29 @@ export const zatcaRouter = router({
         ),
         orderBy: desc(zatcaInvoiceTransactions.createdAt),
       });
-      if (existing && !input.forceResend && !isFinalZatcaState(existing.invoiceStatus)) {
+      if (!existing) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'Snapshot الإلكترونية موجودة دون معاملة إصدار محلية؛ لم يتم إنشاء معاملة جديدة عند الإرسال.',
+        });
+      }
+      if (
+        existing.invoiceUuid?.toString() !== inv.zatcaUuid
+        || existing.invoiceCounter !== inv.zatcaInvoiceCounter
+        || existing.invoiceHash !== inv.zatcaHash
+        || existing.issuanceTimestamp?.getTime() !== new Date(inv.zatcaIssueTimestamp).getTime()
+      ) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'معاملة الإصدار لا تطابق Snapshot المحفوظة؛ تم إيقاف الإرسال لحماية ثبات المستند.',
+        });
+      }
+      if (
+        existing
+        && !input.forceResend
+        && !isFinalZatcaState(existing.invoiceStatus)
+        && !['reporting_pending', 'clearance_pending', 'retry_pending', 'connection_issue'].includes(existing.invoiceStatus ?? '')
+      ) {
         return {
           ok: true,
           status: existing.invoiceStatus,
@@ -3334,40 +3368,13 @@ export const zatcaRouter = router({
         },
       });
 
-      // Reserve once at the start of final issuance. The returned timestamp is
-      // reused by XML, QR, hashing, signing, and the submission payload.
-      let trustedIssuance;
-      try {
-        trustedIssuance = await reserveTrustedIssuance({
-          orgId: ctx.user.orgId,
-          posUnitId: resolvedContext.posUnit.id,
-          invoiceId: input.invoiceId,
-          userId: ctx.user.id,
-          deviceId: resolvedContext.egs.id,
-          existingIssueTimestamp: inv.zatcaIssueTimestamp,
-          existingInvoiceCounter: inv.zatcaInvoiceCounter ?? existing?.invoiceCounter,
-          invoiceCreatedAt: inv.createdAt,
-        });
-      } catch (error) {
-        if (error instanceof TrustedClockError) {
-          throw new TRPCError({ code: 'PRECONDITION_FAILED', message: error.message });
-        }
-        throw error;
-      }
-      if (!inv.zatcaIssueTimestamp) {
-        await db.update(salesInvoices).set({
-          zatcaIssueTimestamp: trustedIssuance.timestamp,
-          updatedAt: new Date(),
-        }).where(and(
-          eq(salesInvoices.id, input.invoiceId),
-          eq(salesInvoices.orgId, ctx.user.orgId),
-          isNull(salesInvoices.zatcaIssueTimestamp),
-        ));
-      }
+      // الإصدار المحلي تم بالفعل عند الحفظ النهائي. الإرسال لا يحجز وقتًا
+      // جديدًا ولا يوقّع XML ولا يعيد إنشاء QR.
+      const issuanceTimestamp = inv.zatcaIssueTimestamp;
 
       const now = new Date();
-      let uuid = inv.zatcaUuid ?? existing?.invoiceUuid?.toString() ?? crypto.randomUUID();
-      let icv = inv.zatcaInvoiceCounter ?? existing?.invoiceCounter ?? input.invoiceId;
+      let uuid = inv.zatcaUuid;
+      let icv = inv.zatcaInvoiceCounter;
       let correlationId = existing?.correlationId ?? crypto.randomUUID();
       let idempotencyKey = `${ctx.user.orgId}:${input.invoiceId}:${uuid}:${operation}`;
       let attemptCount = (existing?.attemptCount ?? inv.zatcaAttemptCount ?? 0) + 1;
@@ -3381,59 +3388,18 @@ export const zatcaRouter = router({
         submittedAt: now.toISOString(),
       }) as Record<string, unknown>;
 
-      let transactionId = existing?.id;
-      if (transactionId == null) {
-        const [created] = await db.insert(zatcaInvoiceTransactions).values({
-          orgId: ctx.user.orgId,
-          invoiceId: input.invoiceId,
-          invoiceNumber: inv.invoiceNumber,
-          invoiceUuid: uuid,
-          issuanceTimestamp: trustedIssuance.timestamp,
-          invoiceCounter: icv,
-          submissionType: operation,
-          invoiceStatus: 'ready_to_submit',
-          correlationId,
-          idempotencyKey,
-          attemptCount: 0,
-          deviceId: null,
-          environmentId: null,
-          createdBy: ctx.user.id,
-          updatedBy: ctx.user.id,
-        }).onConflictDoNothing().returning({ id: zatcaInvoiceTransactions.id });
-        transactionId = created?.id;
-        if (transactionId == null) {
-          existing = await db.query.zatcaInvoiceTransactions.findFirst({
-            where: and(
-              eq(zatcaInvoiceTransactions.orgId, ctx.user.orgId),
-              eq(zatcaInvoiceTransactions.invoiceId, input.invoiceId),
-              eq(zatcaInvoiceTransactions.isActive, true),
-              eq(zatcaInvoiceTransactions.isDeleted, false),
-            ),
-            orderBy: desc(zatcaInvoiceTransactions.createdAt),
-          });
-          if (!existing) {
-            throw new TRPCError({
-              code: 'CONFLICT',
-              message: 'تعذر تثبيت معاملة ZATCA الوحيدة للفواتير المتزامنة',
-            });
-          }
-          transactionId = existing.id;
-          uuid = existing.invoiceUuid?.toString() ?? uuid;
-          icv = existing.invoiceCounter ?? icv;
-          correlationId = existing.correlationId ?? correlationId;
-          idempotencyKey = existing.idempotencyKey ?? `${ctx.user.orgId}:${input.invoiceId}:${uuid}:${operation}`;
-          attemptCount = (existing.attemptCount ?? 0) + 1;
-          requestPayload = redactZatcaPayload({
-            invoiceId: input.invoiceId,
-            invoiceNumber: inv.invoiceNumber,
-            uuid,
-            icv,
-            operation,
-            idempotencyKey,
-            submittedAt: now.toISOString(),
-          }) as Record<string, unknown>;
-        }
-      }
+      const transactionId = existing.id;
+      correlationId = existing.correlationId ?? correlationId;
+      idempotencyKey = existing.idempotencyKey ?? idempotencyKey;
+      requestPayload = redactZatcaPayload({
+        invoiceId: input.invoiceId,
+        invoiceNumber: inv.invoiceNumber,
+        uuid,
+        icv,
+        operation,
+        idempotencyKey,
+        submittedAt: now.toISOString(),
+      }) as Record<string, unknown>;
 
       await db.update(zatcaInvoiceTransactions).set({
         invoiceUuid: uuid,
@@ -3504,7 +3470,7 @@ export const zatcaRouter = router({
       }
 
       if (cfg.environment === 'simulation') {
-        const [currentCsid, signingCertificate, signingKey, originalInvoice] = await Promise.all([
+        const [currentCsid, signingCertificate] = await Promise.all([
           db.query.zatcaCsid.findFirst({
             where: and(
               eq(zatcaCsid.id, resolvedContext.csid.id),
@@ -3524,41 +3490,12 @@ export const zatcaRouter = router({
               eq(zatcaCertificates.status, 'active'),
             ),
           }),
-          db.query.zatcaKeys.findFirst({
-            where: and(
-              eq(zatcaKeys.orgId, ctx.user.orgId),
-              eq(zatcaKeys.deviceId, resolvedContext.egs.id),
-              eq(zatcaKeys.isActive, true),
-              eq(zatcaKeys.isDeleted, false),
-              eq(zatcaKeys.status, 'active'),
-            ),
-            orderBy: desc(zatcaKeys.createdAt),
-          }),
-          (inv.sourceDocumentId || inv.refInvoiceId || inv.basedOnNumber)
-            ? db.query.salesInvoices.findFirst({
-                where: and(
-                  eq(salesInvoices.orgId, ctx.user.orgId),
-                  eq(salesInvoices.invoiceType, 'sale'),
-                  inv.sourceDocumentId
-                    ? eq(salesInvoices.id, inv.sourceDocumentId)
-                    : inv.refInvoiceId
-                      ? eq(salesInvoices.id, inv.refInvoiceId)
-                      : eq(salesInvoices.invoiceNumber, inv.basedOnNumber!),
-                ),
-                columns: {
-                  invoiceNumber: true,
-                  zatcaUuid: true,
-                  invoiceDate: true,
-                },
-              })
-            : Promise.resolve(null),
         ]);
 
         if (
           !currentCsid?.productionCsid
           || !signingCertificate?.publicCertificate
           || !signingCertificate.secretKeyEncrypted
-          || !signingKey?.privateKeyEncrypted
           || resolvedContext.egs.registrationStatus !== 'operational'
         ) {
           throw new TRPCError({
@@ -3566,92 +3503,20 @@ export const zatcaRouter = router({
             message: 'الإرسال الرسمي يتطلب CSID تشغيلياً وشهادة ومفتاحاً صالحين لوحدة EGS',
           });
         }
-        if (['return', 'credit_note', 'debit_note'].includes(inv.invoiceType)
-          && (!originalInvoice?.zatcaUuid || !originalInvoice.invoiceNumber)) {
-          throw new TRPCError({
-            code: 'PRECONDITION_FAILED',
-            message: 'المستند الإلكتروني يتطلب فاتورة أصلية مرتبطة تحمل UUID رسميًا',
-          });
-        }
-
-         let signed: ReturnType<typeof buildAndSignZatcaInvoice>;
-        try {
-           if (inv.zatcaXml && inv.zatcaHash && inv.zatcaQrCode && inv.zatcaIssueTimestamp) {
-             // Retries reuse the immutable signed snapshot; they never
-             // rebuild XML, QR, hash, or signature from mutable ERP fields.
-             signed = {
-               unsignedXml: inv.zatcaXml,
-               signedXml: inv.zatcaXml,
-               invoiceHash: inv.zatcaHash,
-               qrCode: inv.zatcaQrCode,
-               signatureValue: '',
-               invoiceBase64: Buffer.from(inv.zatcaXml, 'utf8').toString('base64'),
-             };
-           } else {
-             signed = buildAndSignZatcaInvoice({
-              invoice: inv,
-              items: await db.select({
-                id: salesInvoiceItems.id,
-                productName: salesInvoiceItems.productName,
-                quantity: salesInvoiceItems.quantity,
-                unit: salesInvoiceItems.unit,
-                unitPrice: salesInvoiceItems.unitPrice,
-                total: salesInvoiceItems.total,
-                taxAmount: salesInvoiceItems.taxAmount,
-                taxPercent: salesInvoiceItems.taxPercent,
-                discountAmount: salesInvoiceItems.discountAmount,
-              }).from(salesInvoiceItems).where(and(
-                eq(salesInvoiceItems.invoiceId, input.invoiceId),
-                eq(salesInvoiceItems.orgId, ctx.user.orgId),
-              )).orderBy(asc(salesInvoiceItems.sortOrder)),
-              seller: {
-                nameAr: String(inv.sellerLegalName ?? cfg.legalName ?? org?.name ?? ''),
-                nameEn: String(cfg.englishName ?? cfg.legalName ?? org?.name ?? ''),
-                vatNumber: String(inv.sellerTaxNumber ?? cfg.vatNumber ?? ''),
-                crNumber: cfg.commercialReg ? String(cfg.commercialReg) : undefined,
-                street: String(cfg.street ?? ''),
-                building: String(cfg.buildingNumber ?? ''),
-                district: String(cfg.district ?? ''),
-                city: String(cfg.city ?? ''),
-                postalCode: String(cfg.postalCode ?? ''),
-                countryCode: String(cfg.countryCode ?? 'SA'),
-              },
-              uuid,
-              invoiceCounter: icv,
-              previousInvoiceHash: inv.zatcaPih ?? '',
-              submissionType: operation,
-              issuanceTimestamp: trustedIssuance.timestamp,
-              privateKeyPem: decrypt(signingKey.privateKeyEncrypted),
-              certificatePem: signingCertificate.publicCertificate,
-              originalInvoice: originalInvoice?.zatcaUuid && originalInvoice.invoiceNumber
-                ? {
-                    invoiceNumber: originalInvoice.invoiceNumber,
-                    uuid: originalInvoice.zatcaUuid,
-                    invoiceDate: originalInvoice.invoiceDate,
-                  }
-                : undefined,
-            });
-           }
-        } catch (error) {
-          const message = error instanceof Error ? error.message : 'تعذر توقيع XML الفاتورة';
-          await db.update(zatcaSubmissionAttempts).set({
-            finishedAt: new Date(),
-            result: 'rejected',
-            errorMessage: message,
-          }).where(eq(zatcaSubmissionAttempts.id, attempt.id));
-          await db.update(zatcaInvoiceTransactions).set({
-            invoiceStatus: 'rejected',
-            lastError: message,
-            responseDate: new Date(),
-            updatedAt: new Date(),
-            updatedBy: ctx.user.id,
-          }).where(eq(zatcaInvoiceTransactions.id, transactionId));
-          throw new TRPCError({ code: 'PRECONDITION_FAILED', message });
-        }
+        // Submission is deliberately Snapshot-only. The local issuance path
+        // already created and signed this XML during final save.
+        const signed: ReturnType<typeof buildAndSignZatcaInvoice> = {
+          unsignedXml: inv.zatcaXml,
+          signedXml: inv.zatcaXml,
+          invoiceHash: inv.zatcaHash,
+          qrCode: inv.zatcaQrCode,
+          signatureValue: '',
+          invoiceBase64: Buffer.from(inv.zatcaXml, 'utf8').toString('base64'),
+        };
 
         await db.update(zatcaInvoiceTransactions).set({
           invoiceHash: signed.invoiceHash,
-          issuanceTimestamp: trustedIssuance.timestamp,
+           issuanceTimestamp,
           requestPayload: redactZatcaPayload({
             ...requestPayload,
             invoiceHash: signed.invoiceHash,
@@ -3670,7 +3535,7 @@ export const zatcaRouter = router({
           zatcaHash: signed.invoiceHash,
           zatcaQrCode: signed.qrCode,
           zatcaXml: signed.signedXml,
-           zatcaIssueTimestamp: trustedIssuance.timestamp,
+            zatcaIssueTimestamp: issuanceTimestamp,
           zatcaStatus: 'submitting',
           zatcaSubmittedAt: inv.zatcaSubmittedAt ?? now,
           zatcaAttemptCount: attemptCount,
@@ -3679,15 +3544,6 @@ export const zatcaRouter = router({
           eq(salesInvoices.id, input.invoiceId),
           eq(salesInvoices.orgId, ctx.user.orgId),
         ));
-        await commitTrustedIssuance({
-          orgId: ctx.user.orgId,
-          posUnitId: resolvedContext.posUnit.id,
-          invoiceCounter: icv,
-          invoiceHash: signed.invoiceHash,
-          invoiceUuid: uuid,
-          lastPih: inv.zatcaPih ?? null,
-        });
-
         const authorityResponse = await postFatoora({
           environment: 'simulation',
           apiPath: operation === 'clearance'

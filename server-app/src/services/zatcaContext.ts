@@ -228,6 +228,7 @@ function assertContextRecords(records: ZatcaContextRecords, requestedEnvironment
   if (!records.posUnit || !records.posUnit.isActive || records.posUnit.isDeleted || records.posUnit.orgId !== user.orgId) {
     throwContext('UNIT_NOT_FOUND', 'وحدة ربط نقطة البيع مع ZATCA غير موجودة أو غير فعالة');
   }
+  const posUnit = records.posUnit;
   if (records.posUnit.oneSoftStatus === 'paused') {
     throwContext('UNIT_NOT_FOUND', 'وحدة ربط نقطة البيع متوقفة مؤقتًا داخل OneSoft');
   }
@@ -276,7 +277,7 @@ function assertContextRecords(records: ZatcaContextRecords, requestedEnvironment
     candidate.isActive
     && !candidate.isDeleted
     && candidate.orgId === user.orgId
-    && candidate.posUnitId === records.posUnit.id
+    && candidate.posUnitId === posUnit.id
     && candidate.environmentId === records.environment!.id
   ));
   if (matchingEgs.length === 0 && records.egs.length > 0) {
@@ -390,9 +391,11 @@ export async function resolveZatcaContext(input: {
   user: ZatcaContextUser;
   environment: ZatcaEnvironment;
   now?: Date;
+  client?: typeof db | any;
 }): Promise<ResolvedZatcaContext> {
   const { journalId, user, environment, now } = input;
-  const journal = await db.query.documentJournals.findFirst({
+  const client = input.client ?? db;
+  const journal = await client.query.documentJournals.findFirst({
     where: and(
       eq(documentJournals.id, journalId),
       eq(documentJournals.orgId, user.orgId),
@@ -413,7 +416,7 @@ export async function resolveZatcaContext(input: {
   }
 
   if (journal.allowedUserGroup && user.role !== 'admin' && user.role !== 'superadmin') {
-    const group = await db.query.userGroups.findFirst({
+    const group = await client.query.userGroups.findFirst({
       where: and(
         eq(userGroups.orgId, user.orgId),
         or(
@@ -435,7 +438,7 @@ export async function resolveZatcaContext(input: {
     }
   }
 
-  const environmentRow = await db.select({
+  const environmentRow = await client.select({
     id: zatcaEnvironments.id,
     orgId: zatcaEnvironments.orgId,
     name: zatcaEnvironments.name,
@@ -443,11 +446,11 @@ export async function resolveZatcaContext(input: {
     isDeleted: zatcaEnvironments.isDeleted,
   }).from(zatcaEnvironments).where(and(
     eq(zatcaEnvironments.orgId, user.orgId),
-  )).then((rows) => rows.find((row) => normalizeEnvironment(row.name) === environment) ?? null);
+  )).then((rows: Array<{ name: string }>) => rows.find((row: { name: string }) => normalizeEnvironment(row.name) === environment) ?? null);
 
   const posUnit = journal.zatcaPosUnitId == null
     ? null
-    : await db.query.zatcaPosUnits.findFirst({
+    : await client.query.zatcaPosUnits.findFirst({
         where: and(
           eq(zatcaPosUnits.id, journal.zatcaPosUnitId),
           eq(zatcaPosUnits.orgId, user.orgId),
@@ -456,7 +459,7 @@ export async function resolveZatcaContext(input: {
 
   const egs = journal.zatcaPosUnitId == null || environmentRow == null
     ? []
-    : await db.query.zatcaDevices.findMany({
+    : await client.query.zatcaDevices.findMany({
         where: and(
           eq(zatcaDevices.orgId, user.orgId),
           eq(zatcaDevices.posUnitId, journal.zatcaPosUnitId),
@@ -481,7 +484,7 @@ export async function resolveZatcaContext(input: {
 
   const groupJournals = journal.zatcaPosUnitId == null
     ? []
-    : await db.query.documentJournals.findMany({
+    : await client.query.documentJournals.findMany({
         where: and(
           eq(documentJournals.orgId, user.orgId),
           eq(documentJournals.zatcaPosUnitId, journal.zatcaPosUnitId),
@@ -497,7 +500,7 @@ export async function resolveZatcaContext(input: {
       });
 
   const csid = egs.length === 1 && egs[0]!.currentCsidId != null
-    ? await db.query.zatcaCsid.findFirst({
+     ? await client.query.zatcaCsid.findFirst({
         where: and(
           eq(zatcaCsid.id, egs[0]!.currentCsidId),
           eq(zatcaCsid.orgId, user.orgId),
@@ -517,7 +520,7 @@ export async function resolveZatcaContext(input: {
       : null;
   const certificate = csid?.certificateId == null
     ? null
-      : await db.query.zatcaCertificates.findFirst({
+       : await client.query.zatcaCertificates.findFirst({
         where: and(
           eq(zatcaCertificates.id, csid.certificateId),
           eq(zatcaCertificates.orgId, user.orgId),

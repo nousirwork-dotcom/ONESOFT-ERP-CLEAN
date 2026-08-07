@@ -7,7 +7,7 @@ import {
   type InvoiceData,
 } from '@talha7k/zatca';
 
-type InvoiceItemInput = {
+export type InvoiceItemInput = {
   id: number;
   productName: string | null;
   quantity: string | number | null;
@@ -19,7 +19,7 @@ type InvoiceItemInput = {
   discountAmount: string | number | null;
 };
 
-type InvoiceInput = {
+export type InvoiceInput = {
   invoiceNumber: string;
   invoiceType: string;
   invoiceDate: Date | string | null;

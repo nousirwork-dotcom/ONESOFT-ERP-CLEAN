@@ -1,5 +1,7 @@
 export const ZATCA_LIFECYCLE_STATES = [
   'ready_to_submit',
+  'reporting_pending',
+  'clearance_pending',
   'submitting',
   'submitted_pending',
   'cleared',
@@ -36,6 +38,8 @@ export const UNCERTAIN_ZATCA_STATES: readonly ZatcaLifecycleState[] = [
 
 const ALLOWED_ZATCA_TRANSITIONS: Readonly<Record<ZatcaLifecycleState, readonly ZatcaLifecycleState[]>> = {
   ready_to_submit: ['submitting', 'retry_pending'],
+  reporting_pending: ['submitting', 'retry_pending'],
+  clearance_pending: ['submitting', 'retry_pending'],
   submitting: ['submitted_pending', 'cleared', 'reported', 'accepted_with_warnings', 'rejected', 'connection_issue', 'uncertain'],
   submitted_pending: ['retry_pending', 'cleared', 'reported', 'accepted_with_warnings', 'rejected', 'uncertain'],
   cleared: [],

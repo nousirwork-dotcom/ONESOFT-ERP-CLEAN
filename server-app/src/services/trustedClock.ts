@@ -456,6 +456,7 @@ export async function reserveTrustedIssuance(input: {
   existingInvoiceCounter?: number | null;
   invoiceCreatedAt?: Date | string | null;
   requestedWallTime?: Date;
+  tx?: any;
 }): Promise<TrustedIssuance> {
   const unitKey = key(input.orgId, input.posUnitId);
   const baseline = processBaselines.get(unitKey);
@@ -467,7 +468,7 @@ export async function reserveTrustedIssuance(input: {
   processBaselines.set(unitKey, { wall: wallNow.getTime(), monotonic: monotonicNow });
   const remoteTime = await fetchTrustedNetworkTime();
 
-  return db.transaction(async (tx) => {
+  const run = async (tx: any): Promise<TrustedIssuance> => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${unitKey}, 0))`);
     // Lock the invoice row in the same transaction as the POS clock state.
     // Two concurrent submissions must observe the same immutable timestamp.
@@ -732,7 +733,8 @@ export async function reserveTrustedIssuance(input: {
       metadata: { source: evaluation.source, issueDate, issueTime },
     });
     return { timestamp, source: evaluation.source, status: evaluation.status };
-  });
+  };
+  return input.tx ? run(input.tx) : db.transaction(run);
 }
 
 export async function commitTrustedIssuance(input: {
@@ -742,13 +744,15 @@ export async function commitTrustedIssuance(input: {
   invoiceHash: string;
   invoiceUuid: string;
   lastPih: string | null;
+  tx?: any;
 }): Promise<void> {
-  const [state] = await db.select().from(zatcaClockStates).where(and(
+  const client = input.tx ?? db;
+  const [state] = await client.select().from(zatcaClockStates).where(and(
     eq(zatcaClockStates.orgId, input.orgId),
     eq(zatcaClockStates.posUnitId, input.posUnitId),
   )).limit(1);
   if (!state) return;
-  await db.update(zatcaClockStates).set({
+  await client.update(zatcaClockStates).set({
     lastInvoiceCounter: input.invoiceCounter,
     lastInvoiceHash: input.invoiceHash,
     lastInvoiceUuid: input.invoiceUuid,

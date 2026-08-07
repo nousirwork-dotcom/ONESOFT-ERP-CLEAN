@@ -2189,6 +2189,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
               {(() => {
                 const statusMap: Record<string, { label: string; color: string; bg: string; icon: string }> = {
                   not_submitted: { label: "لم تُرسَل للهيئة بعد",   color: "#6b7280", bg: "#f3f4f6", icon: "📭" },
+                  reporting_pending: { label: "تم الإصدار محليًا — بانتظار الإبلاغ", color: "#2563eb", bg: "#dbeafe", icon: "🧾" },
+                  clearance_pending: { label: "تم الإصدار محليًا — بانتظار التخليص", color: "#2563eb", bg: "#dbeafe", icon: "🧾" },
                   pending:       { label: "في انتظار معالجة الهيئة", color: "#d97706", bg: "#fef3c7", icon: "⏳" },
                   cleared:       { label: "مُخلَّصة من الهيئة ✓",   color: "#16a34a", bg: "#dcfce7", icon: "✅" },
                   reported:      { label: "مُبلَّغة للهيئة",         color: "#0ea5e9", bg: "#e0f2fe", icon: "📤" },

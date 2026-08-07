@@ -53,6 +53,13 @@ describe('ZATCA submission lifecycle', () => {
     expect(canTransitionZatcaState('not_submitted', 'cleared')).toBe(false);
   });
 
+  it('allows locally issued reporting and clearance snapshots to enter submission', () => {
+    expect(canTransitionZatcaState('reporting_pending', 'submitting')).toBe(true);
+    expect(canTransitionZatcaState('clearance_pending', 'submitting')).toBe(true);
+    expect(isFinalZatcaState('reporting_pending')).toBe(false);
+    expect(isFinalZatcaState('clearance_pending')).toBe(false);
+  });
+
   it('maps accepted outcomes to the operation-specific final state', () => {
     expect(finalStateFor('clearance', 'accepted')).toBe('cleared');
     expect(finalStateFor('reporting', 'accepted')).toBe('reported');
