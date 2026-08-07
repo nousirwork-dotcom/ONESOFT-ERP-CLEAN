@@ -6,7 +6,10 @@ import {
   extractComplianceRequestId,
   getFatooraUrl,
 } from '../services/zatcaFatooraSimulation.js';
-import { getZatcaInvoiceTypeCode } from '../services/zatcaInvoiceSubmission.js';
+import {
+  extractEmbeddedQrCode,
+  getZatcaInvoiceTypeCode,
+} from '../services/zatcaInvoiceSubmission.js';
 
 describe('ZATCA Simulation / Production parity guardrails', () => {
   it('keeps official environment URLs separate without making a request', () => {
@@ -39,6 +42,21 @@ describe('ZATCA Simulation / Production parity guardrails', () => {
     expect(getZatcaInvoiceTypeCode('return')).toBe('381');
     expect(getZatcaInvoiceTypeCode('credit_note')).toBe('381');
     expect(getZatcaInvoiceTypeCode('debit_note')).toBe('383');
+  });
+
+  it('reads the Phase 2 QR snapshot from the signed XML, not from mutable settings', () => {
+    const qr = 'PHASE2_TLV_BASE64';
+    const signedXml = `<Invoice>
+      <cac:AdditionalDocumentReference>
+        <cbc:ID>QR</cbc:ID>
+        <cac:Attachment>
+          <cbc:EmbeddedDocumentBinaryObject mimeCode="text/plain">${qr}</cbc:EmbeddedDocumentBinaryObject>
+        </cac:Attachment>
+      </cac:AdditionalDocumentReference>
+      <cac:Signature>signed</cac:Signature>
+    </Invoice>`;
+    expect(extractEmbeddedQrCode(signedXml)).toBe(qr);
+    expect(() => extractEmbeddedQrCode('<Invoice />')).toThrow();
   });
 
   it('does not silently route Production invoice submission through Sandbox', () => {

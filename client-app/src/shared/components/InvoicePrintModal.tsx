@@ -27,12 +27,16 @@ interface InvoicePrintModalProps {
   data:            PrintInvoiceData;
   qrSettings?:     QrSettings | null;
   templateConfig?: DocTemplateConfig | null;
+  /** Base64 TLV QR extracted from the signed Phase 2 XML snapshot. */
+  zatcaQrCode?: string | null;
+  /** True when the invoice journal is linked to a ZATCA POS unit. */
+  zatcaPhase2?: boolean;
   docType?:        "sales_invoice" | "sales_return" | "credit_note" | "debit_note" | "purchase_invoice" | "purchase_order" | "purchase_return";
 }
 
 /* ═══════════════════ Component ═══════════════════ */
 export default function InvoicePrintModal({
-  open, onClose, data, qrSettings, templateConfig, docType = "sales_invoice",
+  open, onClose, data, qrSettings, templateConfig, zatcaQrCode, zatcaPhase2 = false, docType = "sales_invoice",
 }: InvoicePrintModalProps) {
   const [qrDataUrl, setQrDataUrl] = useState("");
 
@@ -63,6 +67,8 @@ export default function InvoicePrintModal({
     data.customerTaxNumber ?? "",
     data.grandTotal,
     data.taxTotal,
+    zatcaQrCode ?? "",
+    zatcaPhase2 ? "1" : "0",
   ].join("|");
 
   /* ── حل QR عبر QRCodeService ── */
@@ -87,7 +93,7 @@ export default function InvoicePrintModal({
       buyerTaxNumber:  data.customerTaxNumber,
     };
 
-    QRCodeService.resolveForInvoice(qrSettings, invoiceData, docType)
+    QRCodeService.resolveForInvoice(qrSettings, invoiceData, docType, zatcaQrCode, zatcaPhase2)
       .then(result => {
         if (!cancelled) setQrDataUrl(result.show ? result.dataUrl : "");
       })

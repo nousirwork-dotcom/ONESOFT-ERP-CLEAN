@@ -76,6 +76,8 @@ export const QRCodeService = {
       | "purchase_order"
       | "purchase_return"
       | "receipt_voucher" = "sales_invoice",
+    phase2Snapshot?: string | null,
+    phase2Invoice = false,
   ): Promise<{ dataUrl: string; content: string; label: string; size: number; show: boolean }> {
     if (!settings?.isEnabled) {
       return { dataUrl: "", content: "", label: "", size: 100, show: false };
@@ -96,11 +98,20 @@ export const QRCodeService = {
       settings.countrySystem === "zatca" ? "ZATCA QR" :
       settings.countrySystem === "eta"   ? "ETA QR"   : "QR Code";
 
-    const content = generateQrContent(
-      settings.countrySystem,
-      invoiceData,
-      settings.customFormat,
-    );
+    if (settings.countrySystem === "zatca" && phase2Invoice && !phase2Snapshot?.trim()) {
+      // A linked Phase 2 invoice must not silently print a legacy Tags 1–5 QR.
+      return { dataUrl: "", content: "", label, size: 100, show: false };
+    }
+
+    // For a Phase 2 ZATCA invoice the signed XML snapshot is authoritative.
+    // Never rebuild it from current company/invoice settings.
+    const content = settings.countrySystem === "zatca" && phase2Snapshot?.trim()
+      ? phase2Snapshot.trim()
+      : generateQrContent(
+          settings.countrySystem,
+          invoiceData,
+          settings.customFormat,
+        );
 
     // الحجم النهائي يحدده قالب الطباعة؛ هذا الحجم الداخلي ثابت للتوليد فقط.
     const size    = 100;

@@ -3209,10 +3209,28 @@ export const zatcaRouter = router({
           zatcaSubmittedAt: true,
           zatcaAttemptCount: true,
           zatcaRejectionReason: true,
+          journalId: true,
         },
       });
       if (!inv) throw new Error('Invoice not found');
-      return inv;
+      const journal = inv.journalId
+        ? await db.query.documentJournals.findFirst({
+            where: and(
+              eq(documentJournals.id, inv.journalId),
+              eq(documentJournals.orgId, ctx.user.orgId),
+            ),
+            columns: { zatcaPosUnitId: true },
+          })
+        : null;
+      return {
+        ...inv,
+        // A linked journal is the Phase 2 route. Once a signed snapshot exists,
+        // the stored QR remains authoritative even if the unit is later changed.
+        zatcaPhase2: Boolean(
+          journal?.zatcaPosUnitId
+          || (inv.zatcaQrCode && inv.zatcaXml && inv.zatcaHash),
+        ),
+      };
     }),
 
   // ── إرسال ومتابعة فاتورة للهيئة ───────────────────────────────────────────
@@ -3568,6 +3586,24 @@ export const zatcaRouter = router({
           updatedBy: ctx.user.id,
         }).where(eq(zatcaInvoiceTransactions.id, transactionId));
 
+        // Persist the complete signed snapshot before the authority request.
+        // A timeout/rejection must not force a later print to rebuild QR from
+        // current company settings.
+        await db.update(salesInvoices).set({
+          zatcaUuid: uuid,
+          zatcaInvoiceCounter: icv,
+          zatcaHash: signed.invoiceHash,
+          zatcaQrCode: signed.qrCode,
+          zatcaXml: signed.signedXml,
+          zatcaStatus: 'submitting',
+          zatcaSubmittedAt: inv.zatcaSubmittedAt ?? now,
+          zatcaAttemptCount: attemptCount,
+          updatedAt: now,
+        }).where(and(
+          eq(salesInvoices.id, input.invoiceId),
+          eq(salesInvoices.orgId, ctx.user.orgId),
+        ));
+
         const authorityResponse = await postFatoora({
           environment: 'simulation',
           apiPath: operation === 'clearance'
@@ -3635,6 +3671,7 @@ export const zatcaRouter = router({
         await db.update(salesInvoices).set({
           zatcaUuid: uuid,
           zatcaHash: signed.invoiceHash,
+          zatcaQrCode: signed.qrCode,
           zatcaXml: signed.signedXml,
           zatcaStatus: nextState,
           zatcaResponse: responsePayload,

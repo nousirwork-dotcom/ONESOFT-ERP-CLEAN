@@ -330,7 +330,26 @@ export const salesRouter = router({
         warehouseName = wh?.name ?? null;
       }
 
-      return { ...invoice, warehouseName, items };
+      const journal = invoice.journalId
+        ? await db.query.documentJournals.findFirst({
+            where: and(
+              eq(documentJournals.id, invoice.journalId),
+              eq(documentJournals.orgId, ctx.user.orgId),
+            ),
+            columns: { zatcaPosUnitId: true },
+          })
+        : null;
+
+      return {
+        ...invoice,
+        warehouseName,
+        items,
+        // A journal linked to a POS unit is the Phase 2 printing boundary.
+        zatcaPhase2: Boolean(
+          journal?.zatcaPosUnitId
+          || (invoice.zatcaQrCode && invoice.zatcaXml && invoice.zatcaHash),
+        ),
+      };
     }),
 
   // إنشاء فاتورة/عرض سعر

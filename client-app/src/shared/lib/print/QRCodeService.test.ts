@@ -49,4 +49,44 @@ describe("QRCodeService invoice output", () => {
     expect(result.show).toBe(false);
     expect(result.dataUrl).toBe("");
   });
+
+  it("uses the immutable Phase 2 snapshot instead of rebuilding legacy Tags 1–5", async () => {
+    const snapshot = "PHASE2_SIGNED_XML_QR_TLV";
+    const result = await QRCodeService.resolveForInvoice(
+      {
+        isEnabled: true,
+        countrySystem: "zatca",
+        showOnSalesInvoice: true,
+        showOnPurchaseInvoice: false,
+        showOnReceiptVoucher: false,
+      },
+      invoiceData,
+      "sales_invoice",
+      snapshot,
+      true,
+    );
+
+    expect(result.show).toBe(true);
+    expect(result.content).toBe(snapshot);
+    expect(result.dataUrl).toMatch(/^data:image\/png;base64,/);
+  });
+
+  it("does not fall back to a legacy QR for a Phase 2 invoice without a snapshot", async () => {
+    const result = await QRCodeService.resolveForInvoice(
+      {
+        isEnabled: true,
+        countrySystem: "zatca",
+        showOnSalesInvoice: true,
+        showOnPurchaseInvoice: false,
+        showOnReceiptVoucher: false,
+      },
+      invoiceData,
+      "sales_invoice",
+      null,
+      true,
+    );
+
+    expect(result.show).toBe(false);
+    expect(result.dataUrl).toBe("");
+  });
 });

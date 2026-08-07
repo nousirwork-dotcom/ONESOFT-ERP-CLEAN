@@ -25,14 +25,13 @@ import PostingPreviewModal from "@/shared/components/PostingPreviewModal";
 import InvoicePrintModal from "@/shared/components/InvoicePrintModal";
 import SendDocumentPanel from "@/shared/components/SendDocumentPanel";
 import PaymentModal from "@/shared/components/PaymentModal";
-import { PrintEngine } from "@/shared/lib/print";
+import { PrintEngine, QRCodeService } from "@/shared/lib/print";
 import { usePrintTemplate } from "@/shared/hooks/usePrintTemplate";
 import { DateSegmentInput } from "@/shared/components/DateSegmentInput";
 import ProductLookupCell, { type ProductLookupOption } from "@/shared/components/ProductLookupCell";
 import BasedOnDocInput from "@/shared/components/BasedOnDocInput";
 import ContextSelectInput from "@/shared/components/ContextSelectInput";
 import { InvoiceTableColgroup } from "@/components/responsive-layout";
-import QRCode from "qrcode";
 import styles from "@/components/responsive-layout/ResponsiveLayout.module.css";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -286,6 +285,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
   const [customerTaxNumber, setCustomerTaxNumber] = useState("");
   const [sellerLegalNameSnapshot, setSellerLegalNameSnapshot] = useState("");
   const [sellerTaxNumberSnapshot, setSellerTaxNumberSnapshot] = useState("");
+  const [zatcaQrCodeSnapshot, setZatcaQrCodeSnapshot] = useState("");
+  const [zatcaPhase2, setZatcaPhase2] = useState(false);
 
   // ── Add Customer Modal ────────────────────────────────────────────────────
   const [showAddCustomer, setShowAddCustomer] = useState(false);
@@ -354,10 +355,15 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
   const currentInvId          = navInvoiceId ?? savedInvoiceId;
   const zatcaQuery            = trpc.zatca.getInvoiceZatca.useQuery(
     { invoiceId: currentInvId! },
-    { enabled: !!currentInvId && activeMainTab === "zatca" }
+    { enabled: !!currentInvId }
   );
   const zatcaSubmitMut        = trpc.zatca.submitInvoice.useMutation({
-    onSuccess: (r) => { toast.success(r.message ?? "تم"); zatcaQuery.refetch(); },
+    onSuccess: async (r) => {
+      toast.success(r.message ?? "تم");
+      const refreshed = await zatcaQuery.refetch();
+      const snapshot = refreshed.data?.zatcaQrCode ?? "";
+      if (snapshot) setZatcaQrCodeSnapshot(snapshot);
+    },
     onError:   (e) => toast.error(e.message),
   });
   const stockQuery       = trpc.reports.stockByWarehouse.useQuery(
@@ -527,6 +533,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
     setCustomerTaxNumber(inv.customerTaxNumber ?? "");
     setSellerLegalNameSnapshot((inv as any).sellerLegalName ?? "");
     setSellerTaxNumberSnapshot((inv as any).sellerTaxNumber ?? "");
+    setZatcaQrCodeSnapshot((inv as any).zatcaQrCode ?? "");
+    setZatcaPhase2(Boolean((inv as any).zatcaPhase2));
     setWarehouseId(inv.warehouseId ?? null);
     setWarehouseDisplayName(inv.warehouseName ?? "");
     setJournalId(inv.journalId ?? null);
@@ -573,6 +581,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
         setSellerLegalNameSnapshot("");
         setSellerTaxNumberSnapshot("");
       }
+      setZatcaQrCodeSnapshot((data as any).zatcaQrCode ?? "");
+      setZatcaPhase2(Boolean((data as any).zatcaPhase2));
       setErpMode("view");
       // رسالة النجاح تُعرض هنا فقط للحفظ المباشر (آجل)؛ أما عند التأكيد من شاشة الدفع فالنافذة تُعرضها.
       if (!skipSaveToast.current) {
@@ -593,6 +603,10 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
       if (data.id) {
         pendingCreatePayloadRef.current = null;
       }
+      const savedJournal = (journalsQuery.data ?? []).find((journal: any) =>
+        journal.id === ((data as any).journalId ?? journalId),
+      );
+      setZatcaPhase2(Boolean(savedJournal?.zatcaPosUnitId));
     },
     onError: (e) => {
       skipSaveToast.current = false;
@@ -1427,6 +1441,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
     setNavInvoiceId(null);
     setSellerLegalNameSnapshot("");
     setSellerTaxNumberSnapshot("");
+    setZatcaQrCodeSnapshot("");
+    setZatcaPhase2(false);
     setIsPosted(false);
     setShowPostingPreview(false);
     setErpMode("new");
@@ -1461,6 +1477,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
     setCustomerTaxNumber("");
     setSellerLegalNameSnapshot("");
     setSellerTaxNumberSnapshot("");
+    setZatcaQrCodeSnapshot("");
+    setZatcaPhase2(false);
     setWarehouseId(null);
     setPaymentType("cash");
     setBasedOnType('');
@@ -1520,26 +1538,29 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
         toast.error(sellerSnapshotWarning);
         return;
       }
-      const qrEnabled = !!(qrSettingsQuery.data?.isEnabled && qrSettingsQuery.data?.showOnSalesInvoice);
-      let qrDataUrl = "";
-      if (qrEnabled) {
-        const { generateQrContent } = await import("@/shared/lib/qrUtils");
-        const content = generateQrContent(
-          qrSettingsQuery.data!.countrySystem as any,
-          {
-            sellerName: effectiveSellerLegalName,
-            taxNumber: effectiveSellerTaxNumber,
-            invoiceDateTime: `${invoiceDate}T${new Date().toTimeString().slice(0,8)}`,
-            totalAmount: netTotal, vatAmount: totalTax,
-            invoiceNumber: invoiceNumber,
-            buyerName: customerName, buyerTaxNumber: customerTaxNumber,
-          } as any,
-          qrSettingsQuery.data?.customFormat ?? undefined,
-        );
-        if (content) {
-          qrDataUrl = await QRCode.toDataURL(content, { width: 200, margin: 1 }).catch(() => "");
-        }
-      }
+      const qrResult = await QRCodeService.resolveForInvoice(
+        qrSettingsQuery.data ? {
+          isEnabled: qrSettingsQuery.data.isEnabled,
+          countrySystem: qrSettingsQuery.data.countrySystem as any,
+          customFormat: qrSettingsQuery.data.customFormat ?? undefined,
+          showOnSalesInvoice: qrSettingsQuery.data.showOnSalesInvoice,
+          showOnPurchaseInvoice: qrSettingsQuery.data.showOnPurchaseInvoice,
+          showOnReceiptVoucher: qrSettingsQuery.data.showOnReceiptVoucher,
+        } : null,
+        {
+          sellerName: effectiveSellerLegalName,
+          taxNumber: effectiveSellerTaxNumber,
+          invoiceDateTime: `${invoiceDate}T${new Date().toTimeString().slice(0,8)}`,
+          totalAmount: netTotal,
+          vatAmount: totalTax,
+          invoiceNumber,
+          buyerName: customerName,
+          buyerTaxNumber: customerTaxNumber,
+        },
+        "sales_invoice",
+        zatcaQrCodeSnapshot,
+        zatcaPhase2,
+      );
       const ok = PrintEngine.buildAndPrint({
         documentType: "sales_invoice",
         data: {
@@ -1584,7 +1605,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
           sellerPhone: String(orgQuery.data?.phone ?? "") || undefined,
         },
         templateConfig,
-        qrDataUrl: qrDataUrl || undefined,
+         qrDataUrl: qrResult.dataUrl || undefined,
         qrLabel: qrSettingsQuery.data?.countrySystem === "zatca" ? "ZATCA QR"
           : qrSettingsQuery.data?.countrySystem === "eta" ? "ETA QR" : "QR Code",
          qrSize: 100,
@@ -1596,7 +1617,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
   }, [invoiceNumber, invoiceDate, customerName, customerCode, customerTaxNumber, sellerUserId, salespersonsQuery.data,
       paymentType, currency, notes, lines, subtotal, totalDiscount, totalTax, netTotal,
       paidAmount, remainingAmount, effectiveSellerLegalName, effectiveSellerTaxNumber,
-      canUseSellerIdentityForPrint, sellerSnapshotWarning, orgQuery.data, qrSettingsQuery.data, templateConfig]);
+       canUseSellerIdentityForPrint, sellerSnapshotWarning, orgQuery.data, qrSettingsQuery.data, templateConfig, zatcaQrCodeSnapshot, zatcaPhase2]);
 
   // ── Unified Toolbar ──────────────────────────────────────────────────────────
   const _sipRef = useRef<any>({});
@@ -2799,6 +2820,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
           open={showPrintModal}
           onClose={() => setShowPrintModal(false)}
           templateConfig={templateConfig}
+           zatcaQrCode={zatcaQrCodeSnapshot || (zatcaQuery.data?.zatcaQrCode ?? "")}
+           zatcaPhase2={zatcaPhase2}
           qrSettings={qrSettingsQuery.data ? {
             isEnabled: qrSettingsQuery.data.isEnabled,
             countrySystem: qrSettingsQuery.data.countrySystem as any,

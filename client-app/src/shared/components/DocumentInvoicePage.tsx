@@ -233,6 +233,8 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   const [partyName, setPartyName]                     = useState("");
   const [sellerLegalNameSnapshot, setSellerLegalNameSnapshot] = useState("");
   const [sellerTaxNumberSnapshot, setSellerTaxNumberSnapshot] = useState("");
+  const [zatcaQrCodeSnapshot, setZatcaQrCodeSnapshot] = useState("");
+  const [zatcaPhase2, setZatcaPhase2] = useState(false);
   const [supplierInvoiceNumber, setSupplierInvoiceNumber] = useState("");
   const [branchId, setBranchId]                         = useState<number | null>(null);
   const [warehouseId, setWarehouseId]                 = useState<number | null>(null);
@@ -467,6 +469,8 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     setPartyName(inv.customerName ?? inv.supplierName ?? "");
     setSellerLegalNameSnapshot(config.docCategory === "sales" ? (inv.sellerLegalName ?? "") : "");
     setSellerTaxNumberSnapshot(config.docCategory === "sales" ? (inv.sellerTaxNumber ?? "") : "");
+    setZatcaQrCodeSnapshot(config.docCategory === "sales" ? (inv.zatcaQrCode ?? "") : "");
+    setZatcaPhase2(config.docCategory === "sales" && Boolean(inv.zatcaPhase2));
     setSupplierInvoiceNumber(inv.supplierInvoiceNumber || "");
     setWarehouseId(inv.warehouseId ?? null);
     setBranchId(
@@ -628,6 +632,11 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
         setSellerTaxNumberSnapshot("");
       }
       setIsPosted(autoPosted);
+      const savedJournal = (journalsQuery.data ?? []).find((journal: any) =>
+        journal.id === ((data as any).journalId ?? journalId),
+      );
+      setZatcaPhase2(config.docCategory === "sales" && Boolean(savedJournal?.zatcaPosUnitId));
+      setZatcaQrCodeSnapshot((data as any).zatcaQrCode ?? "");
       setErpMode("view");
       pendingNavRef.current?.();
       pendingNavRef.current = null;
@@ -1106,6 +1115,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     if (!savedInvoiceId) { toast.warning("لا يوجد مستند محفوظ للنسخ — احفظ أولاً"); return; }
     setSavedInvoiceId(null); setNavInvoiceId(null); setIsPosted(false); setDocumentStatus("draft"); setShowPostingPreview(false);
     setSellerLegalNameSnapshot(""); setSellerTaxNumberSnapshot("");
+    setZatcaQrCodeSnapshot(""); setZatcaPhase2(false);
     setErpMode("new");
     setBasedOnType(""); setBasedOnNum(""); setBasedOnTrigger("");
     setPaidAmountOverride("");
@@ -1126,6 +1136,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     setErpMode("new"); setJournalWarehouseId(null);
     setSavedInvoiceId(null); setNavInvoiceId(null); setIsPosted(false); setDocumentStatus("draft"); setShowPostingPreview(false);
     setSellerLegalNameSnapshot(""); setSellerTaxNumberSnapshot("");
+    setZatcaQrCodeSnapshot(""); setZatcaPhase2(false);
     if (journalId) {
       utils.documentJournals.previewNextNumber.fetch({ journalId }).then(p => {
         if (p) setInvoiceNumber(p);
@@ -2189,6 +2200,8 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
             showOnReceiptVoucher: qrSettingsQuery.data.showOnReceiptVoucher,
             qrSize: 100,
           } : null}
+           zatcaQrCode={zatcaQrCodeSnapshot}
+           zatcaPhase2={zatcaPhase2}
           data={{
             invoiceNumber: invoiceNumber || "—",
             invoiceDate,

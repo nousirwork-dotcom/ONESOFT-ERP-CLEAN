@@ -77,9 +77,25 @@ export type SignedInvoiceSubmission = {
   unsignedXml: string;
   signedXml: string;
   invoiceHash: string;
+  /** Phase 2 TLV content embedded in the same signed XML as the QR reference. */
+  qrCode: string;
   signatureValue: string;
   invoiceBase64: string;
 };
+
+/**
+ * Reads the QR payload from the signed document instead of rebuilding it from
+ * mutable invoice/company settings. This keeps printed QR, XML, hash, and
+ * signature tied to one immutable document snapshot.
+ */
+export function extractEmbeddedQrCode(signedXml: string): string {
+  const match = signedXml.match(
+    /<cac:AdditionalDocumentReference>\s*<cbc:ID>QR<\/cbc:ID>\s*<cac:Attachment>\s*<cbc:EmbeddedDocumentBinaryObject\b[^>]*>([^<]+)<\/cbc:EmbeddedDocumentBinaryObject>\s*<\/cac:Attachment>\s*<\/cac:AdditionalDocumentReference>/i,
+  );
+  const qrCode = match?.[1]?.trim();
+  if (!qrCode) throw new Error('لم يتم العثور على QR المرحلة الثانية داخل XML الموقّع');
+  return qrCode;
+}
 
 function numberValue(value: string | number | null | undefined): number {
   const parsed = Number(value ?? 0);
@@ -249,6 +265,7 @@ export function buildAndSignZatcaInvoice(
     unsignedXml,
     signedXml: signed.signedXml,
     invoiceHash: signed.invoiceHash,
+    qrCode: extractEmbeddedQrCode(signed.signedXml),
     signatureValue: signed.signatureValue,
     invoiceBase64: Buffer.from(signed.signedXml, 'utf8').toString('base64'),
   };
