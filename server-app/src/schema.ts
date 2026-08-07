@@ -408,6 +408,10 @@ export const salesInvoices = pgTable('sales_invoices', {
   zatcaResponse: jsonb('zatca_response'),
   zatcaInvoiceCounter: integer('zatca_invoice_counter'),
   zatcaPih: varchar('zatca_pih', { length: 256 }),
+  // Immutable electronic issuance timestamp. The commercial invoiceDate stays
+  // editable according to ERP rules; this value is assigned only by the
+  // TrustedClock at the first ZATCA issuance.
+  zatcaIssueTimestamp: timestamp('zatca_issue_timestamp'),
   zatcaSubmittedAt: timestamp('zatca_submitted_at'),
   zatcaAttemptCount: integer('zatca_attempt_count').notNull().default(0),
   zatcaRejectionReason: text('zatca_rejection_reason'),
@@ -1212,6 +1216,51 @@ export const zatcaLogs = pgTable('zatca_logs', {
   createdAt:       timestamp('created_at').notNull().defaultNow(),
 });
 
+// ─── ZATCA Trusted Clock state ───────────────────────────────────────────────
+// One independent clock/chain state per POS/EGS unit. Existing invoices are
+// intentionally not backfilled into this table.
+export const zatcaClockStates = pgTable('zatca_clock_states', {
+  id:                    serial('id').primaryKey(),
+  orgId:                 integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  posUnitId:             integer('pos_unit_id').notNull().references(() => zatcaPosUnits.id, { onDelete: 'cascade' }),
+  lastTrustedTime:       timestamp('last_trusted_time'),
+  lastTrustedTimeSource: varchar('last_trusted_time_source', { length: 30 }),
+  lastTrustedTimeCheckedAt: timestamp('last_trusted_time_checked_at'),
+  clockStatus:           varchar('clock_status', { length: 20 }).notNull().default('stale'),
+  lastObservedWallTime:  timestamp('last_observed_wall_time'),
+  lastIssuedAt:          timestamp('last_issued_at'),
+  lastIssueDate:         varchar('last_issue_date', { length: 10 }),
+  lastIssueTime:         varchar('last_issue_time', { length: 8 }),
+  lastInvoiceCounter:    integer('last_invoice_counter'),
+  lastInvoiceHash:       varchar('last_invoice_hash', { length: 256 }),
+  lastInvoiceUuid:       varchar('last_invoice_uuid', { length: 100 }),
+  createdAt:             timestamp('created_at').notNull().defaultNow(),
+  updatedAt:             timestamp('updated_at').notNull().defaultNow(),
+}, (t) => ({
+  orgPosUnitUnique: uniqueIndex('zatca_clock_states_org_pos_unit_uidx').on(t.orgId, t.posUnitId),
+}));
+
+export const zatcaClockEvents = pgTable('zatca_clock_events', {
+  id:                    serial('id').primaryKey(),
+  orgId:                 integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  posUnitId:             integer('pos_unit_id').notNull().references(() => zatcaPosUnits.id, { onDelete: 'cascade' }),
+  invoiceId:             integer('invoice_id').references(() => salesInvoices.id, { onDelete: 'set null' }),
+  userId:                integer('user_id').references(() => users.id, { onDelete: 'set null' }),
+  eventType:             varchar('event_type', { length: 40 }).notNull(),
+  clockStatus:           varchar('clock_status', { length: 20 }).notNull(),
+  detectedSystemTime:    timestamp('detected_system_time'),
+  trustedTime:           timestamp('trusted_time'),
+  lastIssuedAt:          timestamp('last_issued_at'),
+  reason:                text('reason'),
+  metadata:              jsonb('metadata'),
+  detectedAt:            timestamp('detected_at').notNull().defaultNow(),
+});
+
+export const zatcaClockPolicy = pgTable('zatca_clock_policy', {
+  id:          integer('id').primaryKey().default(1),
+  activatedAt: timestamp('activated_at').notNull().defaultNow(),
+});
+
 // ══════════════════════════════════════════════════════════════════════════════
 // ZATCA Database Architecture (0012) — 14 جدولاً
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1474,6 +1523,7 @@ export const zatcaInvoiceTransactions = pgTable('zatca_invoice_transactions', {
   submissionDate:  timestamp('submission_date').notNull().defaultNow(),
   invoiceStatus:   varchar('invoice_status', { length: 30 }).notNull().default('pending'),
   invoiceCounter:  integer('invoice_counter'),
+  issuanceTimestamp: timestamp('issuance_timestamp'),
   correlationId:   varchar('correlation_id', { length: 120 }),
   httpStatus:      integer('http_status'),
   responseCode:    varchar('response_code', { length: 50 }),

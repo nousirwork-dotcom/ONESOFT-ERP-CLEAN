@@ -62,6 +62,8 @@ export type BuildSignedInvoiceInput = {
   uuid: string;
   invoiceCounter: number;
   previousInvoiceHash: string;
+  /** Assigned once by TrustedClock; never derived from commercial invoiceDate. */
+  issuanceTimestamp: Date | string;
   submissionType: 'reporting' | 'clearance';
   profileIdOverride?: 'reporting:1.0' | 'clearance:1.0';
   privateKeyPem: string;
@@ -148,7 +150,7 @@ export function buildAndSignZatcaInvoice(
   assertSeller(input.seller);
   if (!input.privateKeyPem.trim()) throw new Error('المفتاح الخاص غير متوفر داخليًا');
 
-  const { date, time, iso } = dateParts(input.invoice.invoiceDate);
+  const { date, time, iso } = dateParts(input.issuanceTimestamp);
   const currency = input.invoice.currency || 'SAR';
   if (currency !== 'SAR') throw new Error('عملة الفاتورة الرسمية يجب أن تكون SAR');
 

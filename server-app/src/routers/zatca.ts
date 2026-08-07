@@ -63,6 +63,12 @@ import {
   extractComplianceRequestId,
 } from '../services/zatcaFatooraSimulation.js';
 import { buildAndSignZatcaInvoice } from '../services/zatcaInvoiceSubmission.js';
+import {
+  commitTrustedIssuance,
+  reserveTrustedIssuance,
+  trustedTimeForIsolatedFixture,
+  TrustedClockError,
+} from '../services/trustedClock.js';
 import { decrypt, encrypt } from '../config-crypto.js';
 import { DEFAULT_COMPLIANCE_PREVIOUS_INVOICE_HASH, normalizeZatcaPostalCode } from '@talha7k/zatca';
 
@@ -2549,6 +2555,7 @@ export const zatcaRouter = router({
              : 1;
            let signed: ReturnType<typeof buildAndSignZatcaInvoice>;
           try {
+             const fixtureClock = await trustedTimeForIsolatedFixture();
              signed = buildAndSignZatcaInvoice({
               invoice: submissionInvoice,
               items,
@@ -2571,6 +2578,7 @@ export const zatcaRouter = router({
               uuid,
                invoiceCounter,
                previousInvoiceHash: submissionInvoice.zatcaPih ?? '',
+               issuanceTimestamp: fixtureClock.timestamp,
               submissionType: invoiceType === 'standard' ? 'clearance' : 'reporting',
                profileIdOverride: isStandardFixture ? 'reporting:1.0' : undefined,
               privateKeyPem: decrypt(signingKey.privateKeyEncrypted),
@@ -3206,6 +3214,7 @@ export const zatcaRouter = router({
           zatcaResponse: true,
           zatcaInvoiceCounter: true,
           zatcaPih: true,
+          zatcaIssueTimestamp: true,
           zatcaSubmittedAt: true,
           zatcaAttemptCount: true,
           zatcaRejectionReason: true,
@@ -3306,6 +3315,37 @@ export const zatcaRouter = router({
         },
       });
 
+      // Reserve once at the start of final issuance. The returned timestamp is
+      // reused by XML, QR, hashing, signing, and the submission payload.
+      let trustedIssuance;
+      try {
+        trustedIssuance = await reserveTrustedIssuance({
+          orgId: ctx.user.orgId,
+          posUnitId: resolvedContext.posUnit.id,
+          invoiceId: input.invoiceId,
+          userId: ctx.user.id,
+          deviceId: resolvedContext.egs.id,
+          existingIssueTimestamp: inv.zatcaIssueTimestamp,
+          existingInvoiceCounter: inv.zatcaInvoiceCounter ?? existing?.invoiceCounter,
+          invoiceCreatedAt: inv.createdAt,
+        });
+      } catch (error) {
+        if (error instanceof TrustedClockError) {
+          throw new TRPCError({ code: 'PRECONDITION_FAILED', message: error.message });
+        }
+        throw error;
+      }
+      if (!inv.zatcaIssueTimestamp) {
+        await db.update(salesInvoices).set({
+          zatcaIssueTimestamp: trustedIssuance.timestamp,
+          updatedAt: new Date(),
+        }).where(and(
+          eq(salesInvoices.id, input.invoiceId),
+          eq(salesInvoices.orgId, ctx.user.orgId),
+          isNull(salesInvoices.zatcaIssueTimestamp),
+        ));
+      }
+
       const now = new Date();
       let uuid = inv.zatcaUuid ?? existing?.invoiceUuid?.toString() ?? crypto.randomUUID();
       let icv = inv.zatcaInvoiceCounter ?? existing?.invoiceCounter ?? input.invoiceId;
@@ -3329,6 +3369,7 @@ export const zatcaRouter = router({
           invoiceId: input.invoiceId,
           invoiceNumber: inv.invoiceNumber,
           invoiceUuid: uuid,
+          issuanceTimestamp: trustedIssuance.timestamp,
           invoiceCounter: icv,
           submissionType: operation,
           invoiceStatus: 'ready_to_submit',
@@ -3516,48 +3557,62 @@ export const zatcaRouter = router({
 
          let signed: ReturnType<typeof buildAndSignZatcaInvoice>;
         try {
-           signed = buildAndSignZatcaInvoice({
-            invoice: inv,
-            items: await db.select({
-              id: salesInvoiceItems.id,
-              productName: salesInvoiceItems.productName,
-              quantity: salesInvoiceItems.quantity,
-              unit: salesInvoiceItems.unit,
-              unitPrice: salesInvoiceItems.unitPrice,
-              total: salesInvoiceItems.total,
-              taxAmount: salesInvoiceItems.taxAmount,
-              taxPercent: salesInvoiceItems.taxPercent,
-              discountAmount: salesInvoiceItems.discountAmount,
-            }).from(salesInvoiceItems).where(and(
-              eq(salesInvoiceItems.invoiceId, input.invoiceId),
-              eq(salesInvoiceItems.orgId, ctx.user.orgId),
-            )).orderBy(asc(salesInvoiceItems.sortOrder)),
-            seller: {
-              nameAr: String(inv.sellerLegalName ?? cfg.legalName ?? org?.name ?? ''),
-              nameEn: String(cfg.englishName ?? cfg.legalName ?? org?.name ?? ''),
-              vatNumber: String(inv.sellerTaxNumber ?? cfg.vatNumber ?? ''),
-              crNumber: cfg.commercialReg ? String(cfg.commercialReg) : undefined,
-              street: String(cfg.street ?? ''),
-              building: String(cfg.buildingNumber ?? ''),
-              district: String(cfg.district ?? ''),
-              city: String(cfg.city ?? ''),
-              postalCode: String(cfg.postalCode ?? ''),
-              countryCode: String(cfg.countryCode ?? 'SA'),
-            },
-            uuid,
-            invoiceCounter: icv,
-            previousInvoiceHash: inv.zatcaPih ?? '',
-            submissionType: operation,
-            privateKeyPem: decrypt(signingKey.privateKeyEncrypted),
-            certificatePem: signingCertificate.publicCertificate,
-            originalInvoice: originalInvoice?.zatcaUuid && originalInvoice.invoiceNumber
-              ? {
-                  invoiceNumber: originalInvoice.invoiceNumber,
-                  uuid: originalInvoice.zatcaUuid,
-                  invoiceDate: originalInvoice.invoiceDate,
-                }
-              : undefined,
-          });
+           if (inv.zatcaXml && inv.zatcaHash && inv.zatcaQrCode && inv.zatcaIssueTimestamp) {
+             // Retries reuse the immutable signed snapshot; they never
+             // rebuild XML, QR, hash, or signature from mutable ERP fields.
+             signed = {
+               unsignedXml: inv.zatcaXml,
+               signedXml: inv.zatcaXml,
+               invoiceHash: inv.zatcaHash,
+               qrCode: inv.zatcaQrCode,
+               signatureValue: '',
+               invoiceBase64: Buffer.from(inv.zatcaXml, 'utf8').toString('base64'),
+             };
+           } else {
+             signed = buildAndSignZatcaInvoice({
+              invoice: inv,
+              items: await db.select({
+                id: salesInvoiceItems.id,
+                productName: salesInvoiceItems.productName,
+                quantity: salesInvoiceItems.quantity,
+                unit: salesInvoiceItems.unit,
+                unitPrice: salesInvoiceItems.unitPrice,
+                total: salesInvoiceItems.total,
+                taxAmount: salesInvoiceItems.taxAmount,
+                taxPercent: salesInvoiceItems.taxPercent,
+                discountAmount: salesInvoiceItems.discountAmount,
+              }).from(salesInvoiceItems).where(and(
+                eq(salesInvoiceItems.invoiceId, input.invoiceId),
+                eq(salesInvoiceItems.orgId, ctx.user.orgId),
+              )).orderBy(asc(salesInvoiceItems.sortOrder)),
+              seller: {
+                nameAr: String(inv.sellerLegalName ?? cfg.legalName ?? org?.name ?? ''),
+                nameEn: String(cfg.englishName ?? cfg.legalName ?? org?.name ?? ''),
+                vatNumber: String(inv.sellerTaxNumber ?? cfg.vatNumber ?? ''),
+                crNumber: cfg.commercialReg ? String(cfg.commercialReg) : undefined,
+                street: String(cfg.street ?? ''),
+                building: String(cfg.buildingNumber ?? ''),
+                district: String(cfg.district ?? ''),
+                city: String(cfg.city ?? ''),
+                postalCode: String(cfg.postalCode ?? ''),
+                countryCode: String(cfg.countryCode ?? 'SA'),
+              },
+              uuid,
+              invoiceCounter: icv,
+              previousInvoiceHash: inv.zatcaPih ?? '',
+              submissionType: operation,
+              issuanceTimestamp: trustedIssuance.timestamp,
+              privateKeyPem: decrypt(signingKey.privateKeyEncrypted),
+              certificatePem: signingCertificate.publicCertificate,
+              originalInvoice: originalInvoice?.zatcaUuid && originalInvoice.invoiceNumber
+                ? {
+                    invoiceNumber: originalInvoice.invoiceNumber,
+                    uuid: originalInvoice.zatcaUuid,
+                    invoiceDate: originalInvoice.invoiceDate,
+                  }
+                : undefined,
+            });
+           }
         } catch (error) {
           const message = error instanceof Error ? error.message : 'تعذر توقيع XML الفاتورة';
           await db.update(zatcaSubmissionAttempts).set({
@@ -3577,6 +3632,7 @@ export const zatcaRouter = router({
 
         await db.update(zatcaInvoiceTransactions).set({
           invoiceHash: signed.invoiceHash,
+          issuanceTimestamp: trustedIssuance.timestamp,
           requestPayload: redactZatcaPayload({
             ...requestPayload,
             invoiceHash: signed.invoiceHash,
@@ -3595,6 +3651,7 @@ export const zatcaRouter = router({
           zatcaHash: signed.invoiceHash,
           zatcaQrCode: signed.qrCode,
           zatcaXml: signed.signedXml,
+           zatcaIssueTimestamp: trustedIssuance.timestamp,
           zatcaStatus: 'submitting',
           zatcaSubmittedAt: inv.zatcaSubmittedAt ?? now,
           zatcaAttemptCount: attemptCount,
@@ -3603,6 +3660,13 @@ export const zatcaRouter = router({
           eq(salesInvoices.id, input.invoiceId),
           eq(salesInvoices.orgId, ctx.user.orgId),
         ));
+        await commitTrustedIssuance({
+          orgId: ctx.user.orgId,
+          posUnitId: resolvedContext.posUnit.id,
+          invoiceCounter: icv,
+          invoiceHash: signed.invoiceHash,
+          invoiceUuid: uuid,
+        });
 
         const authorityResponse = await postFatoora({
           environment: 'simulation',
@@ -4357,8 +4421,9 @@ export const zatcaRouter = router({
       const cfg = canonicalizeZatcaConfig(org?.zatcaConfig, org);
 
       // ── توليد XML ──────────────────────────────────────────────────────────
-      const issueDate = inv.invoiceDate ? new Date(inv.invoiceDate).toISOString().split('T')[0] : '';
-      const issueTime = inv.invoiceDate ? new Date(inv.invoiceDate).toISOString().split('T')[1]?.slice(0, 8) ?? '00:00:00' : '00:00:00';
+      const issuanceDate = inv.zatcaIssueTimestamp ?? inv.invoiceDate;
+      const issueDate = issuanceDate ? new Date(issuanceDate).toISOString().split('T')[0] : '';
+      const issueTime = issuanceDate ? new Date(issuanceDate).toISOString().split('T')[1]?.slice(0, 8) ?? '00:00:00' : '00:00:00';
       const isDebitNote = inv.invoiceType === 'debit_note';
       const isAdjustment = inv.invoiceType === 'return' || inv.invoiceType === 'credit_note' || isDebitNote;
       const invTypeCode = isDebitNote ? '383' : isAdjustment ? '381' : '388';
