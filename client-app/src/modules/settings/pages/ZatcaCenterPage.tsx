@@ -3608,11 +3608,43 @@ function LinkingUnitsManagement({
 function EnvironmentSelection({
   units,
   onSelect,
+  isLoading = false,
+  hasError = false,
 }: {
   units: any[];
   onSelect: (environment: LinkingEnvironment) => void;
+  isLoading?: boolean;
+  hasError?: boolean;
 }) {
-  const simulationComplete = units.some(unit => unit.simulationComplete === true);
+  const getSimulationState = (unit: any) => {
+    if (unit.simulationComplete === true) return true;
+    const simulation = unit.environmentStatuses?.simulation;
+    const tests = unit.environmentCompliance?.simulation ?? [];
+    const completedTests = tests.filter((test: any) => (
+      ["passed", "passed_with_warnings", "completed_previously"].includes(
+        String(test.status ?? "").toLowerCase(),
+      )
+    ));
+    return Boolean(
+      simulation
+      && String(simulation.registrationStatus ?? "").toLowerCase() === "operational"
+      && Boolean(simulation.complianceCsidPresent)
+      && Boolean(simulation.operationalCsidPresent)
+      && Boolean(simulation.certificatePresent)
+      && tests.length >= 6
+      && completedTests.length === tests.length,
+    );
+  };
+  const simulationComplete = units.some(getSimulationState);
+  const diagnosticUnit = units.find(unit => unit.unitCode === "EGS-342") ?? units[0] ?? null;
+  const diagnosticSimulation = diagnosticUnit?.environmentStatuses?.simulation ?? null;
+  const diagnosticTests = diagnosticUnit?.environmentCompliance?.simulation ?? [];
+  const diagnosticCompletedTests = diagnosticTests.filter((test: any) => (
+    ["passed", "passed_with_warnings", "completed_previously"].includes(
+      String(test.status ?? "").toLowerCase(),
+    )
+  ));
+  const diagnosticComplete = diagnosticUnit ? getSimulationState(diagnosticUnit) : false;
   const productionReady = units.some(unit => (
     unit.environmentStatuses?.production?.registrationStatus === "operational"
     || unit.environmentStatuses?.production?.certificatePresent
@@ -3668,12 +3700,29 @@ function EnvironmentSelection({
             <li>يمكن تجاوز هذا الاختيار والدخول مباشرة إلى الربط الفعلي.</li>
           </ul>
           <div style={{ fontSize: 10, color: simulationComplete ? "#166534" : "#64748b", marginBottom: 12 }}>
-            {simulationComplete
+            {isLoading
+              ? "جارٍ تحميل حالة الربط..."
+              : hasError
+                ? "تعذر قراءة حالة الربط"
+                : simulationComplete
               ? "✓ مكتمل — الوحدة مهيأة في Fatoora Simulation"
               : "○ لم يبدأ الاختبار التجريبي بعد"}
           </div>
+          {import.meta.env.DEV && (
+            <div dir="ltr" style={{ background: "#0f172a", color: "#e2e8f0", borderRadius: 7, padding: "8px 10px", marginBottom: 12, fontFamily: "monospace", fontSize: 10, lineHeight: 1.65, whiteSpace: "pre-wrap" }}>
+              <strong style={{ color: "#93c5fd" }}>DEV DIAGNOSTIC</strong>
+              {"\n"}units: {units.length}
+              {"\n"}unitCode: {diagnosticUnit?.unitCode ?? "—"}
+              {"\n"}simulationComplete: {isLoading || hasError ? "—" : String(diagnosticComplete)}
+              {"\n"}registrationStatus: {diagnosticSimulation?.registrationStatus ?? "—"}
+              {"\n"}hasComplianceCsid: {diagnosticSimulation ? String(Boolean(diagnosticSimulation.complianceCsidPresent)) : "—"}
+              {"\n"}hasOperationalCsid: {diagnosticSimulation ? String(Boolean(diagnosticSimulation.operationalCsidPresent)) : "—"}
+              {"\n"}hasCertificate: {diagnosticSimulation ? String(Boolean(diagnosticSimulation.certificatePresent)) : "—"}
+              {"\n"}tests: {diagnosticTests.length ? `${diagnosticCompletedTests.length}/${diagnosticTests.length}` : "—"}
+            </div>
+          )}
           <button onClick={() => onSelect("simulation")} style={{ width: "100%", height: 38, background: "#2563eb", color: "#fff", border: "none", borderRadius: 8, fontWeight: 800, fontSize: 12, cursor: "pointer" }}>
-            {simulationComplete ? "إدارة الربط التجريبي" : "بدء الاختبار التجريبي"}
+            {isLoading || hasError ? "إعادة المحاولة" : simulationComplete ? "إدارة الربط التجريبي" : "بدء الاختبار التجريبي"}
           </button>
         </div>
       </div>
@@ -3689,7 +3738,10 @@ function ActivationSection({
   onOpenTechnical?: () => void;
 }) {
   const cfgQ = trpc.zatca.getConfig.useQuery();
-  const unitsQ = trpc.zatca.listPosUnits.useQuery();
+  const unitsQ = trpc.zatca.listPosUnits.useQuery(undefined, {
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+  });
   const [wizardMode, setWizardMode] = useState<boolean | null>(null);
   const [environment, setEnvironment] = useState<LinkingEnvironment | null>(null);
   const cfg = cfgQ.data;
@@ -3697,18 +3749,25 @@ function ActivationSection({
   useEffect(() => {
     if (wizardMode === null && !unitsQ.isLoading) setWizardMode(units.length === 0);
   }, [wizardMode, unitsQ.isLoading, units.length]);
-  if (wizardMode === null || cfgQ.isLoading || unitsQ.isLoading) return <Skeleton height={280} />;
+  if (cfgQ.isLoading) return <Skeleton height={280} />;
   if (environment === null) {
     return (
       <EnvironmentSelection
         units={units}
+        isLoading={unitsQ.isLoading}
+        hasError={Boolean(unitsQ.error)}
         onSelect={nextEnvironment => {
+          if (unitsQ.isLoading || unitsQ.error) {
+            void unitsQ.refetch();
+            return;
+          }
           setEnvironment(nextEnvironment);
           setWizardMode(units.length === 0);
         }}
       />
     );
   }
+  if (wizardMode === null || unitsQ.isLoading) return <Skeleton height={280} />;
   if (!wizardMode) {
     return (
       <LinkingUnitsManagement
