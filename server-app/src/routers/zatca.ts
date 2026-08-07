@@ -54,7 +54,7 @@ import {
   lockAndGetNextPosCode,
 } from '../services/zatcaPosUnitIdentity.js';
 import {
-  generateSimulationCsr,
+  generatePosUnitCsr,
   complianceCertificatePem,
   postFatoora,
   FATOORA_BASE_URLS,
@@ -1935,19 +1935,15 @@ export const zatcaRouter = router({
         orderBy: desc(zatcaDevices.updatedAt),
       });
       const identity = getCsrIdentityForUnit(unit, legacyDevice?.serialNumber);
-      const csr = generateSimulationCsr({
-        commonName: identity.commonName,
+      const csr = generatePosUnitCsr({
+        environment: 'simulation',
+        identity,
         organizationName: String(cfg.englishName ?? cfg.legalName ?? org.name ?? ''),
         organizationUnitName: input.branchName,
-        serialNumber: identity.egsSerialNumber,
-        egsSerialNumber: identity.egsSerialNumber,
         vatNumber,
         branchLocation: input.branchLocation,
         businessCategory: input.businessCategory,
-        solutionName: 'OneSoft',
-        model: 'ERP',
         branchName: input.branchName,
-        taxpayerProvidedId: identity.commonName,
       });
 
       return db.transaction(async (tx) => {

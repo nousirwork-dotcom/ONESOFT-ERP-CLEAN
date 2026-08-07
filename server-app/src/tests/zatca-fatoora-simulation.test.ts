@@ -6,12 +6,14 @@ import { describe, expect, it } from 'vitest';
 import {
   assertSimulationUrl,
   assertFatooraUrl,
+  generatePosUnitCsr,
   generateSimulationCsr,
   getFatooraUrl,
   getSimulationUrl,
 } from '../services/zatcaFatooraSimulation.js';
 import { getSimulationInvoiceTypeCode } from '../services/zatcaInvoiceSubmission.js';
 import { generateCreditNoteXml } from '@talha7k/zatca';
+import { getCsrIdentityForUnit } from '../services/zatcaPosUnitIdentity.js';
 
 describe('Fatoora Simulation transport', () => {
   it('generates a secp256k1 CSR with the Simulation template', () => {
@@ -66,6 +68,59 @@ describe('Fatoora Simulation transport', () => {
     } finally {
       fs.rmSync(workDir, { recursive: true, force: true });
     }
+  });
+
+  it('shares one persisted POS identity across Simulation and Production CSR plans', () => {
+    const identity = getCsrIdentityForUnit({
+      unitCode: 'POS-001',
+      commonName: 'POS-001',
+      egsSerialNumber: '1-OneSoft|2-ERP|3-fixed-serial-001',
+    });
+    const details = {
+      identity,
+      organizationName: 'OneSoft',
+      organizationUnitName: 'Riyadh',
+      vatNumber: '399999999900003',
+      branchLocation: 'Riyadh',
+      businessCategory: 'Retail',
+      branchName: 'Riyadh',
+    };
+    const simulationCredentials = { scope: 'simulation', token: 'simulation-mock' };
+    const productionCredentials = { scope: 'production', token: 'production-mock' };
+    const simulation = {
+      ...generatePosUnitCsr({ ...details, environment: 'simulation' }),
+      credentials: simulationCredentials,
+    };
+    const production = {
+      ...generatePosUnitCsr({ ...details, environment: 'production' }),
+      credentials: productionCredentials,
+    };
+
+    expect(simulation.environment).toBe('simulation');
+    expect(production.environment).toBe('production');
+    expect(simulation.credentials).not.toEqual(production.credentials);
+    expect(simulation.commonName).toBe('POS-001');
+    expect(production.commonName).toBe('POS-001');
+    expect(simulation.egsSerialNumber).toBe('1-OneSoft|2-ERP|3-fixed-serial-001');
+    expect(production.egsSerialNumber).toBe(simulation.egsSerialNumber);
+    expect(simulation.csrPem).not.toBe(production.csrPem);
+
+    const extractCsrText = (csrPem: string) => {
+      const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onesoft-zatca-shared-identity-'));
+      const csrPath = path.join(workDir, 'request.csr');
+      try {
+        fs.writeFileSync(csrPath, csrPem, 'utf8');
+        return execFileSync('openssl', ['req', '-in', csrPath, '-noout', '-text'], { encoding: 'utf8' });
+      } finally {
+        fs.rmSync(workDir, { recursive: true, force: true });
+      }
+    };
+    const simulationText = extractCsrText(simulation.csrPem);
+    const productionText = extractCsrText(production.csrPem);
+    expect(simulationText).toContain('Subject: C = SA, O = OneSoft, OU = Riyadh, CN = POS-001');
+    expect(productionText).toContain('Subject: C = SA, O = OneSoft, OU = Riyadh, CN = POS-001');
+    expect(simulationText).toContain('1-OneSoft|2-ERP|3-fixed-serial-001');
+    expect(productionText).toContain('1-OneSoft|2-ERP|3-fixed-serial-001');
   });
 
   it('allows Simulation endpoints including operational CSID', () => {

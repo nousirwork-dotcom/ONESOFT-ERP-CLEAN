@@ -15,6 +15,11 @@ const POS_CODE_PATTERN = /^POS-(\d{3})$/;
  * ZATCA's EGS serial format is three pipe-separated fields:
  * 1-solution/provider | 2-model/version | 3-manufacturer serial.
  *
+ * OneSoft uses "ERP" for the model/version field. ZATCA specifies the field
+ * and its format, not this literal value; "ERP" is the stable product-model
+ * label chosen for this implementation and is not a credential or identity
+ * supplied by the user.
+ *
  * The UUID is generated once when a POS unit is created and then persisted.
  * It is not regenerated for a retry, restart, or a second environment.
  */

@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import type { PosUnitIdentity } from './zatcaPosUnitIdentity.js';
 
 export type FatooraEnvironment = 'simulation' | 'production';
 
@@ -45,6 +46,25 @@ export type CsrInput = {
   model: string;
   branchName: string;
   taxpayerProvidedId: string;
+};
+
+/**
+ * Environment-neutral CSR input for a POS unit.
+ *
+ * Deliberately does not expose commonName, serialNumber, or taxpayerProvidedId:
+ * those values come only from the persisted POS identity service. The
+ * environment selects the future transport/credential scope, not the EGS
+ * identity embedded in the CSR.
+ */
+export type PosUnitCsrInput = {
+  environment: FatooraEnvironment;
+  identity: PosUnitIdentity;
+  organizationName: string;
+  organizationUnitName: string;
+  vatNumber: string;
+  branchLocation: string;
+  businessCategory: string;
+  branchName: string;
 };
 
 export type GeneratedSimulationCsr = {
@@ -241,7 +261,7 @@ function runOpenSsl(args: string[], cwd: string): void {
   }
 }
 
-export function generateSimulationCsr(input: CsrInput): GeneratedSimulationCsr {
+export function generateFatooraCsr(input: CsrInput): GeneratedSimulationCsr {
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onesoft-zatca-'));
   const configPath = path.join(workDir, 'csr.cnf');
   const privateKeyPath = path.join(workDir, 'private-key.pem');
@@ -306,6 +326,44 @@ export function generateSimulationCsr(input: CsrInput): GeneratedSimulationCsr {
   } finally {
     fs.rmSync(workDir, { recursive: true, force: true });
   }
+}
+
+/** @deprecated Use generatePosUnitCsr for Simulation and Production POS flows. */
+export const generateSimulationCsr = generateFatooraCsr;
+
+/**
+ * Shared CSR builder for both Fatoora environments.
+ *
+ * The generated key pair is intentionally new per CSR request, but the
+ * Common Name and EGS serial are always taken from the same persisted POS
+ * identity. Production callers use this function without a separate
+ * user-editable identity path.
+ */
+export function generatePosUnitCsr(input: PosUnitCsrInput): GeneratedSimulationCsr & {
+  environment: FatooraEnvironment;
+  commonName: string;
+  egsSerialNumber: string;
+} {
+  const generated = generateFatooraCsr({
+    commonName: input.identity.commonName,
+    organizationName: input.organizationName,
+    organizationUnitName: input.organizationUnitName,
+    serialNumber: input.identity.egsSerialNumber,
+    egsSerialNumber: input.identity.egsSerialNumber,
+    vatNumber: input.vatNumber,
+    branchLocation: input.branchLocation,
+    businessCategory: input.businessCategory,
+    solutionName: 'OneSoft',
+    model: 'ERP',
+    branchName: input.branchName,
+    taxpayerProvidedId: input.identity.commonName,
+  });
+  return {
+    ...generated,
+    environment: input.environment,
+    commonName: input.identity.commonName,
+    egsSerialNumber: input.identity.egsSerialNumber,
+  };
 }
 
 function basicAuth(binarySecurityToken: string, secret: string): string {
