@@ -32,6 +32,7 @@ import {
 } from '../schema.js';
 import { eq, and, desc, count, sql, gte, lte, like, or, asc, notInArray, inArray, isNull } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
+import { logger } from '../logger.js';
 import { resolveZatcaContext, type ZatcaEnvironment } from '../services/zatcaContext.js';
 import {
   ZATCA_LIFECYCLE_STATES,
@@ -769,13 +770,20 @@ export const zatcaRouter = router({
   // هذا كيان فني داخل مركز ZATCA فقط؛ لا ينشئ نقطة بيع تشغيلية جديدة.
   // يبدأ إنشاء المجموعة من دفتر، ويُستنتج المخزن منه للتحقق فقط.
   listPosUnits: protectedProcedure.query(async ({ ctx }) => {
+    logger.info('zatca', 'listPosUnits request', {
+      userId: ctx.user.id,
+      organizationId: ctx.user.orgId,
+    });
     const units = await db.select({
       id: zatcaPosUnits.id,
       unitCode: zatcaPosUnits.unitCode,
       unitName: zatcaPosUnits.unitName,
-      oneSoftStatus: zatcaPosUnits.oneSoftStatus,
-      lifecycleUpdatedAt: zatcaPosUnits.lifecycleUpdatedAt,
-      lifecycleReason: zatcaPosUnits.lifecycleReason,
+      // Development databases may still have the pre-0082 shape. Keep this
+      // read path compatible without mutating the database: the legacy
+      // `status` projection is the only lifecycle-like value available there.
+      oneSoftStatus: zatcaPosUnits.status,
+      lifecycleUpdatedAt: sql<Date | null>`NULL`,
+      lifecycleReason: sql<string | null>`NULL`,
       warehouseId: zatcaPosUnits.warehouseId,
       warehouseName: warehouses.name,
       branchName: branches.name,
@@ -885,7 +893,7 @@ export const zatcaRouter = router({
         .orderBy(desc(zatcaComplianceTests.updatedAt)),
     ]);
 
-    return units.map((unit) => {
+    const result = units.map((unit) => {
       const simulationDevice = devices.find((device) => (
         device.posUnitId === unit.id && device.environmentName === 'Simulation'
       )) ?? null;
@@ -936,6 +944,17 @@ export const zatcaRouter = router({
         },
       };
     });
+    logger.info('zatca', 'listPosUnits result', {
+      userId: ctx.user.id,
+      organizationId: ctx.user.orgId,
+      unitsReturned: result.length,
+      unitCodes: result.map((unit) => unit.unitCode),
+      simulationComplete: result.map((unit) => ({
+        unitCode: unit.unitCode,
+        simulationComplete: unit.simulationComplete,
+      })),
+    });
+    return result;
   }),
 
   listLinkingJournalOptions: protectedProcedure.query(async ({ ctx }) => {

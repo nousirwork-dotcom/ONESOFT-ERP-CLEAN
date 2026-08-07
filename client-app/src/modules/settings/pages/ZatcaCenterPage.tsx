@@ -3610,12 +3610,17 @@ function EnvironmentSelection({
   onSelect,
   isLoading = false,
   hasError = false,
+  errorCode = null,
+  errorMessage = null,
 }: {
-  units: any[];
+  units?: any[];
   onSelect: (environment: LinkingEnvironment) => void;
   isLoading?: boolean;
   hasError?: boolean;
+  errorCode?: string | null;
+  errorMessage?: string | null;
 }) {
+  const loadedUnits = units ?? [];
   const getSimulationState = (unit: any) => {
     if (unit.simulationComplete === true) return true;
     const simulation = unit.environmentStatuses?.simulation;
@@ -3635,8 +3640,8 @@ function EnvironmentSelection({
       && completedTests.length === tests.length,
     );
   };
-  const simulationComplete = units.some(getSimulationState);
-  const diagnosticUnit = units.find(unit => unit.unitCode === "EGS-342") ?? units[0] ?? null;
+  const simulationComplete = loadedUnits.some(getSimulationState);
+  const diagnosticUnit = loadedUnits.find(unit => unit.unitCode === "EGS-342") ?? loadedUnits[0] ?? null;
   const diagnosticSimulation = diagnosticUnit?.environmentStatuses?.simulation ?? null;
   const diagnosticTests = diagnosticUnit?.environmentCompliance?.simulation ?? [];
   const diagnosticCompletedTests = diagnosticTests.filter((test: any) => (
@@ -3645,7 +3650,7 @@ function EnvironmentSelection({
     )
   ));
   const diagnosticComplete = diagnosticUnit ? getSimulationState(diagnosticUnit) : false;
-  const productionReady = units.some(unit => (
+  const productionReady = loadedUnits.some(unit => (
     unit.environmentStatuses?.production?.registrationStatus === "operational"
     || unit.environmentStatuses?.production?.certificatePresent
   ));
@@ -3711,7 +3716,7 @@ function EnvironmentSelection({
           {import.meta.env.DEV && (
             <div dir="ltr" style={{ background: "#0f172a", color: "#e2e8f0", borderRadius: 7, padding: "8px 10px", marginBottom: 12, fontFamily: "monospace", fontSize: 10, lineHeight: 1.65, whiteSpace: "pre-wrap" }}>
               <strong style={{ color: "#93c5fd" }}>DEV DIAGNOSTIC</strong>
-              {"\n"}units: {units.length}
+              {"\n"}units: {isLoading || hasError ? "—" : String(loadedUnits.length)}
               {"\n"}unitCode: {diagnosticUnit?.unitCode ?? "—"}
               {"\n"}simulationComplete: {isLoading || hasError ? "—" : String(diagnosticComplete)}
               {"\n"}registrationStatus: {diagnosticSimulation?.registrationStatus ?? "—"}
@@ -3719,6 +3724,12 @@ function EnvironmentSelection({
               {"\n"}hasOperationalCsid: {diagnosticSimulation ? String(Boolean(diagnosticSimulation.operationalCsidPresent)) : "—"}
               {"\n"}hasCertificate: {diagnosticSimulation ? String(Boolean(diagnosticSimulation.certificatePresent)) : "—"}
               {"\n"}tests: {diagnosticTests.length ? `${diagnosticCompletedTests.length}/${diagnosticTests.length}` : "—"}
+              {hasError && (
+                <>
+                  {"\n"}errorCode: {errorCode ?? "UNKNOWN"}
+                  {"\n"}errorMessage: {errorMessage ?? "—"}
+                </>
+              )}
             </div>
           )}
           <button onClick={() => onSelect("simulation")} style={{ width: "100%", height: 38, background: "#2563eb", color: "#fff", border: "none", borderRadius: 8, fontWeight: 800, fontSize: 12, cursor: "pointer" }}>
@@ -3745,10 +3756,12 @@ function ActivationSection({
   const [wizardMode, setWizardMode] = useState<boolean | null>(null);
   const [environment, setEnvironment] = useState<LinkingEnvironment | null>(null);
   const cfg = cfgQ.data;
-  const units = unitsQ.data ?? [];
+  const units = unitsQ.data;
   useEffect(() => {
-    if (wizardMode === null && !unitsQ.isLoading) setWizardMode(units.length === 0);
-  }, [wizardMode, unitsQ.isLoading, units.length]);
+    if (wizardMode === null && !unitsQ.isLoading && !unitsQ.error && units) {
+      setWizardMode(units.length === 0);
+    }
+  }, [wizardMode, unitsQ.isLoading, unitsQ.error, units]);
   if (cfgQ.isLoading) return <Skeleton height={280} />;
   if (environment === null) {
     return (
@@ -3756,18 +3769,21 @@ function ActivationSection({
         units={units}
         isLoading={unitsQ.isLoading}
         hasError={Boolean(unitsQ.error)}
+        errorCode={unitsQ.error ? String((unitsQ.error as any).data?.code ?? "UNKNOWN") : null}
+        errorMessage={unitsQ.error ? String(unitsQ.error.message ?? "تعذر قراءة حالة الربط") : null}
         onSelect={nextEnvironment => {
           if (unitsQ.isLoading || unitsQ.error) {
             void unitsQ.refetch();
             return;
           }
+          if (!units) return;
           setEnvironment(nextEnvironment);
           setWizardMode(units.length === 0);
         }}
       />
     );
   }
-  if (wizardMode === null || unitsQ.isLoading) return <Skeleton height={280} />;
+  if (wizardMode === null || unitsQ.isLoading || !units) return <Skeleton height={280} />;
   if (!wizardMode) {
     return (
       <LinkingUnitsManagement
