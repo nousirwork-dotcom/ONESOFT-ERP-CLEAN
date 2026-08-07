@@ -95,13 +95,17 @@ export function isTrustedClockDocumentType(invoiceType: string | null | undefine
 
 const CLOCK_TOLERANCE_MS = 2 * 60 * 1000;
 const FORWARD_JUMP_MS = 5 * 60 * 1000;
-const REMOTE_TIMEOUT_MS = 1200;
+const REMOTE_TIMEOUT_MS = 5_000;
+const REMOTE_RETRIES = 3;
+const REMOTE_RETRY_BACKOFF_MS = [250, 750] as const;
 const TRUSTED_CLOCK_URL = 'https://time.cloudflare.com/cdn-cgi/trace';
 
 // Monotonic time is process-local by design. The durable record handles
 // restarts and backup restores; this baseline handles wall-clock edits while
 // the backend remains running.
 const processBaselines = new Map<string, { wall: number; monotonic: number }>();
+let machineTrustedAnchor: { timestamp: Date; monotonic: number } | null = null;
+let bootstrapPromise: Promise<boolean> | null = null;
 
 function key(orgId: number, posUnitId: number): string {
   return `${orgId}:${posUnitId}`;
@@ -180,6 +184,12 @@ function checkpointPayload(record: Omit<DurableClockRecord, 'hmac'>): string {
     lastPih: record.lastPih,
   });
 }
+
+export type TrustedClockBootstrapResult = {
+  ok: boolean;
+  attempts: number;
+  timestamp: Date | null;
+};
 
 function checkpointHmac(record: Omit<DurableClockRecord, 'hmac'>): string | null {
   const key = checkpointKey();
@@ -280,7 +290,7 @@ async function writeDurableRecord(record: Omit<DurableClockRecord, 'hmac'>): Pro
   await fs.rename(tmp, file);
 }
 
-async function fetchTrustedNetworkTime(): Promise<Date | null> {
+async function fetchTrustedNetworkTimeOnce(): Promise<Date | null> {
   const url = process.env.NODE_ENV === 'test'
     ? process.env.TRUSTED_CLOCK_URL?.trim() || TRUSTED_CLOCK_URL
     : TRUSTED_CLOCK_URL;
@@ -299,6 +309,116 @@ async function fetchTrustedNetworkTime(): Promise<Date | null> {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function fetchTrustedNetworkTime(): Promise<Date | null> {
+  for (let attempt = 0; attempt < REMOTE_RETRIES; attempt += 1) {
+    const trustedTime = await fetchTrustedNetworkTimeOnce();
+    if (trustedTime) return trustedTime;
+    const delay = REMOTE_RETRY_BACKOFF_MS[attempt];
+    if (delay != null) await new Promise((resolve) => setTimeout(resolve, delay));
+  }
+  return null;
+}
+
+async function trustedTimeForIssuance(): Promise<Date | null> {
+  const current = currentMachineTrustedTime();
+  if (current) return current;
+  if (bootstrapPromise) {
+    await bootstrapPromise;
+    return currentMachineTrustedTime();
+  }
+  return null;
+}
+
+/**
+ * Establish one network-trusted anchor for this OneSoft process. The anchor
+ * is shared by all POS units, while each POS still owns its own issuance
+ * timestamp/ICV/PIH/hash/UUID chain in the database and durable checkpoint.
+ *
+ * This intentionally does not persist an anchor for offline use after restart:
+ * a fresh process must obtain a fresh network anchor before its first issuance.
+ */
+export async function bootstrapTrustedClock(): Promise<TrustedClockBootstrapResult> {
+  if (bootstrapPromise) {
+    const ok = await bootstrapPromise;
+    return { ok, attempts: REMOTE_RETRIES, timestamp: machineTrustedAnchor?.timestamp ?? null };
+  }
+  bootstrapPromise = (async () => {
+    for (let attempt = 0; attempt < REMOTE_RETRIES; attempt += 1) {
+      const trustedTime = await fetchTrustedNetworkTimeOnce();
+      if (trustedTime) {
+        machineTrustedAnchor = { timestamp: trustedTime, monotonic: performance.now() };
+        console.log(`[trusted-clock] network anchor established at ${trustedTime.toISOString()}`);
+        return true;
+      }
+      const delay = REMOTE_RETRY_BACKOFF_MS[attempt];
+      if (delay != null) await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+    console.warn('[trusted-clock] network anchor unavailable; ZATCA issuance remains blocked');
+    return false;
+  })().finally(() => {
+    bootstrapPromise = null;
+  });
+  const ok = await bootstrapPromise;
+  return { ok, attempts: REMOTE_RETRIES, timestamp: machineTrustedAnchor?.timestamp ?? null };
+}
+
+function currentMachineTrustedTime(): Date | null {
+  if (!machineTrustedAnchor) return null;
+  return new Date(
+    machineTrustedAnchor.timestamp.getTime()
+    + Math.max(0, performance.now() - machineTrustedAnchor.monotonic),
+  );
+}
+
+async function persistIndependentClockAudit(input: {
+  orgId: number;
+  posUnitId: number;
+  invoiceId: number;
+  userId: number;
+  eventType: TrustedClockEvent;
+  clockStatus: TrustedClockStatus;
+  detectedSystemTime: Date;
+  trustedTime: Date | null;
+  lastIssuedAt: Date | null;
+  reason: string;
+  metadata?: Record<string, unknown>;
+}): Promise<void> {
+  try {
+    // The commercial invoice is still inside the caller's transaction and
+    // may be rolled back. Keep this audit committed independently and avoid
+    // an FK reference to the uncommitted invoice.
+    await db.insert(zatcaClockEvents).values({
+      orgId: input.orgId,
+      posUnitId: input.posUnitId,
+      invoiceId: null,
+      userId: input.userId,
+      eventType: input.eventType,
+      clockStatus: input.clockStatus,
+      detectedSystemTime: input.detectedSystemTime,
+      trustedTime: input.trustedTime,
+      lastIssuedAt: input.lastIssuedAt,
+      reason: input.reason,
+      metadata: {
+        ...input.metadata,
+        attemptedInvoiceId: input.invoiceId,
+        committedOutsideInvoiceTransaction: true,
+      },
+    });
+  } catch (error) {
+    console.error('[trusted-clock] could not persist independent audit event:', error);
+  }
+}
+
+function deniedMessage(event: TrustedClockEvent, remoteTime: Date | null): string {
+  if (event === 'CLOCK_UNTRUSTED' && !remoteTime) {
+    return 'تعذر التحقق من الوقت الموثوق عبر الإنترنت. لم يتم إصدار المستند. تحقق من الاتصال ثم أعد المحاولة.';
+  }
+  if (event === 'RESTORE_SUSPECTED' || event === 'ZATCA_CHAIN_REVIEW_REQUIRED') {
+    return 'تم اكتشاف حالة قد تشير إلى استعادة نسخة احتياطية أقدم. يجب التحقق من سلامة سلسلة الفوترة الإلكترونية قبل الإصدار.';
+  }
+  return 'تاريخ ووقت الجهاز غير متوافقين مع سجل الفوترة الإلكترونية. يرجى تصحيح تاريخ ووقت الجهاز قبل إصدار المستند.';
 }
 
 export function evaluateTrustedClock(input: ClockEvaluationInput): ClockEvaluation {
@@ -466,9 +586,30 @@ export async function reserveTrustedIssuance(input: {
   const monotonicSinceObservedMs = baseline ? Math.max(0, monotonicNow - baseline.monotonic) : null;
   const processObservedWallTime = baseline ? new Date(baseline.wall) : null;
   processBaselines.set(unitKey, { wall: wallNow.getTime(), monotonic: monotonicNow });
-  const remoteTime = await fetchTrustedNetworkTime();
+  const remoteTime = await trustedTimeForIssuance();
 
   const run = async (tx: any): Promise<TrustedIssuance> => {
+    const auditDenied = async (
+      eventType: TrustedClockEvent,
+      clockStatus: TrustedClockStatus,
+      reason: string,
+      trustedTime: Date | null,
+      lastIssuedAt: Date | null,
+      metadata?: Record<string, unknown>,
+    ) => persistIndependentClockAudit({
+      orgId: input.orgId,
+      posUnitId: input.posUnitId,
+      invoiceId: input.invoiceId,
+      userId: input.userId,
+      eventType,
+      clockStatus,
+      detectedSystemTime: wallNow,
+      trustedTime,
+      lastIssuedAt,
+      reason,
+      metadata,
+    });
+
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${unitKey}, 0))`);
     // Lock the invoice row in the same transaction as the POS clock state.
     // Two concurrent submissions must observe the same immutable timestamp.
@@ -558,6 +699,14 @@ export async function reserveTrustedIssuance(input: {
         reason,
         metadata: { source: 'persisted_state', blockedBy: latestEvent?.eventType ?? null },
       });
+      await auditDenied(
+        'ZATCA_CHAIN_REVIEW_REQUIRED',
+        'suspicious',
+        reason,
+        state.lastTrustedTime,
+        state.lastIssuedAt,
+        { source: 'persisted_state', blockedBy: latestEvent?.eventType ?? null },
+      );
       throw new TrustedClockError('ZATCA_CHAIN_REVIEW_REQUIRED', reason);
     }
 
@@ -599,6 +748,14 @@ export async function reserveTrustedIssuance(input: {
           updatedAt: new Date(),
         },
       });
+      await auditDenied(
+        checkpointProblem.code,
+        'suspicious',
+        checkpointProblem.reason,
+        state?.lastTrustedTime ?? null,
+        state?.lastIssuedAt ?? null,
+        { source: 'local_checkpoint' },
+      );
       throw new TrustedClockError(checkpointProblem.code, checkpointProblem.reason);
     }
 
@@ -664,11 +821,18 @@ export async function reserveTrustedIssuance(input: {
         createdAt: checkedAt,
         updatedAt: checkedAt,
       }).onConflictDoNothing();
+      const message = deniedMessage(denied.event, remoteTime);
+      await auditDenied(
+        denied.event,
+        evaluation.status,
+        denied.reason,
+        remoteTime ?? state?.lastTrustedTime ?? null,
+        state?.lastIssuedAt ?? asDate(durable?.lastIssuedAt),
+        { source: remoteTime ? 'https' : 'offline' },
+      );
       throw new TrustedClockError(
         denied.event,
-        denied.event === 'RESTORE_SUSPECTED' || denied.event === 'ZATCA_CHAIN_REVIEW_REQUIRED'
-          ? 'تم اكتشاف حالة قد تشير إلى استعادة نسخة احتياطية أقدم. يجب التحقق من سلامة سلسلة الفوترة الإلكترونية قبل الإصدار.'
-          : 'تاريخ ووقت الجهاز غير متوافقين مع سجل الفوترة الإلكترونية. يرجى تصحيح تاريخ ووقت الجهاز قبل إصدار المستند.',
+        message,
       );
     }
 
@@ -798,6 +962,7 @@ export async function recheckTrustedClock(input: {
       message: 'تعذر الحصول على Trusted Time جديد من Cloudflare؛ لم يتم فك حالة الحظر.',
     };
   }
+  machineTrustedAnchor = { timestamp: remoteTime, monotonic: performance.now() };
 
   return db.transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${unitKey}, 0))`);

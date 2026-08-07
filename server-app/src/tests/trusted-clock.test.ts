@@ -124,6 +124,14 @@ describe('TrustedClock evaluation', () => {
     expect(result).toMatchObject({ allowed: false, event: 'CLOCK_UNTRUSTED' });
   });
 
+  it('does not use a commercial invoice date to evaluate TrustedClock', () => {
+    const result = evaluateTrustedClock({
+      wallNow: new Date('2026-08-08T00:01:00.000Z'),
+      remoteTime: new Date('2026-08-08T00:01:01.000Z'),
+    });
+    expect(result).toMatchObject({ allowed: true, status: 'trusted', source: 'https' });
+  });
+
   it('blocks Offline issuance after a backend restart without a monotonic baseline', () => {
     const result = evaluateTrustedClock({
       wallNow: new Date('2026-08-07T12:01:00.000Z'),

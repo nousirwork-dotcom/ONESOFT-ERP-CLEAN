@@ -448,6 +448,22 @@ try {
 
 console.log('[6/6] ✅ PostgreSQL connected — schema OK — server fully ready');
 
+// Establish the machine-level network time anchor in the background. This
+// keeps the ERP available while ensuring the first ZATCA issuance never
+// falls back to the Windows wall clock.
+try {
+  const { bootstrapTrustedClock } = await import('./services/trustedClock.js');
+  void bootstrapTrustedClock().then((result) => {
+    console.log(
+      result.ok
+        ? `[trusted-clock] bootstrap ready at ${result.timestamp?.toISOString() ?? 'unknown'}`
+        : '[trusted-clock] bootstrap unavailable; ZATCA issuance remains blocked',
+    );
+  });
+} catch (err) {
+  console.error('[trusted-clock] bootstrap could not start:', err);
+}
+
 // Durable Mock-only ZATCA queue. It is started only after schema validation,
 // survives process restarts through PostgreSQL, and never contacts Production.
 try {
