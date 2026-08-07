@@ -24,7 +24,6 @@ import {
 import {
   resolveZatcaContext,
   type ResolvedZatcaContext,
-  type ZatcaEnvironment,
   type ZatcaContextUser,
 } from './zatcaContext.js';
 
@@ -86,13 +85,6 @@ export type ZatcaIssuedSnapshot = {
 
 function configRecord(value: unknown): Record<string, any> {
   return value && typeof value === 'object' ? value as Record<string, any> : {};
-}
-
-function environmentFromConfig(value: unknown): ZatcaEnvironment {
-  const environment = String(configRecord(value).environment ?? '').trim().toLowerCase();
-  if (environment === 'production') return 'production';
-  if (environment === 'sandbox' || environment === 'test') return 'sandbox';
-  return environment === 'simulation' ? 'simulation' : 'sandbox';
 }
 
 function text(value: unknown): string {
@@ -158,23 +150,15 @@ export async function issueZatcaDocument(input: {
   }
 
   const cfg = configRecord(organization.zatcaConfig);
-  if (cfg.enabled !== true) {
-    throw new TRPCError({
-      code: 'PRECONDITION_FAILED',
-      message: 'منظومة ZATCA غير مفعَّلة لهذا المستند.',
-    });
-  }
-  const environment = environmentFromConfig(organization.zatcaConfig);
-  if (environment === 'production') {
-    throw new TRPCError({
-      code: 'PRECONDITION_FAILED',
-      message: 'إصدار Production مغلق في هذه المرحلة.',
-    });
-  }
 
+  // Local issuance is deliberately bound to the Simulation device selected
+  // through the document journal -> POS unit relationship. The organization
+  // config is not the source of truth for either the unit or its environment:
+  // older config rows may still have enabled=false while the linked Simulation
+  // device is operational. Production is never selected by this path.
   const resolvedContext: ResolvedZatcaContext = await resolveZatcaContext({
     journalId: invoice.journalId,
-    environment,
+    environment: 'simulation',
     user,
     client: tx,
   });
