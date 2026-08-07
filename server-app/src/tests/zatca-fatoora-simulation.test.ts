@@ -7,28 +7,28 @@ import {
   assertSimulationUrl,
   assertFatooraUrl,
   generatePosUnitCsr,
-  generateSimulationCsr,
   getFatooraUrl,
   getSimulationUrl,
 } from '../services/zatcaFatooraSimulation.js';
-import { getSimulationInvoiceTypeCode } from '../services/zatcaInvoiceSubmission.js';
+import { getZatcaInvoiceTypeCode } from '../services/zatcaInvoiceSubmission.js';
 import { generateCreditNoteXml } from '@talha7k/zatca';
 import { getCsrIdentityForUnit } from '../services/zatcaPosUnitIdentity.js';
 
 describe('Fatoora Simulation transport', () => {
   it('generates a secp256k1 CSR with the Simulation template', () => {
-    const generated = generateSimulationCsr({
-      commonName: 'OneSoft-EGS-01',
+    const generated = generatePosUnitCsr({
+      environment: 'simulation',
+      identity: {
+        posCode: 'POS-001',
+        commonName: 'POS-001',
+        egsSerialNumber: '1-OneSoft|2-ERP|3-fixed-serial-001',
+      },
       organizationName: 'OneSoft',
       organizationUnitName: 'Riyadh',
-      serialNumber: 'SN-01',
       vatNumber: '399999999900003',
       branchLocation: 'Riyadh',
       businessCategory: 'Retail',
-      solutionName: 'OneSoft',
-      model: 'ERP',
       branchName: 'Riyadh',
-      taxpayerProvidedId: 'OneSoft-EGS-01',
     });
 
     expect(generated.privateKeyPem).toContain('PRIVATE KEY');
@@ -39,19 +39,19 @@ describe('Fatoora Simulation transport', () => {
   });
 
   it('uses a persisted EGS serial as-is without nesting the ZATCA segments', () => {
-    const generated = generateSimulationCsr({
-      commonName: 'POS-001',
+    const generated = generatePosUnitCsr({
+      environment: 'simulation',
+      identity: {
+        posCode: 'POS-001',
+        commonName: 'POS-001',
+        egsSerialNumber: '1-OneSoft|2-ERP|3-fixed-serial-001',
+      },
       organizationName: 'OneSoft',
       organizationUnitName: 'Riyadh',
-      serialNumber: 'ignored-by-persisted-identity',
-      egsSerialNumber: '1-OneSoft|2-ERP|3-fixed-serial-001',
       vatNumber: '399999999900003',
       branchLocation: 'Riyadh',
       businessCategory: 'Retail',
-      solutionName: 'OneSoft',
-      model: 'ERP',
       branchName: 'Riyadh',
-      taxpayerProvidedId: 'POS-001',
     });
 
     const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onesoft-zatca-test-'));
@@ -179,10 +179,10 @@ describe('Fatoora Simulation transport', () => {
   });
 
   it('maps invoice documents to the required ZATCA type codes', () => {
-    expect(getSimulationInvoiceTypeCode('sale')).toBe('388');
-    expect(getSimulationInvoiceTypeCode('return')).toBe('381');
-    expect(getSimulationInvoiceTypeCode('credit_note')).toBe('381');
-    expect(getSimulationInvoiceTypeCode('debit_note')).toBe('383');
+    expect(getZatcaInvoiceTypeCode('sale')).toBe('388');
+    expect(getZatcaInvoiceTypeCode('return')).toBe('381');
+    expect(getZatcaInvoiceTypeCode('credit_note')).toBe('381');
+    expect(getZatcaInvoiceTypeCode('debit_note')).toBe('383');
   });
 
   it('builds a debit-note XML with the sales original reference and reason', () => {

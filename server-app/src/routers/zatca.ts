@@ -62,7 +62,7 @@ import {
   probeFatooraSimulation,
   extractComplianceRequestId,
 } from '../services/zatcaFatooraSimulation.js';
-import { buildAndSignSimulationInvoice } from '../services/zatcaInvoiceSubmission.js';
+import { buildAndSignZatcaInvoice } from '../services/zatcaInvoiceSubmission.js';
 import { decrypt, encrypt } from '../config-crypto.js';
 import { DEFAULT_COMPLIANCE_PREVIOUS_INVOICE_HASH, normalizeZatcaPostalCode } from '@talha7k/zatca';
 
@@ -2100,6 +2100,9 @@ export const zatcaRouter = router({
           eq(zatcaCsrRequests.orgId, ctx.user.orgId),
           eq(zatcaCsrRequests.deviceId, device.id),
           ...(input.csrRequestId ? [eq(zatcaCsrRequests.id, input.csrRequestId)] : []),
+           // A CSR that already received a failed/incomplete OTP response is
+           // not reusable. The user must generate a fresh CSR/key attempt.
+           eq(zatcaCsrRequests.status, 'pending_otp'),
           eq(zatcaCsrRequests.isActive, true),
           eq(zatcaCsrRequests.isDeleted, false),
         ),
@@ -2121,7 +2124,9 @@ export const zatcaRouter = router({
         ? response.body as Record<string, unknown>
         : {};
       const complianceRequestId = extractComplianceRequestId(response);
-      const requestId = response.requestId;
+       // Only body.requestID is a valid Compliance reference. The transport
+       // request UUID must never be exposed as the Compliance request ID.
+       const requestId = complianceRequestId;
       const binarySecurityToken = String(rawBody.binarySecurityToken ?? '');
       const secret = String(rawBody.secret ?? '');
       const successful = response.httpStatus != null
@@ -2531,9 +2536,9 @@ export const zatcaRouter = router({
            const invoiceCounter = isStandardFixture
              ? ++standardInvoiceCounter
              : 1;
-          let signed: ReturnType<typeof buildAndSignSimulationInvoice>;
+           let signed: ReturnType<typeof buildAndSignZatcaInvoice>;
           try {
-            signed = buildAndSignSimulationInvoice({
+             signed = buildAndSignZatcaInvoice({
               invoice: submissionInvoice,
               items,
               seller: {
@@ -2622,10 +2627,7 @@ export const zatcaRouter = router({
             : (passed
               ? (parts.warnings.length ? 'passed_with_warnings' : 'passed')
               : 'failed');
-          const requestId = response.requestId
-            ?? (response.body && typeof response.body === 'object'
-              ? String((response.body as Record<string, unknown>).requestID ?? (response.body as Record<string, unknown>).requestId ?? '') || null
-              : null);
+           const requestId = extractComplianceRequestId(response);
           const safeResponse = safeRemoteResponse(response);
           await saveRow({
             testKey, invoiceType, documentType, status,
@@ -2786,7 +2788,9 @@ export const zatcaRouter = router({
       const rawBody = response.body && typeof response.body === 'object'
         ? response.body as Record<string, unknown>
         : {};
-      const requestId = String(rawBody.requestID ?? rawBody.requestId ?? response.requestId ?? '') || null;
+       // Only the successful Compliance body's requestID is valid for the
+       // operational-CSID reference. Transport request IDs are not substitutes.
+       const requestId = complianceRequestId;
       const operationalToken = String(rawBody.binarySecurityToken ?? '');
       const operationalSecret = String(rawBody.secret ?? '');
       const successful = response.httpStatus != null
@@ -3261,9 +3265,10 @@ export const zatcaRouter = router({
         };
       }
 
+      const requestedEnvironment = cfg.environment as ZatcaEnvironment;
       const resolvedContext = await resolveZatcaContext({
         journalId: inv.journalId ?? -1,
-        environment: cfg.environment === 'simulation' ? 'simulation' : 'sandbox',
+        environment: requestedEnvironment,
         user: {
           id: ctx.user.id,
           orgId: ctx.user.orgId,
@@ -3480,9 +3485,9 @@ export const zatcaRouter = router({
           });
         }
 
-        let signed: ReturnType<typeof buildAndSignSimulationInvoice>;
+         let signed: ReturnType<typeof buildAndSignZatcaInvoice>;
         try {
-          signed = buildAndSignSimulationInvoice({
+           signed = buildAndSignZatcaInvoice({
             invoice: inv,
             items: await db.select({
               id: salesInvoiceItems.id,

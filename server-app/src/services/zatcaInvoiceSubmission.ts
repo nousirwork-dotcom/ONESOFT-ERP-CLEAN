@@ -120,13 +120,13 @@ function assertSeller(seller: SellerInput) {
   }
 }
 
-export function getSimulationInvoiceTypeCode(invoiceType: string): '381' | '383' | '388' {
+export function getZatcaInvoiceTypeCode(invoiceType: string): '381' | '383' | '388' {
   if (invoiceType === 'return' || invoiceType === 'credit_note') return '381';
   if (invoiceType === 'debit_note') return '383';
   return '388';
 }
 
-export function buildAndSignSimulationInvoice(
+export function buildAndSignZatcaInvoice(
   input: BuildSignedInvoiceInput,
 ): SignedInvoiceSubmission {
   assertSeller(input.seller);
@@ -136,7 +136,7 @@ export function buildAndSignSimulationInvoice(
   const currency = input.invoice.currency || 'SAR';
   if (currency !== 'SAR') throw new Error('عملة الفاتورة الرسمية يجب أن تكون SAR');
 
-  const invoiceTypeCode = getSimulationInvoiceTypeCode(input.invoice.invoiceType);
+  const invoiceTypeCode = getZatcaInvoiceTypeCode(input.invoice.invoiceType);
   const invoiceTypeCodeName = input.submissionType === 'clearance' ? '0100000' : '0200000';
   const subtotal = numberValue(input.invoice.subtotal);
   const discountTotal = numberValue(input.invoice.discountAmount);
@@ -253,6 +253,7 @@ export function buildAndSignSimulationInvoice(
     invoiceBase64: Buffer.from(signed.signedXml, 'utf8').toString('base64'),
   };
 }
+
 
 function discountAmount(value: string | number | null): Array<{
   chargeIndicator: false;
