@@ -617,6 +617,13 @@
       "when": 1786122500000,
       "tag": "0087_zatca_trusted_clock_checkpoint_pih",
       "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "7",
+      "when": 1786144701732,
+      "tag": "0088_repair_zatca_clock_policy",
+      "breakpoints": true
     }
   ]
 }

@@ -5,4 +5,4 @@
  * constant to match the new filename (without the .sql extension), then
  * run `pnpm migrate` so the live database is stamped with the new version.
  */
-export const REQUIRED_SCHEMA_VERSION = '0087_zatca_trusted_clock_checkpoint_pih';
+export const REQUIRED_SCHEMA_VERSION = '0088_repair_zatca_clock_policy';
