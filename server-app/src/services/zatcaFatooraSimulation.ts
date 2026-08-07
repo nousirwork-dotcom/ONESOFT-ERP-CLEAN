@@ -46,6 +46,42 @@ export type FatooraResponse = {
 };
 
 /**
+ * The operational-CSID endpoint expects the numeric requestID returned inside
+ * the successful Compliance response body. The transport requestId (HTTP
+ * header/request UUID) identifies the HTTP exchange only and is not a valid
+ * Compliance reference.
+ *
+ * Keep this extraction strict and shared by every environment flow:
+ * - read body.requestID only;
+ * - accept a positive integer or its decimal-string representation;
+ * - never fall back to response.requestId or body.requestId.
+ */
+export function extractComplianceRequestId(payload: unknown): string | null {
+  let value: unknown = payload;
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return null;
+    }
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+
+  const body = (value as Record<string, unknown>).body;
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return null;
+
+  const requestId = (body as Record<string, unknown>).requestID;
+  if (typeof requestId === 'number') {
+    return Number.isSafeInteger(requestId) && requestId > 0 ? String(requestId) : null;
+  }
+  if (typeof requestId === 'string') {
+    const normalized = requestId.trim();
+    return /^\d+$/.test(normalized) && BigInt(normalized) > 0n ? normalized : null;
+  }
+  return null;
+}
+
+/**
  * The Simulation /compliance response returns the Compliance certificate in
  * binarySecurityToken. It is a Base64-encoded DER X.509 certificate, while
  * the invoice signer expects PEM. Keep the transport token unchanged for

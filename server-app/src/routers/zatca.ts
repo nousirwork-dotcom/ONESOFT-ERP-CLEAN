@@ -54,6 +54,7 @@ import {
   postFatooraSimulation,
   getSimulationUrl,
   probeFatooraSimulation,
+  extractComplianceRequestId,
 } from '../services/zatcaFatooraSimulation.js';
 import { buildAndSignSimulationInvoice } from '../services/zatcaInvoiceSubmission.js';
 import { decrypt, encrypt } from '../config-crypto.js';
@@ -2099,13 +2100,14 @@ export const zatcaRouter = router({
       const rawBody = response.body && typeof response.body === 'object'
         ? response.body as Record<string, unknown>
         : {};
-      const requestId = String(rawBody.requestID ?? rawBody.requestId ?? response.requestId ?? '') || null;
+      const complianceRequestId = extractComplianceRequestId(response);
+      const requestId = response.requestId;
       const binarySecurityToken = String(rawBody.binarySecurityToken ?? '');
       const secret = String(rawBody.secret ?? '');
       const successful = response.httpStatus != null
         && response.httpStatus >= 200
         && response.httpStatus < 300
-        && Boolean(binarySecurityToken && secret);
+        && Boolean(binarySecurityToken && secret && complianceRequestId);
 
       const key = await db.query.zatcaKeys.findFirst({
         where: and(
@@ -2722,19 +2724,30 @@ export const zatcaRouter = router({
           eq(zatcaCsrRequests.orgId, ctx.user.orgId),
           eq(zatcaCsrRequests.deviceId, device.id),
           ...(input.csrRequestId ? [eq(zatcaCsrRequests.id, input.csrRequestId)] : []),
+          eq(zatcaCsrRequests.status, 'compliance_received'),
           eq(zatcaCsrRequests.isActive, true),
           eq(zatcaCsrRequests.isDeleted, false),
         ),
         orderBy: desc(zatcaCsrRequests.createdAt),
       });
-      const priorResponse = csrRequest?.response ? JSON.parse(csrRequest.response) as Record<string, unknown> : {};
-      const complianceRequestId = String(
-        priorResponse.requestId
-        ?? priorResponse.requestID
-        ?? '',
-      );
+      if (!csrRequest?.csrText) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'لا يوجد سجل Compliance ناجح مرتبط بـCompliance CSID لهذه الوحدة',
+        });
+      }
+      if (certificate.csr && certificate.csr !== csrRequest.csrText) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'سجل CSR الناجح لا يطابق CSR الذي أصدر Compliance CSID الحالي',
+        });
+      }
+      const complianceRequestId = extractComplianceRequestId(csrRequest.response);
       if (!complianceRequestId) {
-        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'لم يُحفظ Request ID الخاص بـCompliance CSID' });
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'مرجع Compliance الصحيح (body.requestID) مفقود؛ تم منع إرسال CSID التشغيلي',
+        });
       }
 
       const response = await postFatooraSimulation({
