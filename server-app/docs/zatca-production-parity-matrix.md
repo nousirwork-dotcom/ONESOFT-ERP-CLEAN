@@ -12,9 +12,9 @@ Production يميّز بين الجاهزية المحلية/Mock وبين ال�
 | الإصلاح | Simulation | Production | الخدمة المشتركة | الاختبار |
 |---|---|---|---|---|
 | Schema 0083/0084/0085 | ✓ | ✓ نفس Drizzle schema والنسخة المطلوبة `0085_zatca_pos_unit_identity` | `schema.ts` + migrations | ✓ schema version/runtime check |
-| POS identity | ✓ | ✓ Mock/local، مع حظر الاتصال الخارجي | `zatcaPosUnitIdentity` + `generatePosUnitCsr` | ✓ نفس CN وEGS Serial |
+| POS identity | ✓ للوحدات الجديدة من `organizations.commercialReg` | ✓ Mock/local، مع حظر الاتصال الخارجي | `zatcaPosUnitIdentity` + `generatePosUnitCsr` | ✓ نفس CN وEGS Serial |
 | Common Name | ✓ من `posUnit` | ✓ Mock/local من نفس `posUnit` | `getCsrIdentityForUnit` | ✓ `POS-001` في CSRين |
-| EGS Serial | ✓ محفوظ وثابت | ✓ Mock/local نفس القيمة | `zatcaPosUnitIdentity` | ✓ لا تتغير بين البيئتين |
+| EGS Serial | ✓ `1-OneSoft\|2-ERP\|3-<CR>-<POS Code>` محفوظ وثابت | ✓ Mock/local نفس القيمة | `zatcaPosUnitIdentity` | ✓ CR 7001710990 وPOS-001/POS-002 |
 | إنشاء الوحدة وربط الدفاتر | ✓ | ✓ نفس mutation، لا تعتمد على البيئة | `createPosUnit` transaction | ✓ source/identity tests |
 | إنشاء Device/CSR عند حفظ الوحدة | لا يُنشأ تلقائيًا | لا يُنشأ تلقائيًا | `createPosUnit` | ✓ المسار منفصل عن CSR |
 | OTP | Simulation فقط حاليًا، في الذاكرة ولا يُسجل | لا يوجد endpoint Production | `postFatoora` يحمل البيئة صراحة | ✓ عدم تخزين/تسجيل OTP |

@@ -1,4 +1,3 @@
-import crypto from 'node:crypto';
 import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../db.js';
 import { zatcaPosUnits } from '../schema.js';
@@ -20,18 +19,27 @@ const POS_CODE_PATTERN = /^POS-(\d{3})$/;
  * label chosen for this implementation and is not a credential or identity
  * supplied by the user.
  *
- * The UUID is generated once when a POS unit is created and then persisted.
- * It is not regenerated for a retry, restart, or a second environment.
+ * New units use the organization's commercial registration/unified number
+ * together with the immutable POS code. The value is generated once at unit
+ * creation and then persisted; it is not rebuilt for CSR retries or either
+ * environment.
  */
-export function buildPosUnitIdentity(posCode: string): PosUnitIdentity {
+export function buildPosUnitIdentity(
+  posCode: string,
+  unifiedCrNumber: string,
+): PosUnitIdentity {
   const normalizedCode = posCode.trim();
   if (!POS_CODE_PATTERN.test(normalizedCode)) {
     throw new Error('POS code must use the POS-### format');
   }
+  const normalizedCr = unifiedCrNumber.trim();
+  if (!/^\d{10}$/.test(normalizedCr)) {
+    throw new Error('A valid 10-digit commercial registration/unified number is required');
+  }
   return {
     posCode: normalizedCode,
     commonName: normalizedCode,
-    egsSerialNumber: `1-OneSoft|2-ERP|3-${crypto.randomUUID()}`,
+    egsSerialNumber: `1-OneSoft|2-ERP|3-${normalizedCr}-${normalizedCode}`,
   };
 }
 

@@ -1292,7 +1292,18 @@ export const zatcaRouter = router({
             .returning();
         } else {
           const unitCode = await lockAndGetNextPosCode(tx, ctx.user.orgId);
-          const identity = buildPosUnitIdentity(unitCode);
+          const organization = await tx.query.organizations.findFirst({
+            where: eq(organizations.id, ctx.user.orgId),
+            columns: { commercialReg: true },
+          });
+          const commercialReg = organization?.commercialReg?.trim() ?? '';
+          if (!/^\d{10}$/.test(commercialReg)) {
+            throw new TRPCError({
+              code: 'PRECONDITION_FAILED',
+              message: 'لا يمكن إنشاء وحدة ZATCA جديدة قبل استكمال رقم السجل التجاري/الرقم الموحد للمنشأة (10 أرقام)',
+            });
+          }
+          const identity = buildPosUnitIdentity(unitCode, commercialReg);
           [unit] = await tx.insert(zatcaPosUnits).values({
             orgId: ctx.user.orgId,
             warehouseId: journal.warehouseId,

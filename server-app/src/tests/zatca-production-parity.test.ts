@@ -59,6 +59,13 @@ describe('ZATCA Simulation / Production parity guardrails', () => {
     expect(source).not.toMatch(/requestProductionOperationalCsid/);
   });
 
+  it('creates new EGS identity from organization CR, not VAT or UUID', () => {
+    const source = readFileSync(resolve(process.cwd(), 'src/routers/zatca.ts'), 'utf8');
+    expect(source).toContain('columns: { commercialReg: true }');
+    expect(source).toContain('buildPosUnitIdentity(unitCode, commercialReg)');
+    expect(source).not.toContain('buildPosUnitIdentity(unitCode)');
+  });
+
   it('does not reuse a CSR after an incomplete Compliance/OTP attempt', () => {
     const source = readFileSync(resolve(process.cwd(), 'src/routers/zatca.ts'), 'utf8');
     const complianceSection = source.slice(
