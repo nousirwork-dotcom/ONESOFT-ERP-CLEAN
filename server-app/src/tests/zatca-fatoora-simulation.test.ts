@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   assertSimulationUrl,
+  assertFatooraUrl,
   generateSimulationCsr,
+  getFatooraUrl,
   getSimulationUrl,
 } from '../services/zatcaFatooraSimulation.js';
 import { getSimulationInvoiceTypeCode } from '../services/zatcaInvoiceSubmission.js';
@@ -38,9 +40,44 @@ describe('Fatoora Simulation transport', () => {
       .toBe('/e-invoicing/simulation/production/csids');
   });
 
-  it('rejects core and non-Fatoora endpoints', () => {
+  it('maps every shared endpoint to the official Simulation and Production bases', () => {
+    const paths = [
+      '/compliance',
+      '/compliance/invoices',
+      '/production/csids',
+      '/invoices/reporting/single',
+      '/invoices/clearance/single',
+    ] as const;
+
+    for (const path of paths) {
+      expect(getFatooraUrl('simulation', path)).toBe(
+        `https://gw-fatoora.zatca.gov.sa/e-invoicing/simulation${path}`,
+      );
+      expect(getFatooraUrl('production', path)).toBe(
+        `https://gw-fatoora.zatca.gov.sa/e-invoicing/core${path}`,
+      );
+      expect(assertFatooraUrl(getFatooraUrl('simulation', path), 'simulation').pathname)
+        .toBe(`/e-invoicing/simulation${path}`);
+      expect(assertFatooraUrl(getFatooraUrl('production', path), 'production').pathname)
+        .toBe(`/e-invoicing/core${path}`);
+    }
+  });
+
+  it('rejects cross-environment, non-Fatoora, and non-allowlisted endpoints', () => {
     expect(() => assertSimulationUrl(
       'https://gw-fatoora.zatca.gov.sa/e-invoicing/core/compliance',
+    )).toThrow();
+    expect(() => assertFatooraUrl(
+      'https://gw-fatoora.zatca.gov.sa/e-invoicing/simulation/compliance',
+      'production',
+    )).toThrow();
+    expect(() => assertFatooraUrl(
+      'https://gw-fatoora.zatca.gov.sa/e-invoicing/core/compliance',
+      'simulation',
+    )).toThrow();
+    expect(() => assertFatooraUrl(
+      'https://gw-fatoora.zatca.gov.sa/e-invoicing/core/unknown',
+      'production',
     )).toThrow();
     expect(() => assertSimulationUrl(
       'https://example.invalid/e-invoicing/simulation/compliance',

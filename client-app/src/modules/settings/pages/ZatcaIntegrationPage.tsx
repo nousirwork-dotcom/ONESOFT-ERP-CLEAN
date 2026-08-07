@@ -237,10 +237,15 @@ function ZatcaSettings() {
               <label style={lbl}>Secret Key (المفتاح السري)</label>
               <input type="password" style={{ ...fld, direction: "ltr", fontFamily: "monospace", fontSize: 11 }} value={cfg.secretKey ?? ""} onChange={e => set("secretKey", e.target.value)} placeholder="••••••••••••••••" />
             </div>
-            <div style={{ gridColumn: "1 / -1", ...grp }}>
-              <label style={lbl}>رابط API الهيئة</label>
-              <input style={{ ...fld, direction: "ltr", fontSize: 11 }} value={cfg.apiBaseUrl ?? ""} onChange={e => set("apiBaseUrl", e.target.value)} />
-            </div>
+             <div style={{ gridColumn: "1 / -1", ...grp }}>
+               <label style={lbl}>رابط API الهيئة الرسمي (مشتق من البيئة)</label>
+               <input
+                 style={{ ...fld, direction: "ltr", fontSize: 11, background: "#f8fafc", color: "#475569" }}
+                 value={cfg.apiBaseUrl ?? ""}
+                 readOnly
+                 aria-readonly="true"
+               />
+             </div>
             <SectionTitle icon="🛡️" title="معلومات الشهادة" />
             <div style={grp}>
               <label style={lbl}>رقم تسلسل الشهادة</label>

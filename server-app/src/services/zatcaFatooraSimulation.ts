@@ -4,17 +4,32 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-export const FATOORA_SIMULATION_BASE =
-  'https://gw-fatoora.zatca.gov.sa/e-invoicing/simulation';
+export type FatooraEnvironment = 'simulation' | 'production';
+
+export const FATOORA_BASE_URLS: Readonly<Record<FatooraEnvironment, string>> = {
+  simulation: 'https://gw-fatoora.zatca.gov.sa/e-invoicing/simulation',
+  production: 'https://gw-fatoora.zatca.gov.sa/e-invoicing/core',
+};
 
 const REQUEST_TIMEOUT_MS = 30_000;
 
-export type SimulationApiPath =
+export type FatooraApiPath =
   | '/compliance'
   | '/compliance/invoices'
   | '/production/csids'
   | '/invoices/reporting/single'
   | '/invoices/clearance/single';
+
+/** @deprecated Use FatooraApiPath in environment-neutral transport code. */
+export type SimulationApiPath = FatooraApiPath;
+
+const FATOORA_API_PATHS: ReadonlySet<string> = new Set([
+  '/compliance',
+  '/compliance/invoices',
+  '/production/csids',
+  '/invoices/reporting/single',
+  '/invoices/clearance/single',
+]);
 
 export type CsrInput = {
   commonName: string;
@@ -94,7 +109,7 @@ export function complianceCertificatePem(
   const value = binarySecurityToken.trim();
   if (!value) throw new Error('شهادة Compliance غير مستلمة');
 
-  let certificate: crypto.X509Certificate;
+  let certificate: crypto.X509Certificate | undefined;
   try {
     if (value.includes('BEGIN CERTIFICATE')) {
       certificate = new crypto.X509Certificate(value);
@@ -150,21 +165,33 @@ export function complianceCertificatePem(
   return certificate.toString();
 }
 
-export function getSimulationUrl(apiPath: SimulationApiPath): string {
-  return `${FATOORA_SIMULATION_BASE}${apiPath}`;
+export function getFatooraUrl(environment: FatooraEnvironment, apiPath: FatooraApiPath): string {
+  return `${FATOORA_BASE_URLS[environment]}${apiPath}`;
 }
 
-export function assertSimulationUrl(value: string): URL {
+export function assertFatooraUrl(value: string, environment: FatooraEnvironment): URL {
   const parsed = new URL(value);
+  const expectedBase = new URL(FATOORA_BASE_URLS[environment]);
+  const expectedPrefix = `${expectedBase.pathname}/`;
   if (
     parsed.protocol !== 'https:'
-    || parsed.hostname !== 'gw-fatoora.zatca.gov.sa'
-    || !parsed.pathname.startsWith('/e-invoicing/simulation/')
-    || parsed.pathname.includes('/e-invoicing/core')
+    || parsed.hostname !== expectedBase.hostname
+    || parsed.port !== expectedBase.port
+    || !parsed.pathname.startsWith(expectedPrefix)
+    || !FATOORA_API_PATHS.has(parsed.pathname.slice(expectedBase.pathname.length))
   ) {
-    throw new Error('عنوان Fatoora غير مسموح؛ هذه الخدمة مقيدة ببيئة Simulation فقط');
+    throw new Error(`عنوان Fatoora غير مسموح لبيئة ${environment}`);
   }
   return parsed;
+}
+
+export function getSimulationUrl(apiPath: SimulationApiPath): string {
+  return getFatooraUrl('simulation', apiPath);
+}
+
+/** @deprecated Use assertFatooraUrl(value, environment). */
+export function assertSimulationUrl(value: string): URL {
+  return assertFatooraUrl(value, 'simulation');
 }
 
 /**
@@ -177,7 +204,7 @@ export async function probeFatooraSimulation(): Promise<{
   reachable: boolean;
   httpStatus: number | null;
 }> {
-  const url = assertSimulationUrl(getSimulationUrl('/compliance'));
+  const url = assertFatooraUrl(getFatooraUrl('simulation', '/compliance'), 'simulation');
   try {
     const response = await fetch(url, {
       method: 'GET',
@@ -292,18 +319,26 @@ function responseBody(raw: string): Record<string, unknown> | string | null {
   }
 }
 
-export async function postFatooraSimulation(input: {
-  apiPath: SimulationApiPath;
+export type FatooraCredentials = {
+  binarySecurityToken: string;
+  secret: string;
+};
+
+export async function postFatoora(input: {
+  environment: FatooraEnvironment;
+  apiPath: FatooraApiPath;
   body: Record<string, unknown>;
   otp?: string;
-  binarySecurityToken?: string;
-  secret?: string;
+  credentials?: FatooraCredentials;
   clearance?: boolean;
   clearanceStatus?: '0' | '1';
   correlationId?: string;
   idempotencyKey?: string;
 }): Promise<FatooraResponse> {
-  const url = assertSimulationUrl(getSimulationUrl(input.apiPath));
+  const url = assertFatooraUrl(
+    getFatooraUrl(input.environment, input.apiPath),
+    input.environment,
+  );
   const headers: Record<string, string> = {
     accept: 'application/json',
     'accept-language': 'en',
@@ -315,8 +350,11 @@ export async function postFatooraSimulation(input: {
   else if (input.clearance) headers['Clearance-Status'] = '1';
   if (input.correlationId) headers['x-correlation-id'] = input.correlationId;
   if (input.idempotencyKey) headers['idempotency-key'] = input.idempotencyKey;
-  if (input.binarySecurityToken && input.secret) {
-    headers.Authorization = basicAuth(input.binarySecurityToken, input.secret);
+  if (input.credentials?.binarySecurityToken && input.credentials.secret) {
+    headers.Authorization = basicAuth(
+      input.credentials.binarySecurityToken,
+      input.credentials.secret,
+    );
   }
 
   let response: Response;
@@ -346,4 +384,31 @@ export async function postFatooraSimulation(input: {
     requestId,
     body: parsed,
   };
+}
+
+/** @deprecated Use postFatoora with an explicit environment and credentials. */
+export async function postFatooraSimulation(input: {
+  apiPath: SimulationApiPath;
+  body: Record<string, unknown>;
+  otp?: string;
+  binarySecurityToken?: string;
+  secret?: string;
+  clearance?: boolean;
+  clearanceStatus?: '0' | '1';
+  correlationId?: string;
+  idempotencyKey?: string;
+}): Promise<FatooraResponse> {
+  return postFatoora({
+    environment: 'simulation',
+    apiPath: input.apiPath,
+    body: input.body,
+    otp: input.otp,
+    credentials: input.binarySecurityToken && input.secret
+      ? { binarySecurityToken: input.binarySecurityToken, secret: input.secret }
+      : undefined,
+    clearance: input.clearance,
+    clearanceStatus: input.clearanceStatus,
+    correlationId: input.correlationId,
+    idempotencyKey: input.idempotencyKey,
+  });
 }

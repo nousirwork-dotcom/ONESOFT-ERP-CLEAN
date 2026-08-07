@@ -51,7 +51,8 @@ import { assertUnitCanBeUsed } from '../services/zatcaUnitLifecycle.js';
 import {
   generateSimulationCsr,
   complianceCertificatePem,
-  postFatooraSimulation,
+  postFatoora,
+  FATOORA_BASE_URLS,
   getSimulationUrl,
   probeFatooraSimulation,
   extractComplianceRequestId,
@@ -109,7 +110,7 @@ function canonicalizeZatcaConfig(
   organization?: { name?: string | null; nameEn?: string | null; taxNumber?: string | null },
 ): ZatcaConfig {
   const raw = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>;
-  return ZatcaConfigSchema.parse({
+  const parsed = ZatcaConfigSchema.parse({
     ...raw,
     legalName: organization?.name ?? raw.legalName ?? raw.businessName ?? '',
     englishName: organization?.nameEn ?? raw.englishName ?? raw.businessNameEn ?? '',
@@ -121,6 +122,14 @@ function canonicalizeZatcaConfig(
     phone: raw.phone ?? '',
     email: raw.email ?? '',
   });
+  return {
+    ...parsed,
+    // The authority base is derived from the environment enum. A user-supplied
+    // URL is never trusted for transport or persisted as an authority target.
+    apiBaseUrl: parsed.environment === 'production'
+      ? FATOORA_BASE_URLS.production
+      : FATOORA_BASE_URLS.simulation,
+  };
 }
 
 const REDACTED_CREDENTIAL = '••••••••••••••••';
@@ -202,7 +211,7 @@ function lifecycleMessage(state: ZatcaLifecycleState): string {
 function simulationEnvironmentValues() {
   return {
     name: 'Simulation',
-    baseApiUrl: 'https://gw-fatoora.zatca.gov.sa/e-invoicing/simulation',
+    baseApiUrl: FATOORA_BASE_URLS.simulation,
     complianceUrl: getSimulationUrl('/compliance'),
     reportingUrl: getSimulationUrl('/invoices/reporting/single'),
     clearanceUrl: getSimulationUrl('/invoices/clearance/single'),
@@ -2091,7 +2100,8 @@ export const zatcaRouter = router({
       }
 
       // OTP يُستخدم في الذاكرة لهذا الطلب فقط ولا يدخل قاعدة البيانات أو السجل.
-      const response = await postFatooraSimulation({
+      const response = await postFatoora({
+        environment: 'simulation',
         apiPath: '/compliance',
         body: { csr: csrRequest.csrText },
         otp: input.otp,
@@ -2568,11 +2578,14 @@ export const zatcaRouter = router({
 
           let response;
           try {
-            response = await postFatooraSimulation({
+            response = await postFatoora({
+              environment: 'simulation',
               apiPath: '/compliance/invoices',
               body: { invoiceHash: signed.invoiceHash, uuid, invoice: signed.invoiceBase64 },
-              binarySecurityToken: decrypt(csid.complianceCsid),
-              secret: decrypt(certificate.complianceSecretEncrypted),
+              credentials: {
+                binarySecurityToken: decrypt(csid.complianceCsid),
+                secret: decrypt(certificate.complianceSecretEncrypted),
+              },
               clearance: invoiceType === 'standard',
               clearanceStatus: invoiceType === 'standard' ? '1' : '0',
               correlationId: uuid,
@@ -2750,11 +2763,14 @@ export const zatcaRouter = router({
         });
       }
 
-      const response = await postFatooraSimulation({
+      const response = await postFatoora({
+        environment: 'simulation',
         apiPath: '/production/csids',
         body: { compliance_request_id: complianceRequestId },
-        binarySecurityToken: decrypt(csid.complianceCsid),
-        secret: decrypt(certificate.complianceSecretEncrypted ?? certificate.secretKeyEncrypted ?? ''),
+        credentials: {
+          binarySecurityToken: decrypt(csid.complianceCsid),
+          secret: decrypt(certificate.complianceSecretEncrypted ?? certificate.secretKeyEncrypted ?? ''),
+        },
       });
       const safeResponse = safeRemoteResponse(response);
       const rawBody = response.body && typeof response.body === 'object'
@@ -3032,6 +3048,11 @@ export const zatcaRouter = router({
 
       const updated = {
         ...input,
+        // Never persist a user-supplied authority URL. It is derived from the
+        // selected environment and the official internal allowlist.
+        // Production is rejected above in this mutation, so the only
+        // persistable environment here is the official Simulation base.
+        apiBaseUrl: FATOORA_BASE_URLS.simulation,
         // هوية المنشأة لا تُحفظ من مركز ZATCA؛ مصدرها الوحيد معلومات المؤسسة.
         legalName: existing?.name ?? '',
         englishName: existing?.nameEn ?? '',
@@ -3521,7 +3542,8 @@ export const zatcaRouter = router({
           updatedBy: ctx.user.id,
         }).where(eq(zatcaInvoiceTransactions.id, transactionId));
 
-        const authorityResponse = await postFatooraSimulation({
+        const authorityResponse = await postFatoora({
+          environment: 'simulation',
           apiPath: operation === 'clearance'
             ? '/invoices/clearance/single'
             : '/invoices/reporting/single',
@@ -3530,8 +3552,10 @@ export const zatcaRouter = router({
             uuid,
             invoice: signed.invoiceBase64,
           },
-          binarySecurityToken: decrypt(currentCsid.productionCsid),
-          secret: decrypt(signingCertificate.secretKeyEncrypted),
+          credentials: {
+            binarySecurityToken: decrypt(currentCsid.productionCsid),
+            secret: decrypt(signingCertificate.secretKeyEncrypted),
+          },
           clearance: operation === 'clearance',
           clearanceStatus: operation === 'clearance' ? '1' : '0',
           correlationId,

@@ -906,10 +906,13 @@ function EnvSection() {
             ⚠️ تغيير البيئة من إنتاج إلى اختبار سيوقف إرسال الفواتير الحقيقية.
           </div>
           <div style={grp}>
-            <label style={lbl}>API Base URL</label>
-            <input style={{ ...fld, direction: "ltr", fontFamily: "monospace", fontSize: 11 }}
-              value={(cfg as any).apiBaseUrl ?? ""} onChange={e => set("apiBaseUrl", e.target.value)}
-              placeholder="https://gw-fatoora.zatca.gov.sa/e-invoicing/developer-portal" />
+            <label style={lbl}>API Base URL الرسمي (مشتق من البيئة)</label>
+            <input
+              style={{ ...fld, direction: "ltr", fontFamily: "monospace", fontSize: 11, background: "#f8fafc", color: "#475569" }}
+              value={(cfg as any).apiBaseUrl ?? ""}
+              readOnly
+              aria-readonly="true"
+            />
           </div>
           <div style={grp}>
             <label style={lbl}>إصدار API</label>
@@ -920,12 +923,11 @@ function EnvSection() {
           </div>
           <div style={{ background: "#f8fafc", borderRadius: 8, padding: "12px 14px", border: "1px solid #e2e8f0", marginBottom: 14 }}>
             <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 8 }}>🔗 روابط API المرحلة الثانية</div>
-            {[
-              { label: "OAuth URL",     value: "https://gw-fatoora.zatca.gov.sa/e-invoicing/developer-portal/oauth/token" },
-              { label: "Compliance",    value: "https://gw-fatoora.zatca.gov.sa/e-invoicing/developer-portal/compliance" },
-              { label: "Reporting",     value: "https://gw-fatoora.zatca.gov.sa/e-invoicing/developer-portal/invoices/reporting/single" },
-              { label: "Clearance",     value: "https://gw-fatoora.zatca.gov.sa/e-invoicing/developer-portal/invoices/clearance/single" },
-            ].map(u => (
+             {[
+               { label: "Compliance", value: `${(cfg as any).apiBaseUrl ?? ""}/compliance` },
+               { label: "Reporting",  value: `${(cfg as any).apiBaseUrl ?? ""}/invoices/reporting/single` },
+               { label: "Clearance",  value: `${(cfg as any).apiBaseUrl ?? ""}/invoices/clearance/single` },
+             ].map(u => (
               <div key={u.label} style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 11, marginBottom: 4 }}>
                 <span style={{ width: 90, fontWeight: 600, color: "#6b7280", flexShrink: 0 }}>{u.label}</span>
                 <span style={{ fontFamily: "monospace", fontSize: 10, color: "#374151" }}>{u.value}</span>
