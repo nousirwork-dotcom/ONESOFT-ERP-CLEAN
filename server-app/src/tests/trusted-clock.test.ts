@@ -9,7 +9,7 @@ import {
 } from '../services/trustedClock.js';
 
 const base = new Date('2026-08-07T12:00:00.000Z');
-process.env.SESSION_SECRET = 'trusted-clock-test-secret';
+process.env.TRUSTED_CLOCK_HMAC_KEY = '11'.repeat(32);
 
 describe('TrustedClock evaluation', () => {
   it('accepts an online trusted timestamp and marks it trusted', () => {
@@ -176,12 +176,32 @@ describe('TrustedClock evaluation', () => {
     const validHmac = (() => {
       // The production writer uses the same canonical payload and secret;
       // this test only verifies that changing a field invalidates its MAC.
-      const key = crypto.createHash('sha256').update('onesoft-zatca-clock:v2:trusted-clock-test-secret').digest();
+      const key = Buffer.from('11'.repeat(32), 'hex');
       return crypto.createHmac('sha256', key).update(JSON.stringify(payload)).digest('hex');
     })();
 
     expect(checkpointIntegrity(payload, validHmac)).toBe(true);
     expect(checkpointIntegrity({ ...payload, lastPih: 'tampered' }, validHmac)).toBe(false);
+  });
+
+  it('keeps checkpoint HMAC stable when SESSION_SECRET changes', () => {
+    const payload = {
+      version: 2 as const,
+      orgId: 1,
+      posUnitId: 2,
+      lastTrustedTime: base.toISOString(),
+      lastIssuedAt: base.toISOString(),
+      lastInvoiceCounter: 12,
+      lastInvoiceHash: 'hash',
+      lastInvoiceUuid: 'uuid',
+      lastPih: 'pih',
+    };
+    const key = Buffer.from('11'.repeat(32), 'hex');
+    const hmac = crypto.createHmac('sha256', key).update(JSON.stringify(payload)).digest('hex');
+    process.env.SESSION_SECRET = 'secret-from-old-installation';
+    expect(checkpointIntegrity(payload, hmac)).toBe(true);
+    process.env.SESSION_SECRET = 'secret-from-updated-installation';
+    expect(checkpointIntegrity(payload, hmac)).toBe(true);
   });
 
   it('keeps TrustedClock outside purchases and manual journals', () => {

@@ -1,4 +1,5 @@
 import * as fs from 'node:fs/promises';
+import * as fsSync from 'node:fs';
 import * as path from 'node:path';
 import crypto from 'node:crypto';
 import { performance } from 'node:perf_hooks';
@@ -116,7 +117,51 @@ function clockFile(orgId: number, posUnitId: number): string {
   return path.join(getOnesoftDataDir(), 'zatca-clock', `${orgId}-${posUnitId}.json`);
 }
 
+function checkpointKeyFile(): string {
+  return path.join(getOnesoftDataDir(), 'zatca-clock', 'hmac.key');
+}
+
 function checkpointKey(): Buffer | null {
+  // Tests may inject a deterministic key. Production never uses SESSION_SECRET
+  // for signing; the production key is generated once and kept in machine-level
+  // OneSoft data that survives application updates and normal reinstalls.
+  if (process.env.NODE_ENV === 'test' && process.env.TRUSTED_CLOCK_HMAC_KEY?.trim()) {
+    const configured = process.env.TRUSTED_CLOCK_HMAC_KEY.trim();
+    if (/^[a-f0-9]{64}$/i.test(configured)) return Buffer.from(configured, 'hex');
+    return null;
+  }
+
+  const file = checkpointKeyFile();
+  try {
+    const existing = fsSync.readFileSync(file, 'utf8').trim();
+    if (/^[a-f0-9]{64}$/i.test(existing)) return Buffer.from(existing, 'hex');
+    return null;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') return null;
+  }
+
+  try {
+    fsSync.mkdirSync(path.dirname(file), { recursive: true });
+    const key = crypto.randomBytes(32);
+    const fd = fsSync.openSync(file, 'wx', 0o600);
+    try {
+      fsSync.writeFileSync(fd, key.toString('hex'), { encoding: 'utf8' });
+    } finally {
+      fsSync.closeSync(fd);
+    }
+    return key;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code !== 'EEXIST') return null;
+    try {
+      const existing = fsSync.readFileSync(file, 'utf8').trim();
+      return /^[a-f0-9]{64}$/i.test(existing) ? Buffer.from(existing, 'hex') : null;
+    } catch {
+      return null;
+    }
+  }
+}
+
+function legacyCheckpointKey(): Buffer | null {
   const secret = process.env.SESSION_SECRET?.trim();
   if (!secret) return null;
   return crypto.createHash('sha256').update(`onesoft-zatca-clock:v2:${secret}`).digest();
@@ -139,6 +184,10 @@ function checkpointPayload(record: Omit<DurableClockRecord, 'hmac'>): string {
 function checkpointHmac(record: Omit<DurableClockRecord, 'hmac'>): string | null {
   const key = checkpointKey();
   if (!key) return null;
+  return crypto.createHmac('sha256', key).update(checkpointPayload(record)).digest('hex');
+}
+
+function checkpointHmacWithKey(record: Omit<DurableClockRecord, 'hmac'>, key: Buffer): string {
   return crypto.createHmac('sha256', key).update(checkpointPayload(record)).digest('hex');
 }
 
@@ -177,7 +226,7 @@ export function parseCloudflareTraceTimestamp(body: string): Date | null {
 
 async function readDurableRecord(orgId: number, posUnitId: number): Promise<DurableReadResult> {
   const key = checkpointKey();
-  if (!key) return { status: 'invalid', reason: 'SESSION_SECRET غير متوفر للتحقق من checkpoint.' };
+  if (!key) return { status: 'invalid', reason: 'مفتاح ZATCA Clock HMAC غير متوفر للتحقق من checkpoint.' };
   try {
     const parsed = JSON.parse(await fs.readFile(clockFile(orgId, posUnitId), 'utf8')) as DurableClockRecord;
     if (parsed?.version !== 2 || parsed.orgId !== orgId || parsed.posUnitId !== posUnitId || typeof parsed.hmac !== 'string') {
@@ -185,7 +234,20 @@ async function readDurableRecord(orgId: number, posUnitId: number): Promise<Dura
     }
     const { hmac, ...payload } = parsed;
     if (!checkpointIntegrity(payload, hmac)) {
-      return { status: 'invalid', reason: 'فشل التحقق من سلامة checkpoint.' };
+      // One-time compatibility bridge for checkpoints written by the previous
+      // implementation. SESSION_SECRET is used only to verify and re-sign the
+      // record with the independent persistent key; it is never used for new
+      // checkpoint signatures.
+      const legacyKey = legacyCheckpointKey();
+      const legacyHmac = legacyKey ? checkpointHmacWithKey(payload, legacyKey) : null;
+      if (!legacyHmac
+        || legacyHmac.length !== hmac.length
+        || !crypto.timingSafeEqual(Buffer.from(legacyHmac, 'utf8'), Buffer.from(hmac, 'utf8'))) {
+        return { status: 'invalid', reason: 'فشل التحقق من سلامة checkpoint.' };
+      }
+      await writeDurableRecord(payload);
+      const migrated = JSON.parse(await fs.readFile(clockFile(orgId, posUnitId), 'utf8')) as DurableClockRecord;
+      return { status: 'ok', record: migrated };
     }
     return { status: 'ok', record: parsed };
   } catch (error) {
@@ -194,8 +256,8 @@ async function readDurableRecord(orgId: number, posUnitId: number): Promise<Dura
   }
 }
 
-async function writeDurableRecord(record: DurableClockRecord): Promise<void> {
-  if (!checkpointKey()) throw new TrustedClockError('CHECKPOINT_INTEGRITY_FAILED', 'SESSION_SECRET غير متوفر لحماية checkpoint.');
+async function writeDurableRecord(record: Omit<DurableClockRecord, 'hmac'>): Promise<void> {
+  if (!checkpointKey()) throw new TrustedClockError('CHECKPOINT_INTEGRITY_FAILED', 'مفتاح ZATCA Clock HMAC غير متوفر لحماية checkpoint.');
   const payload = {
     version: record.version,
     orgId: record.orgId,
@@ -209,12 +271,12 @@ async function writeDurableRecord(record: DurableClockRecord): Promise<void> {
   };
   const hmac = checkpointHmac(payload);
   if (!hmac) throw new TrustedClockError('CHECKPOINT_INTEGRITY_FAILED', 'تعذر توقيع checkpoint بمفتاح حماية مستقل.');
-  record = { ...payload, hmac };
-  const file = clockFile(record.orgId, record.posUnitId);
+  const signedRecord: DurableClockRecord = { ...payload, hmac };
+  const file = clockFile(signedRecord.orgId, signedRecord.posUnitId);
   const dir = path.dirname(file);
   const tmp = `${file}.${process.pid}.tmp`;
   await fs.mkdir(dir, { recursive: true });
-  await fs.writeFile(tmp, JSON.stringify(record), { encoding: 'utf8', mode: 0o600 });
+  await fs.writeFile(tmp, JSON.stringify(signedRecord), { encoding: 'utf8', mode: 0o600 });
   await fs.rename(tmp, file);
 }
 
@@ -703,7 +765,6 @@ export async function commitTrustedIssuance(input: {
     lastInvoiceHash: input.invoiceHash,
     lastInvoiceUuid: input.invoiceUuid,
     lastPih: input.lastPih,
-    hmac: '',
   });
 }
 
