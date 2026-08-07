@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { evaluateTrustedClock } from '../services/trustedClock.js';
+import crypto from 'node:crypto';
+import {
+  checkpointIntegrity,
+  checkpointNeedsReview,
+  evaluateTrustedClock,
+  isTrustedClockDocumentType,
+  parseCloudflareTraceTimestamp,
+} from '../services/trustedClock.js';
 
 const base = new Date('2026-08-07T12:00:00.000Z');
+process.env.SESSION_SECRET = 'trusted-clock-test-secret';
 
 describe('TrustedClock evaluation', () => {
   it('accepts an online trusted timestamp and marks it trusted', () => {
@@ -26,6 +34,22 @@ describe('TrustedClock evaluation', () => {
     });
 
     expect(result).toMatchObject({ allowed: false, event: 'CLOCK_ROLLBACK' });
+  });
+
+  it('allows the same unit after Windows time is corrected and Cloudflare time agrees', () => {
+    const blocked = evaluateTrustedClock({
+      wallNow: new Date('2026-08-07T11:55:00.000Z'),
+      lastIssuedAt: base,
+      remoteTime: new Date('2026-08-07T11:55:00.000Z'),
+    });
+    const corrected = evaluateTrustedClock({
+      wallNow: new Date('2026-08-07T12:01:00.000Z'),
+      lastIssuedAt: base,
+      remoteTime: new Date('2026-08-07T12:01:01.000Z'),
+    });
+
+    expect(blocked).toMatchObject({ allowed: false, event: 'CLOCK_ROLLBACK' });
+    expect(corrected).toMatchObject({ allowed: true, status: 'trusted', source: 'https' });
   });
 
   it('blocks a suspicious forward jump from the online source', () => {
@@ -63,6 +87,23 @@ describe('TrustedClock evaluation', () => {
     expect(result).toMatchObject({ allowed: false, event: 'ZATCA_CHAIN_REVIEW_REQUIRED' });
   });
 
+  it('blocks a PIH mismatch even when ICV, hash, and UUID match', () => {
+    const result = evaluateTrustedClock({
+      wallNow: base,
+      remoteTime: base,
+      durableLastInvoiceCounter: 12,
+      databaseLastInvoiceCounter: 12,
+      durableLastInvoiceHash: 'same-hash',
+      databaseLastInvoiceHash: 'same-hash',
+      durableLastInvoiceUuid: 'same-uuid',
+      databaseLastInvoiceUuid: 'same-uuid',
+      durableLastPih: 'old-pih',
+      databaseLastPih: 'new-pih',
+    });
+
+    expect(result).toMatchObject({ allowed: false, event: 'ZATCA_CHAIN_REVIEW_REQUIRED' });
+  });
+
   it('allows offline continuation only from a trusted monotonic anchor', () => {
     const result = evaluateTrustedClock({
       wallNow: new Date('2026-08-07T12:00:03.000Z'),
@@ -81,6 +122,75 @@ describe('TrustedClock evaluation', () => {
   it('does not trust a backend wall clock for first offline issuance', () => {
     const result = evaluateTrustedClock({ wallNow: base });
     expect(result).toMatchObject({ allowed: false, event: 'CLOCK_UNTRUSTED' });
+  });
+
+  it('blocks Offline issuance after a backend restart without a monotonic baseline', () => {
+    const result = evaluateTrustedClock({
+      wallNow: new Date('2026-08-07T12:01:00.000Z'),
+      lastTrustedTime: base,
+      lastIssuedAt: base,
+      monotonicElapsedMs: null,
+      remoteTime: null,
+    });
+
+    expect(result).toMatchObject({ allowed: false, event: 'CLOCK_UNTRUSTED' });
+  });
+
+  it('allows issuance after a backend restart when a fresh Cloudflare time is available', () => {
+    const result = evaluateTrustedClock({
+      wallNow: new Date('2026-08-07T12:01:00.000Z'),
+      lastTrustedTime: base,
+      lastIssuedAt: base,
+      monotonicElapsedMs: null,
+      remoteTime: new Date('2026-08-07T12:01:01.000Z'),
+    });
+
+    expect(result).toMatchObject({ allowed: true, status: 'trusted', source: 'https' });
+  });
+
+  it('accepts only the Cloudflare trace ts field and rejects JSON/general time fields', () => {
+    expect(parseCloudflareTraceTimestamp('fl=abc\nts=1786122000.000\ncolo=AMS')).toEqual(new Date('2026-08-07T17:00:00.000Z'));
+    expect(parseCloudflareTraceTimestamp('{"ts":1786122000}')).toBeNull();
+    expect(parseCloudflareTraceTimestamp('date=2026-08-07T16:20:00.000Z')).toBeNull();
+    expect(parseCloudflareTraceTimestamp('ts=1786122000\nts=1786122001')).toBeNull();
+  });
+
+  it('blocks missing checkpoints only for a unit with a database chain', () => {
+    expect(checkpointNeedsReview('missing', true)).toBe('CHECKPOINT_MISSING');
+    expect(checkpointNeedsReview('missing', false)).toBeNull();
+    expect(checkpointNeedsReview('invalid', false)).toBe('CHECKPOINT_INTEGRITY_FAILED');
+  });
+
+  it('detects manual checkpoint tampering through HMAC', () => {
+    const payload = {
+      version: 2 as const,
+      orgId: 1,
+      posUnitId: 2,
+      lastTrustedTime: base.toISOString(),
+      lastIssuedAt: base.toISOString(),
+      lastInvoiceCounter: 12,
+      lastInvoiceHash: 'hash',
+      lastInvoiceUuid: 'uuid',
+      lastPih: 'pih',
+    };
+    const validHmac = (() => {
+      // The production writer uses the same canonical payload and secret;
+      // this test only verifies that changing a field invalidates its MAC.
+      const key = crypto.createHash('sha256').update('onesoft-zatca-clock:v2:trusted-clock-test-secret').digest();
+      return crypto.createHmac('sha256', key).update(JSON.stringify(payload)).digest('hex');
+    })();
+
+    expect(checkpointIntegrity(payload, validHmac)).toBe(true);
+    expect(checkpointIntegrity({ ...payload, lastPih: 'tampered' }, validHmac)).toBe(false);
+  });
+
+  it('keeps TrustedClock outside purchases and manual journals', () => {
+    expect(isTrustedClockDocumentType('sale')).toBe(true);
+    expect(isTrustedClockDocumentType('return')).toBe(true);
+    expect(isTrustedClockDocumentType('credit_note')).toBe(true);
+    expect(isTrustedClockDocumentType('debit_note')).toBe(true);
+    expect(isTrustedClockDocumentType('purchase')).toBe(false);
+    expect(isTrustedClockDocumentType('manual_journal')).toBe(false);
   });
 
   it('uses a persisted suspicious state as a hard issuance boundary', () => {

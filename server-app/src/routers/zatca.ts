@@ -66,8 +66,10 @@ import { buildAndSignZatcaInvoice } from '../services/zatcaInvoiceSubmission.js'
 import {
   commitTrustedIssuance,
   reserveTrustedIssuance,
+  recheckTrustedClock,
   trustedTimeForIsolatedFixture,
   TrustedClockError,
+  isTrustedClockDocumentType,
 } from '../services/trustedClock.js';
 import { decrypt, encrypt } from '../config-crypto.js';
 import { DEFAULT_COMPLIANCE_PREVIOUS_INVOICE_HASH, normalizeZatcaPostalCode } from '@talha7k/zatca';
@@ -1397,6 +1399,17 @@ export const zatcaRouter = router({
           })
         : null;
       return { ...unit, environment: input.environment, environmentId: environmentRow?.id ?? null, device };
+    }),
+
+  recheckTrustedClock: protectedProcedure
+    .input(z.object({ posUnitId: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      await getPosUnitForOrg(ctx.user.orgId, input.posUnitId);
+      return recheckTrustedClock({
+        orgId: ctx.user.orgId,
+        posUnitId: input.posUnitId,
+        userId: ctx.user.id,
+      });
     }),
 
   setUnitEnvironmentLifecycle: adminProcedure
@@ -3257,6 +3270,12 @@ export const zatcaRouter = router({
         where: and(eq(salesInvoices.id, input.invoiceId), eq(salesInvoices.orgId, ctx.user.orgId)),
       });
       if (!inv) throw new TRPCError({ code: 'NOT_FOUND', message: 'الفاتورة غير موجودة' });
+      if (!isTrustedClockDocumentType(inv.invoiceType)) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'TrustedClock مخصص فقط لفاتورة المبيعات ومردود المبيعات والإشعارات الدائنة والمدينة.',
+        });
+      }
       if (!inv.sellerLegalName?.trim() || !inv.sellerTaxNumber?.trim()) {
         throw new TRPCError({
           code: 'PRECONDITION_FAILED',
@@ -3666,6 +3685,7 @@ export const zatcaRouter = router({
           invoiceCounter: icv,
           invoiceHash: signed.invoiceHash,
           invoiceUuid: uuid,
+          lastPih: inv.zatcaPih ?? null,
         });
 
         const authorityResponse = await postFatoora({

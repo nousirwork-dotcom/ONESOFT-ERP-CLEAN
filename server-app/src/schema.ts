@@ -1234,6 +1234,7 @@ export const zatcaClockStates = pgTable('zatca_clock_states', {
   lastInvoiceCounter:    integer('last_invoice_counter'),
   lastInvoiceHash:       varchar('last_invoice_hash', { length: 256 }),
   lastInvoiceUuid:       varchar('last_invoice_uuid', { length: 100 }),
+  lastPih:               varchar('last_pih', { length: 256 }),
   createdAt:             timestamp('created_at').notNull().defaultNow(),
   updatedAt:             timestamp('updated_at').notNull().defaultNow(),
 }, (t) => ({
