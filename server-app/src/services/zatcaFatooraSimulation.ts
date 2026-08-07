@@ -36,6 +36,8 @@ export type CsrInput = {
   organizationName: string;
   organizationUnitName: string;
   serialNumber: string;
+  /** Persisted ZATCA EGS serial in 1-...|2-...|3-... format. */
+  egsSerialNumber?: string;
   vatNumber: string;
   branchLocation: string;
   businessCategory: string;
@@ -247,7 +249,8 @@ export function generateSimulationCsr(input: CsrInput): GeneratedSimulationCsr {
   const csrPath = path.join(workDir, 'request.csr');
 
   const serial = configValue(
-    `1-${input.solutionName}|2-${input.model}|3-${input.serialNumber}`,
+    input.egsSerialNumber
+      ?? `1-${input.solutionName}|2-${input.model}|3-${input.serialNumber}`,
   );
   const config = [
     'oid_section = OIDs',

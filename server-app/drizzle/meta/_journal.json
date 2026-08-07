@@ -596,6 +596,13 @@
       "when": 1786086600000,
       "tag": "0084_zatca_pos_units_lifecycle_repair",
       "breakpoints": true
+    },
+    {
+      "idx": 85,
+      "version": "7",
+      "when": 1786086700000,
+      "tag": "0085_zatca_pos_unit_identity",
+      "breakpoints": true
     }
   ]
 }

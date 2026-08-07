@@ -955,14 +955,14 @@ function LinkingUnitsSection({ onActivate }: { onActivate?: () => void }) {
   const utils = trpc.useUtils();
   const unitsQ = trpc.zatca.listPosUnits.useQuery();
   const journalsQ = trpc.zatca.listLinkingJournalOptions.useQuery();
-  const [form, setForm] = useState({ journalId: "", unitCode: "", unitName: "" });
+  const [form, setForm] = useState({ journalId: "", unitName: "" });
   const [linkingUnitId, setLinkingUnitId] = useState<number | null>(null);
   const [auditUnitId, setAuditUnitId] = useState<number | null>(null);
 
   const createM = trpc.zatca.createPosUnit.useMutation({
     onSuccess: () => {
       toast.success("تم إنشاء وحدة الربط وربط الدفتر الأول");
-      setForm({ journalId: "", unitCode: "", unitName: "" });
+      setForm({ journalId: "", unitName: "" });
       utils.zatca.listPosUnits.invalidate();
       utils.zatca.listLinkingJournalOptions.invalidate();
     },
@@ -1035,7 +1035,6 @@ function LinkingUnitsSection({ onActivate }: { onActivate?: () => void }) {
   const canCreate = Boolean(
     form.journalId
     && selected
-    && form.unitCode.trim()
     && form.unitName.trim()
     && missingJournalTypes.length === 0
   );
@@ -1121,7 +1120,6 @@ function LinkingUnitsSection({ onActivate }: { onActivate?: () => void }) {
               setForm(f => ({
                 ...f,
                 journalId: e.target.value,
-                unitCode: next ? `EGS-${String(next.id).padStart(3, "0")}` : "",
                 unitName: next ? `وحدة ربط – ${next.warehouseName ?? "المخزن الرئيسي"} – نقطة إصدار 1` : "",
               }));
             }}>
@@ -1130,8 +1128,10 @@ function LinkingUnitsSection({ onActivate }: { onActivate?: () => void }) {
             </select>
           </div>
           <div>
-            <label style={lbl}>رمز وحدة الربط (قابل للتعديل) *</label>
-            <input style={fld} value={form.unitCode} onChange={e => setForm(f => ({ ...f, unitCode: e.target.value }))} placeholder="POS-01" />
+            <label style={lbl}>رمز وحدة الربط</label>
+            <div style={{ ...fld, background: "#f8fafc", color: "#64748b", display: "flex", alignItems: "center" }}>
+              يُولّد تلقائيًا من الخادم لكل منشأة
+            </div>
           </div>
           <div>
             <label style={lbl}>اسم الوحدة *</label>
@@ -1188,7 +1188,7 @@ function LinkingUnitsSection({ onActivate }: { onActivate?: () => void }) {
           )}
         </div>
         <div style={{ display: "flex", justifyContent: "flex-start", marginTop: 12 }}>
-          <button disabled={!canCreate || busy} onClick={() => createM.mutate({ journalId: Number(form.journalId), unitCode: form.unitCode.trim(), unitName: form.unitName.trim() })}
+          <button disabled={!canCreate || busy} onClick={() => createM.mutate({ journalId: Number(form.journalId), unitName: form.unitName.trim() })}
             style={{ ...smallBtn, height: 32, padding: "0 18px", background: canCreate && !busy ? "#D19C05" : "#cbd5e1", color: "#fff", cursor: canCreate && !busy ? "pointer" : "not-allowed", fontSize: 12 }}>
             {createM.isPending ? "جارٍ الإنشاء..." : "إنشاء وحدة الربط"}
           </button>
@@ -1207,6 +1207,12 @@ function LinkingUnitsSection({ onActivate }: { onActivate?: () => void }) {
                   <div style={{ color: "#6b7280", fontSize: 11 }}>
                     المخزن/الفرع: {unit.branchName ? `${unit.branchName} — ` : ""}{unit.warehouseName ?? "—"}
                   </div>
+                   {(unit.commonName || unit.egsSerialNumber) && (
+                     <div style={{ marginTop: 5, color: "#64748b", fontSize: 10, lineHeight: 1.6 }}>
+                       <span>Common Name: <b style={{ fontFamily: "monospace", color: "#334155" }}>{unit.commonName ?? "—"}</b></span>
+                       <span style={{ marginInlineStart: 12 }}>EGS Serial: <b style={{ fontFamily: "monospace", color: "#334155" }}>{unit.egsSerialNumber ?? "—"}</b></span>
+                     </div>
+                   )}
                 </div>
                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
                     <span style={{ fontSize: 11, fontWeight: 800, color: "#334155" }}>
@@ -1565,13 +1571,9 @@ function OtpSimulationSection({
              createCsrM.mutate({
                posUnitId,
                otp,
-               serialNumber: selectedUnit?.unitCode ?? `EGS-${posUnitId}`,
-               solutionName: "OneSoft",
-               model: "ERP",
                branchName: selectedUnit?.branchName ?? selectedUnit?.warehouseName ?? "OneSoft",
                branchLocation: selectedUnit?.warehouseName ?? "Saudi Arabia",
                businessCategory: "Retail and invoicing",
-               taxpayerProvidedId: selectedUnit?.unitCode ?? `OneSoft-${posUnitId}`,
              });
            }}
            style={{ ...smallBtn, height: 36, width: "100%", background: posUnitId && otp && !hasComplianceCsid ? "#D19C05" : "#cbd5e1", color: "#fff", cursor: posUnitId && otp && !hasComplianceCsid ? "pointer" : "not-allowed" }}
@@ -3023,7 +3025,6 @@ function ActivationWizard({
   const utils = trpc.useUtils();
   const [activeStep, setActiveStep] = useState(includeCompanyStep ? 1 : 2);
   const [warehouseId, setWarehouseId] = useState("");
-  const [unitCode, setUnitCode] = useState("");
   const [unitName, setUnitName] = useState("");
   const [invoiceType, setInvoiceType] = useState<"simplified" | "standard" | "both">("both");
   const [selectedUnitId, setSelectedUnitId] = useState<number | null>(
@@ -3192,7 +3193,6 @@ function ActivationWizard({
   const canCreateUnit = Boolean(
     warehouseId
     && salesJournal
-    && unitCode.trim()
     && unitName.trim()
     && missingJournalTypes.length === 0
     && conflictingJournalTypes.length === 0
@@ -3233,7 +3233,6 @@ function ActivationWizard({
         setCreatingUnit(true);
         const created = await createUnitM.mutateAsync({
           journalId: salesJournal.id as number,
-          unitCode: unitCode.trim(),
           unitName: unitName.trim(),
         });
         const [refreshedUnits] = await Promise.all([
@@ -3368,7 +3367,6 @@ function ActivationWizard({
                     const existingUnit = availableUnits.find(unit => unit.warehouseId === Number(value));
                     setWarehouseId(value);
                     setSelectedUnitId(existingUnit?.id ?? null);
-                    setUnitCode(existingUnit?.unitCode ?? (next ? `POS-${String(next.id).padStart(2, "0")}` : ""));
                     setUnitName(existingUnit?.unitName ?? (next ? `وحدة ربط — ${next.label}` : ""));
                   }}>
                     <option value="">اختر المخزن/الفرع</option>
@@ -3376,8 +3374,10 @@ function ActivationWizard({
                   </select>
                 </div>
                 <div>
-                  <label style={lbl}>رمز الوحدة *</label>
-                  <input style={fld} value={unitCode} onChange={event => setUnitCode(event.target.value)} placeholder="POS-01" />
+                  <label style={lbl}>رمز الوحدة</label>
+                  <div style={{ ...fld, background: "#f8fafc", color: "#64748b", display: "flex", alignItems: "center" }}>
+                    يُولّد تلقائيًا عند إنشاء وحدة جديدة
+                  </div>
                 </div>
                 <div>
                   <label style={lbl}>اسم الوحدة *</label>

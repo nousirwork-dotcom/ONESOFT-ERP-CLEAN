@@ -49,6 +49,11 @@ import {
 import { enqueueZatcaSubmission } from '../services/zatcaQueue.js';
 import { assertUnitCanBeUsed } from '../services/zatcaUnitLifecycle.js';
 import {
+  buildPosUnitIdentity,
+  getCsrIdentityForUnit,
+  lockAndGetNextPosCode,
+} from '../services/zatcaPosUnitIdentity.js';
+import {
   generateSimulationCsr,
   complianceCertificatePem,
   postFatoora,
@@ -783,6 +788,8 @@ export const zatcaRouter = router({
       id: zatcaPosUnits.id,
       unitCode: zatcaPosUnits.unitCode,
       unitName: zatcaPosUnits.unitName,
+      commonName: zatcaPosUnits.commonName,
+      egsSerialNumber: zatcaPosUnits.egsSerialNumber,
       oneSoftStatus: zatcaPosUnits.oneSoftStatus,
       lifecycleUpdatedAt: zatcaPosUnits.lifecycleUpdatedAt,
       lifecycleReason: zatcaPosUnits.lifecycleReason,
@@ -1190,7 +1197,6 @@ export const zatcaRouter = router({
   createPosUnit: adminProcedure
     .input(z.object({
       journalId: z.number().int().positive(),
-      unitCode: z.string().trim().min(1).max(50),
       unitName: z.string().trim().min(1).max(255),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -1275,8 +1281,6 @@ export const zatcaRouter = router({
           }
           [unit] = await tx.update(zatcaPosUnits)
             .set({
-              unitCode: input.unitCode,
-              unitName: input.unitName,
               status: 'linked',
               updatedBy: ctx.user.id,
               updatedAt: new Date(),
@@ -1287,11 +1291,15 @@ export const zatcaRouter = router({
             ))
             .returning();
         } else {
+          const unitCode = await lockAndGetNextPosCode(tx, ctx.user.orgId);
+          const identity = buildPosUnitIdentity(unitCode);
           [unit] = await tx.insert(zatcaPosUnits).values({
             orgId: ctx.user.orgId,
             warehouseId: journal.warehouseId,
-            unitCode: input.unitCode,
+            unitCode: identity.posCode,
             unitName: input.unitName,
+            commonName: identity.commonName,
+            egsSerialNumber: identity.egsSerialNumber,
             status: 'linked',
             createdBy: ctx.user.id,
             updatedBy: ctx.user.id,
@@ -1317,14 +1325,12 @@ export const zatcaRouter = router({
   updatePosUnit: adminProcedure
     .input(z.object({
       id: z.number().int().positive(),
-      unitCode: z.string().trim().min(1).max(50).optional(),
       unitName: z.string().trim().min(1).max(255).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       await getPosUnitForOrg(ctx.user.orgId, input.id);
       const [unit] = await db.update(zatcaPosUnits)
         .set({
-          ...(input.unitCode !== undefined ? { unitCode: input.unitCode } : {}),
           ...(input.unitName !== undefined ? { unitName: input.unitName } : {}),
           updatedBy: ctx.user.id,
           updatedAt: new Date(),
@@ -1886,13 +1892,9 @@ export const zatcaRouter = router({
     .input(z.object({
       posUnitId: z.number().int().positive(),
       otp: z.string().trim().min(1).max(32),
-      serialNumber: z.string().trim().min(1).max(100),
-      solutionName: z.string().trim().min(1).max(100).default('OneSoft'),
-      model: z.string().trim().min(1).max(100).default('ERP'),
       branchName: z.string().trim().min(1).max(255),
       branchLocation: z.string().trim().min(1).max(255),
       businessCategory: z.string().trim().min(1).max(255),
-      taxpayerProvidedId: z.string().trim().min(1).max(255),
     }))
     .mutation(async ({ ctx, input }) => {
       requireSimulationEncryptionKey();
@@ -1922,18 +1924,30 @@ export const zatcaRouter = router({
         throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'اختر بيئة Fatoora Simulation واحفظها قبل إنشاء CSR' });
       }
 
+      const legacyDevice = await db.query.zatcaDevices.findFirst({
+        where: and(
+          eq(zatcaDevices.orgId, ctx.user.orgId),
+          eq(zatcaDevices.posUnitId, unit.id),
+          eq(zatcaDevices.isActive, true),
+          eq(zatcaDevices.isDeleted, false),
+        ),
+        columns: { serialNumber: true },
+        orderBy: desc(zatcaDevices.updatedAt),
+      });
+      const identity = getCsrIdentityForUnit(unit, legacyDevice?.serialNumber);
       const csr = generateSimulationCsr({
-        commonName: input.taxpayerProvidedId,
+        commonName: identity.commonName,
         organizationName: String(cfg.englishName ?? cfg.legalName ?? org.name ?? ''),
         organizationUnitName: input.branchName,
-        serialNumber: input.serialNumber,
+        serialNumber: identity.egsSerialNumber,
+        egsSerialNumber: identity.egsSerialNumber,
         vatNumber,
         branchLocation: input.branchLocation,
         businessCategory: input.businessCategory,
-        solutionName: input.solutionName,
-        model: input.model,
+        solutionName: 'OneSoft',
+        model: 'ERP',
         branchName: input.branchName,
-        taxpayerProvidedId: input.taxpayerProvidedId,
+        taxpayerProvidedId: identity.commonName,
       });
 
       return db.transaction(async (tx) => {
@@ -1966,7 +1980,7 @@ export const zatcaRouter = router({
             orgId: ctx.user.orgId,
             posUnitId: unit.id,
             deviceName: unit.unitName,
-            serialNumber: input.serialNumber,
+            serialNumber: identity.egsSerialNumber,
             environmentId: environment.id,
             registrationStatus: 'csr_ready',
             createdBy: ctx.user.id,

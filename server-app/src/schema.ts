@@ -771,6 +771,10 @@ export const zatcaPosUnits = pgTable('zatca_pos_units', {
   warehouseId: integer('warehouse_id').notNull().references(() => warehouses.id, { onDelete: 'restrict' }),
   unitCode:    varchar('unit_code', { length: 50 }).notNull(),
   unitName:    varchar('unit_name', { length: 255 }).notNull(),
+  // Immutable technical identity for units created under the POS identity policy.
+  // Nullable intentionally: existing units keep their historical identity.
+  commonName:       varchar('common_name', { length: 255 }),
+  egsSerialNumber:  varchar('egs_serial_number', { length: 255 }),
   // Legacy compatibility projection only. The source of truth for whether a
   // unit is linked is document_journals.zatca_pos_unit_id; lifecycle guards
   // use the journal relationship plus oneSoftStatus/device lifecycle.

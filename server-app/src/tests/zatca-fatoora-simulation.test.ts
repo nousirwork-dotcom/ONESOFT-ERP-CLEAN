@@ -1,3 +1,7 @@
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   assertSimulationUrl,
@@ -30,6 +34,38 @@ describe('Fatoora Simulation transport', () => {
     expect(generated.csrPem).toContain('CERTIFICATE REQUEST');
     expect(generated.csrBase64).not.toContain('BEGIN CERTIFICATE REQUEST');
     expect(generated.fingerprint).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it('uses a persisted EGS serial as-is without nesting the ZATCA segments', () => {
+    const generated = generateSimulationCsr({
+      commonName: 'POS-001',
+      organizationName: 'OneSoft',
+      organizationUnitName: 'Riyadh',
+      serialNumber: 'ignored-by-persisted-identity',
+      egsSerialNumber: '1-OneSoft|2-ERP|3-fixed-serial-001',
+      vatNumber: '399999999900003',
+      branchLocation: 'Riyadh',
+      businessCategory: 'Retail',
+      solutionName: 'OneSoft',
+      model: 'ERP',
+      branchName: 'Riyadh',
+      taxpayerProvidedId: 'POS-001',
+    });
+
+    const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onesoft-zatca-test-'));
+    const csrPath = path.join(workDir, 'request.csr');
+    try {
+      fs.writeFileSync(csrPath, generated.csrPem, 'utf8');
+      const details = execFileSync(
+        'openssl',
+        ['req', '-in', csrPath, '-noout', '-text'],
+        { encoding: 'utf8' },
+      );
+      expect(details).toContain('1-OneSoft|2-ERP|3-fixed-serial-001');
+      expect(details).not.toContain('1-OneSoft|2-ERP|3-1-OneSoft');
+    } finally {
+      fs.rmSync(workDir, { recursive: true, force: true });
+    }
   });
 
   it('allows Simulation endpoints including operational CSID', () => {
