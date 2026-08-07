@@ -885,44 +885,57 @@ export const zatcaRouter = router({
         .orderBy(desc(zatcaComplianceTests.updatedAt)),
     ]);
 
-    return units.map((unit) => ({
-      ...unit,
-      journals: journals.filter((journal) => journal.posUnitId === unit.id),
-      environmentStatuses: {
-        simulation: devices.find((device) => (
-          device.posUnitId === unit.id && device.environmentName === 'Simulation'
-        )) ?? null,
-        production: devices.find((device) => (
-          device.posUnitId === unit.id && device.environmentName === 'Production'
-        )) ?? null,
-      },
-      environmentCompliance: {
-        simulation: complianceResults
-          .filter((result) => {
-            const device = devices.find((candidate) => candidate.deviceId === result.deviceId);
-            return device?.posUnitId === unit.id && device.environmentName === 'Simulation';
-          })
-          .map(({ testKey, status, httpStatus, completedAt, updatedAt }) => ({
+    return units.map((unit) => {
+      const simulationDevice = devices.find((device) => (
+        device.posUnitId === unit.id && device.environmentName === 'Simulation'
+      )) ?? null;
+      const productionDevice = devices.find((device) => (
+        device.posUnitId === unit.id && device.environmentName === 'Production'
+      )) ?? null;
+      const simulationTests = complianceResults.filter((result) => {
+        const device = devices.find((candidate) => candidate.deviceId === result.deviceId);
+        return device?.posUnitId === unit.id && device.environmentName === 'Simulation';
+      });
+      const productionTests = complianceResults.filter((result) => {
+        const device = devices.find((candidate) => candidate.deviceId === result.deviceId);
+        return device?.posUnitId === unit.id && device.environmentName === 'Production';
+      });
+      const simulationComplete = Boolean(
+        simulationDevice
+        && simulationDevice.registrationStatus === 'operational'
+        && simulationDevice.complianceCsidPresent
+        && simulationDevice.operationalCsidPresent
+        && simulationDevice.certificatePresent
+        && simulationTests.length >= 6
+        && simulationTests.every((test) => isComplianceCompleted(test.status)),
+      );
+
+      return {
+        ...unit,
+        simulationComplete,
+        journals: journals.filter((journal) => journal.posUnitId === unit.id),
+        environmentStatuses: {
+          simulation: simulationDevice,
+          production: productionDevice,
+        },
+        environmentCompliance: {
+          simulation: simulationTests.map(({ testKey, status, httpStatus, completedAt, updatedAt }) => ({
             testKey,
             status,
             httpStatus,
             completedAt,
             updatedAt,
           })),
-        production: complianceResults
-          .filter((result) => {
-            const device = devices.find((candidate) => candidate.deviceId === result.deviceId);
-            return device?.posUnitId === unit.id && device.environmentName === 'Production';
-          })
-          .map(({ testKey, status, httpStatus, completedAt, updatedAt }) => ({
+          production: productionTests.map(({ testKey, status, httpStatus, completedAt, updatedAt }) => ({
             testKey,
             status,
             httpStatus,
             completedAt,
             updatedAt,
           })),
-      },
-    }));
+        },
+      };
+    });
   }),
 
   listLinkingJournalOptions: protectedProcedure.query(async ({ ctx }) => {

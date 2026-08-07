@@ -3612,32 +3612,7 @@ function EnvironmentSelection({
   units: any[];
   onSelect: (environment: LinkingEnvironment) => void;
 }) {
-  const completedSimulationStatuses = new Set([
-    "passed",
-    "passed_with_warnings",
-    "completed_previously",
-  ]);
-  const simulationComplete = units.some(unit => {
-    const simulation = unit.environmentStatuses?.simulation;
-    const tests = unit.environmentCompliance?.simulation ?? [];
-    const completedTests = tests.filter((test: any) => (
-      completedSimulationStatuses.has(String(test.status ?? "").toLowerCase())
-    ));
-    const registrationStatus = String(simulation?.registrationStatus ?? "").toLowerCase();
-    const hasComplianceCsid = Boolean(simulation?.complianceCsidPresent);
-    const hasOperationalCsid = Boolean(simulation?.operationalCsidPresent);
-    const hasCertificate = Boolean(simulation?.certificatePresent);
-    const simulationCompleted = Boolean(
-      simulation
-      && registrationStatus === "operational"
-      && hasComplianceCsid
-      && hasOperationalCsid
-      && hasCertificate
-      && tests.length >= 6
-      && completedTests.length === tests.length,
-    );
-    return simulationCompleted;
-  });
+  const simulationComplete = units.some(unit => unit.simulationComplete === true);
   const productionReady = units.some(unit => (
     unit.environmentStatuses?.production?.registrationStatus === "operational"
     || unit.environmentStatuses?.production?.certificatePresent
