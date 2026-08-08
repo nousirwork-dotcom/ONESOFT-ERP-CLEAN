@@ -365,7 +365,13 @@ function salesInvoiceCss(): string {
       border-radius: 9px;
       background: #fff;
     }
-    .qrBox img { width: 150px; height: 150px; object-fit: contain; }
+    .qrBox img {
+      width: 40mm;
+      height: 40mm;
+      display: block;
+      object-fit: contain;
+      image-rendering: pixelated;
+    }
     .amountWords {
       width: 76%;
       margin: 14px auto 0;
@@ -921,10 +927,19 @@ function buildPositionedHtml(
 
       case "qr":
         if (!qrDataUrl) return `<div style="${elStyle(el)}"></div>`;
-        return `<div style="${elStyle(el)};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.5mm">
-          <img src="${qrDataUrl}" style="max-width:${el.w-2}mm;max-height:${el.h-4}mm;object-fit:contain"/>
+        {
+          const qrMm = Math.max(1, Math.min(el.w - 2, el.h - 4));
+          const qrPx = Math.max(1, Math.round(qrMm * 3.7795));
+          return `<div style="${elStyle(el)};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.5mm">
+          <img
+            src="${qrDataUrl}"
+            width="${qrPx}"
+            height="${qrPx}"
+            style="width:${qrMm}mm;height:${qrMm}mm;object-fit:contain;image-rendering:pixelated;display:block"
+          />
           <span style="font-size:6pt;color:#888">${qrLabel}</span>
         </div>`;
+        }
 
       case "image":
         return `<div style="${elStyle(el)};display:flex;align-items:center;justify-content:center;opacity:0.3;font-size:${fs}pt;color:#999">شعار</div>`;
@@ -1167,7 +1182,7 @@ export function buildInvoiceHtml(
 
   const qrHtml = qrDataUrl
     ? `<div style="display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px;border:1px solid #ddd;border-radius:3px;margin-left:8px">
-         <img src="${qrDataUrl}" width="${qrSize}" height="${qrSize}" style="display:block"/>
+         <img src="${qrDataUrl}" width="${qrSize}" height="${qrSize}" style="display:block;width:40mm;height:40mm;object-fit:contain;image-rendering:pixelated"/>
          <span style="font-size:7px;color:#888">${qrLabel}</span>
        </div>`
     : "";

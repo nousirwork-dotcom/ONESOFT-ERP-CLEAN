@@ -11,6 +11,7 @@ import { buildInvoiceHtml } from "@/shared/lib/buildInvoiceHtml";
 import {
   PrintEngine,
   QRCodeService,
+  QR_CODE_PRINT_PX,
   DEFAULT_TEMPLATE_CONFIG,
 } from "@/shared/lib/print";
 import type { InvDocTemplateConfig, InvPrintData } from "@/shared/lib/print";
@@ -112,7 +113,7 @@ export default function InvoicePrintModal({
     const qrLabel = qrSettings?.countrySystem === "zatca" ? "ZATCA QR"
                   : qrSettings?.countrySystem === "eta"   ? "ETA QR"  : "QR Code";
     // الحجم والموضع يحددهما قالب الطباعة؛ إعدادات QR العامة لا تتحكم بهما.
-    const qrSize  = 100;
+    const qrSize  = QR_CODE_PRINT_PX;
 
     return buildInvoiceHtml(data, cfg, showQR ? qrDataUrl : undefined, qrLabel, qrSize, docType);
   }, [data, cfg, qrDataUrl, qrSettings?.countrySystem, qrSettings?.isEnabled, showQrSetting, docType]);

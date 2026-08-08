@@ -63,10 +63,27 @@ describe("sales invoice QR print output", () => {
 
   it("embeds the generated data URL in positioned invoice HTML", () => {
     const qrDataUrl = "data:image/png;base64,TEST_QR_DATA";
-    const html = buildInvoiceHtml(data, positionedConfig, qrDataUrl, "ZATCA QR", 100, "sales_invoice");
+    const html = buildInvoiceHtml(
+      data,
+      {
+        ...positionedConfig,
+        renderer: undefined,
+        elements: [
+          { id: "qr", type: "qr", x: 5, y: 5, w: 40, h: 28 },
+          { id: "items", type: "items_table", x: 5, y: 40, w: 200, h: 120 },
+        ],
+      },
+      qrDataUrl,
+      "ZATCA QR",
+      100,
+      "sales_invoice",
+    );
 
     expect(html).toContain(`<img src="${qrDataUrl}"`);
     expect(html).toContain("ZATCA QR");
+    expect(html).toContain('width="91"');
+    expect(html).toContain('height="91"');
+    expect(html).toContain("width:24mm;height:24mm");
   });
 
   it("does not emit an empty QR image when generation has no data URL", () => {

@@ -29,7 +29,14 @@ export { PreviewEngine }                 from "./PreviewEngine";
 
 /* ── Services ─────────────────────────────────────────────────────────────── */
 export { TemplateEngine, DEFAULT_TEMPLATE_CONFIG } from "./TemplateEngine";
-export { QRCodeService }                 from "./QRCodeService";
+export {
+  QRCodeService,
+  QR_CODE_RENDER_PX,
+  QR_CODE_PRINT_PX,
+  QR_CODE_PRINT_MM,
+  QR_CODE_MARGIN_MODULES,
+  QR_CODE_ERROR_CORRECTION,
+} from "./QRCodeService";
 export { BarcodeService }                from "./BarcodeService";
 export { CssEngine }                     from "./CssEngine";
 export { HtmlRenderer }                  from "./HtmlRenderer";

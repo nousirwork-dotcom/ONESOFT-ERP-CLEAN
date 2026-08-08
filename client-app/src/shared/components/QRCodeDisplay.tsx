@@ -1,8 +1,12 @@
 /**
  * QRCodeDisplay.tsx — مكوّن عرض QR Code باستخدام مكتبة qrcode
  */
-import { useEffect, useRef } from "react";
-import QRCode from "qrcode";
+import { useEffect, useState } from "react";
+import {
+  QRCodeService,
+  QR_CODE_ERROR_CORRECTION,
+  QR_CODE_MARGIN_MODULES,
+} from "@/shared/lib/print/QRCodeService";
 
 interface QRCodeDisplayProps {
   content: string;
@@ -12,27 +16,43 @@ interface QRCodeDisplayProps {
 }
 
 export default function QRCodeDisplay({ content, size = 100, className, style }: QRCodeDisplayProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [dataUrl, setDataUrl] = useState("");
 
   useEffect(() => {
-    if (!canvasRef.current || !content) return;
-    QRCode.toCanvas(canvasRef.current, content, {
-      width: size,
-      margin: 1,
-      color: { dark: "#000000", light: "#ffffff" },
-      errorCorrectionLevel: "M",
-    }).catch(() => {});
+    let cancelled = false;
+    setDataUrl("");
+    if (!content) return () => { cancelled = true; };
+
+    QRCodeService.generateDataUrl(content, size)
+      .then(nextDataUrl => {
+        if (!cancelled) setDataUrl(nextDataUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setDataUrl("");
+      });
+
+    return () => { cancelled = true; };
   }, [content, size]);
 
-  if (!content) return null;
+  if (!content || !dataUrl) return null;
 
   return (
-    <canvas
-      ref={canvasRef}
+    <img
+      src={dataUrl}
       width={size}
       height={size}
+      alt="ZATCA QR"
       className={className}
-      style={style}
+      style={{
+        width: size,
+        height: size,
+        display: "block",
+        objectFit: "contain",
+        imageRendering: "pixelated",
+        ...style,
+      }}
+      data-qr-error-correction={QR_CODE_ERROR_CORRECTION}
+      data-qr-margin-modules={QR_CODE_MARGIN_MODULES}
     />
   );
 }

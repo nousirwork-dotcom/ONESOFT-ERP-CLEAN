@@ -30,7 +30,8 @@ import PostingPreviewModal from "@/shared/components/PostingPreviewModal";
 import InvoicePrintModal from "@/shared/components/InvoicePrintModal";
 import SendDocumentPanel from "@/shared/components/SendDocumentPanel";
 import PaymentModal from "@/shared/components/PaymentModal";
-import { PrintEngine, QRCodeService } from "@/shared/lib/print";
+import { PrintEngine, QRCodeService, QR_CODE_PRINT_PX } from "@/shared/lib/print";
+import QRCodeDisplay from "@/shared/components/QRCodeDisplay";
 import { usePrintTemplate } from "@/shared/hooks/usePrintTemplate";
 import { DateSegmentInput } from "@/shared/components/DateSegmentInput";
 import ProductLookupCell, { type ProductLookupOption } from "@/shared/components/ProductLookupCell";
@@ -1616,7 +1617,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
          qrDataUrl: qrResult.dataUrl || undefined,
         qrLabel: qrSettingsQuery.data?.countrySystem === "zatca" ? "ZATCA QR"
           : qrSettingsQuery.data?.countrySystem === "eta" ? "ETA QR" : "QR Code",
-         qrSize: 100,
+          qrSize: QR_CODE_PRINT_PX,
       });
       if (!ok) toast.error("تعذّر فتح نافذة PDF — تحقق من إعدادات المتصفح (السماح بالنوافذ المنبثقة)");
     } catch (e: any) {
@@ -2262,7 +2263,11 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
               {zatcaQuery.data.zatcaQrCode && (
                 <div style={{ marginTop: 16, background: "#fff", borderRadius: 10, border: "1px solid #e2e8f0", padding: "14px 16px" }}>
                   <div style={{ fontWeight: 700, fontSize: "var(--work-font-size, 12px)", color: "#374151", marginBottom: 10 }}>📱 QR Code الهيئة</div>
-                  <img src={`data:image/png;base64,${zatcaQuery.data.zatcaQrCode}`} alt="ZATCA QR" style={{ width: "140px", height: "140px" }} />
+                  <QRCodeDisplay
+                    content={zatcaQuery.data.zatcaQrCode}
+                    size={280}
+                    style={{ width: 280, height: 280 }}
+                  />
                 </div>
               )}
 
