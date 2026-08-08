@@ -21,6 +21,11 @@ import { useDocumentToolsMenu } from "@/components/unified-toolbar/DocumentTools
 import type { CommandHandlers, ScreenState } from "@/components/unified-toolbar/useRegisterCommands";
 import { useDocumentNavigation } from "@/components/unified-toolbar/useDocumentNavigation";
 type ERPMode = "view" | "new" | "edit" | "search";
+
+function localDateValue(date = new Date()): string {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
 import PostingPreviewModal from "@/shared/components/PostingPreviewModal";
 import InvoicePrintModal from "@/shared/components/InvoicePrintModal";
 import SendDocumentPanel from "@/shared/components/SendDocumentPanel";
@@ -212,8 +217,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
   };
   // ── Header state ─────────────────────────────────────────────────────────
   const [invoiceNumber, setInvoiceNumber] = useState("");
-  const [invoiceDate, setInvoiceDate] = useState(() => new Date().toISOString().split("T")[0]);
-  const [dueDate, setDueDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [invoiceDate, setInvoiceDate] = useState(() => localDateValue());
+  const [dueDate, setDueDate] = useState(() => localDateValue());
   const [customerId, setCustomerId] = useState<number | null>(null);
   const [customerName, setCustomerName] = useState("");
   const [customerCode, setCustomerCode] = useState("");
@@ -347,6 +352,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
   const canUseSellerIdentityForPrint = !issuedWithoutSellerSnapshot;
   const sellerSnapshotWarning = "لا يمكن إعادة طباعة أو توليد QR لهذه الفاتورة: لقطة اسم المنشأة والرقم الضريبي غير محفوظة تاريخيًا.";
   const selectedJournalForPrint = (journalsQuery.data ?? []).find((j: any) => j.id === journalId);
+  const zatcaJournalSelected = Boolean(selectedJournalForPrint?.zatcaPosUnitId);
+  const zatcaDateUsesCurrentWindowsDay = zatcaJournalSelected && !savedInvoiceId && !navInvoiceId;
   const { templateConfig }    = usePrintTemplate(
     "sales_invoice",
     selectedJournalForPrint?.printTemplate || undefined,
@@ -524,7 +531,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
     const inv = navInvoiceQuery.data;
     if (!inv) return;
     setInvoiceNumber(inv.invoiceNumber);
-    setInvoiceDate(inv.invoiceDate ? new Date(inv.invoiceDate).toISOString().split("T")[0] : "");
+    setInvoiceDate(inv.invoiceDate ? localDateValue(new Date(inv.invoiceDate)) : "");
     setDueDate(inv.dueDate ? new Date(inv.dueDate).toISOString().split("T")[0] : "");
     setCustomerId(inv.customerId ?? null);
     setCustomerName(inv.customerName ?? "");
@@ -712,6 +719,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
       }
       if (j.defaultCurrency) setCurrency(j.defaultCurrency);
       if (j.defaultPayMethod) setPaymentType(j.defaultPayMethod as any);
+      if (j.zatcaPosUnitId) setInvoiceDate(localDateValue());
       const custJId = (j as any).customersJournal ? parseInt((j as any).customersJournal) : null;
       setJournalCustomersJournalId(custJId && !isNaN(custJId) ? custJId : null);
     }
@@ -1446,8 +1454,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
     setIsPosted(false);
     setShowPostingPreview(false);
     setErpMode("new");
-    setInvoiceDate(new Date().toISOString().split("T")[0]);
-    setDueDate(new Date().toISOString().split("T")[0]);
+    setInvoiceDate(localDateValue());
+    setDueDate(localDateValue());
     setBasedOnType(''); setBasedOnNum(''); setBasedOnTrigger('');
     setPaidAmountOverride("");
     if (journalId) {
@@ -2060,9 +2068,9 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
           <div className="flex items-center w-full min-w-0" style={{ gap: 3, gridColumn: "2" }}>
             <label style={compactHeaderLabelStyle}>تاريخ التحرير</label>
             <div data-date-field className="flex min-w-0" style={{ flex: "0 0 118px", width: 118, transform: "translateX(-11px)", height: "var(--work-field-h, 26px)", border: "1px solid #d1d5db", borderRadius: 4, overflow: "hidden" }}>
-              <DateSegmentInput value={invoiceDate} onChange={setInvoiceDate} style={{ flex: 1, minWidth: 0, width: "100%", height: "var(--work-field-h, 26px)", border: "none", borderRadius: 0, justifyContent: "center", textAlign: "center", paddingInline: 2 }} />
-              <button type="button" onClick={() => invoiceDatePickerRef.current?.showPicker()} className="flex items-center justify-center flex-shrink-0" style={{ height: "var(--work-field-h, 26px)", width: "26px", background: "#f3f4f6", border: "none", borderInlineStart: "1px solid #d1d5db", color: "#555", cursor: "pointer", fontSize: "var(--work-font-size, 12px)" }}>📅</button>
-              <input ref={invoiceDatePickerRef} type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }} tabIndex={-1} aria-hidden="true" />
+              <DateSegmentInput value={zatcaDateUsesCurrentWindowsDay ? localDateValue() : invoiceDate} onChange={setInvoiceDate} readOnly={zatcaJournalSelected} style={{ flex: 1, minWidth: 0, width: "100%", height: "var(--work-field-h, 26px)", border: "none", borderRadius: 0, justifyContent: "center", textAlign: "center", paddingInline: 2 }} />
+              {!zatcaJournalSelected && <button type="button" onClick={() => invoiceDatePickerRef.current?.showPicker()} className="flex items-center justify-center flex-shrink-0" style={{ height: "var(--work-field-h, 26px)", width: "26px", background: "#f3f4f6", border: "none", borderInlineStart: "1px solid #d1d5db", color: "#555", cursor: "pointer", fontSize: "var(--work-font-size, 12px)" }}>📅</button>}
+              {!zatcaJournalSelected && <input ref={invoiceDatePickerRef} type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }} tabIndex={-1} aria-hidden="true" />}
             </div>
           </div>
 

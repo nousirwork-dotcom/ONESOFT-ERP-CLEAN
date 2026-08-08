@@ -109,10 +109,17 @@ function dateParts(value: Date | string | null): { date: string; time: string; i
   if (!value) throw new Error('تاريخ الفاتورة مطلوب للإرسال الرسمي');
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) throw new Error('تاريخ الفاتورة غير صالح');
+  const pad = (part: number) => String(part).padStart(2, '0');
+  const dateValue = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  const timeValue = `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+  const offsetMinutes = -date.getTimezoneOffset();
+  const offsetSign = offsetMinutes >= 0 ? '+' : '-';
+  const offsetHours = pad(Math.floor(Math.abs(offsetMinutes) / 60));
+  const offsetRemainder = pad(Math.abs(offsetMinutes) % 60);
   return {
-    date: date.toISOString().slice(0, 10),
-    time: date.toISOString().slice(11, 19),
-    iso: date.toISOString(),
+    date: dateValue,
+    time: timeValue,
+    iso: `${dateValue}T${timeValue}${offsetSign}${offsetHours}:${offsetRemainder}`,
   };
 }
 

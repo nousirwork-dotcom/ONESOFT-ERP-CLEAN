@@ -5,14 +5,13 @@ import {
   checkpointNeedsReview,
   evaluateTrustedClock,
   isTrustedClockDocumentType,
-  parseCloudflareTraceTimestamp,
 } from '../services/trustedClock.js';
 
 const base = new Date('2026-08-07T12:00:00.000Z');
 process.env.TRUSTED_CLOCK_HMAC_KEY = '11'.repeat(32);
 
 describe('TrustedClock evaluation', () => {
-  it('accepts an online trusted timestamp and marks it trusted', () => {
+  it('uses the local Windows timestamp even when a remote timestamp is supplied', () => {
     const result = evaluateTrustedClock({
       wallNow: base,
       remoteTime: new Date('2026-08-07T12:00:01.000Z'),
@@ -20,9 +19,9 @@ describe('TrustedClock evaluation', () => {
 
     expect(result.allowed).toBe(true);
     if (result.allowed) {
-      expect(result.status).toBe('trusted');
-      expect(result.source).toBe('https');
-      expect(result.timestamp.toISOString()).toBe('2026-08-07T12:00:01.000Z');
+      expect(result.status).toBe('stale');
+      expect(result.source).toBe('system_initial');
+      expect(result.timestamp.toISOString()).toBe('2026-08-07T12:00:00.000Z');
     }
   });
 
@@ -36,7 +35,7 @@ describe('TrustedClock evaluation', () => {
     expect(result).toMatchObject({ allowed: false, event: 'CLOCK_ROLLBACK' });
   });
 
-  it('allows the same unit after Windows time is corrected and Cloudflare time agrees', () => {
+  it('allows the same unit after Windows time is corrected', () => {
     const blocked = evaluateTrustedClock({
       wallNow: new Date('2026-08-07T11:55:00.000Z'),
       lastIssuedAt: base,
@@ -45,20 +44,23 @@ describe('TrustedClock evaluation', () => {
     const corrected = evaluateTrustedClock({
       wallNow: new Date('2026-08-07T12:01:00.000Z'),
       lastIssuedAt: base,
-      remoteTime: new Date('2026-08-07T12:01:01.000Z'),
     });
 
     expect(blocked).toMatchObject({ allowed: false, event: 'CLOCK_ROLLBACK' });
-    expect(corrected).toMatchObject({ allowed: true, status: 'trusted', source: 'https' });
+    expect(corrected).toMatchObject({ allowed: true, status: 'stale', source: 'system_initial' });
   });
 
-  it('blocks a suspicious forward jump from the online source', () => {
+  it('allows a large forward jump and returns an audit warning', () => {
     const result = evaluateTrustedClock({
       wallNow: new Date('2026-08-07T12:20:00.000Z'),
-      remoteTime: base,
+      lastObservedWallTime: base,
+      monotonicSinceObservedMs: 1_000,
     });
 
-    expect(result).toMatchObject({ allowed: false, event: 'CLOCK_FORWARD_JUMP' });
+    expect(result).toMatchObject({
+      allowed: true,
+      warning: { event: 'CLOCK_FORWARD_JUMP' },
+    });
   });
 
   it('blocks a durable checkpoint that is ahead of the database chain', () => {
@@ -104,63 +106,51 @@ describe('TrustedClock evaluation', () => {
     expect(result).toMatchObject({ allowed: false, event: 'ZATCA_CHAIN_REVIEW_REQUIRED' });
   });
 
-  it('allows offline continuation only from a trusted monotonic anchor', () => {
+  it('allows the first issuance offline from the local Windows timestamp', () => {
     const result = evaluateTrustedClock({
       wallNow: new Date('2026-08-07T12:00:03.000Z'),
-      lastTrustedTime: base,
-      monotonicElapsedMs: 3000,
     });
 
     expect(result.allowed).toBe(true);
     if (result.allowed) {
       expect(result.status).toBe('stale');
-      expect(result.source).toBe('monotonic');
+      expect(result.source).toBe('system_initial');
       expect(result.timestamp.toISOString()).toBe('2026-08-07T12:00:03.000Z');
     }
   });
 
-  it('does not trust a backend wall clock for first offline issuance', () => {
+  it('does not require a network anchor for the first issuance', () => {
     const result = evaluateTrustedClock({ wallNow: base });
-    expect(result).toMatchObject({ allowed: false, event: 'CLOCK_UNTRUSTED' });
+    expect(result).toMatchObject({ allowed: true, source: 'system_initial' });
   });
 
   it('does not use a commercial invoice date to evaluate TrustedClock', () => {
     const result = evaluateTrustedClock({
       wallNow: new Date('2026-08-08T00:01:00.000Z'),
-      remoteTime: new Date('2026-08-08T00:01:01.000Z'),
     });
-    expect(result).toMatchObject({ allowed: true, status: 'trusted', source: 'https' });
+    expect(result).toMatchObject({ allowed: true, status: 'stale', source: 'system_initial' });
   });
 
-  it('blocks Offline issuance after a backend restart without a monotonic baseline', () => {
+  it('allows issuance after a backend restart when Windows time has advanced', () => {
     const result = evaluateTrustedClock({
       wallNow: new Date('2026-08-07T12:01:00.000Z'),
       lastTrustedTime: base,
       lastIssuedAt: base,
       monotonicElapsedMs: null,
-      remoteTime: null,
     });
 
-    expect(result).toMatchObject({ allowed: false, event: 'CLOCK_UNTRUSTED' });
+    expect(result).toMatchObject({ allowed: true, source: 'persisted' });
   });
 
-  it('allows issuance after a backend restart when a fresh Cloudflare time is available', () => {
+  it('allows the next calendar day without an internet connection', () => {
     const result = evaluateTrustedClock({
       wallNow: new Date('2026-08-07T12:01:00.000Z'),
       lastTrustedTime: base,
       lastIssuedAt: base,
       monotonicElapsedMs: null,
-      remoteTime: new Date('2026-08-07T12:01:01.000Z'),
     });
 
-    expect(result).toMatchObject({ allowed: true, status: 'trusted', source: 'https' });
-  });
-
-  it('accepts only the Cloudflare trace ts field and rejects JSON/general time fields', () => {
-    expect(parseCloudflareTraceTimestamp('fl=abc\nts=1786122000.000\ncolo=AMS')).toEqual(new Date('2026-08-07T17:00:00.000Z'));
-    expect(parseCloudflareTraceTimestamp('{"ts":1786122000}')).toBeNull();
-    expect(parseCloudflareTraceTimestamp('date=2026-08-07T16:20:00.000Z')).toBeNull();
-    expect(parseCloudflareTraceTimestamp('ts=1786122000\nts=1786122001')).toBeNull();
+    expect(result).toMatchObject({ allowed: true, source: 'persisted' });
   });
 
   it('blocks missing checkpoints only for a unit with a database chain', () => {

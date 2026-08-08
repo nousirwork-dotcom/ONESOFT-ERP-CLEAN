@@ -76,6 +76,7 @@ export type ZatcaIssuedSnapshot = {
     zatcaXml: string;
     zatcaPih: string;
     zatcaIssueTimestamp: Date;
+    invoiceDate: Date;
     zatcaStatus: 'reporting_pending' | 'clearance_pending';
     zatcaAttemptCount: number;
     zatcaSubmittedAt: null;
@@ -328,6 +329,7 @@ export async function issueZatcaDocument(input: {
     zatcaXml: signed.signedXml,
     zatcaPih: previousInvoiceHash,
     zatcaIssueTimestamp: trustedIssuance.timestamp,
+    invoiceDate: trustedIssuance.timestamp,
     zatcaStatus: operation === 'reporting' ? 'reporting_pending' : 'clearance_pending',
     zatcaAttemptCount: 0,
     zatcaSubmittedAt: null,
