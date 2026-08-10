@@ -631,6 +631,20 @@
       "when": 1786152000000,
       "tag": "0089_repair_zatca_transaction_issuance_timestamp",
       "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "7",
+      "when": 1786155600000,
+      "tag": "0090_foundation_reconcile_status",
+      "breakpoints": true
+    },
+    {
+      "idx": 91,
+      "version": "7",
+      "when": 1786159200000,
+      "tag": "0091_foundation_tombstones",
+      "breakpoints": true
     }
   ]
 }

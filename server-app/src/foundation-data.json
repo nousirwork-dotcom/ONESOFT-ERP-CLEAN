@@ -22,7 +22,7 @@
       "defaultCurrency": "SAR",
       "defaultPayMethod": "cash",
       "allowedUserGroup": null,
-      "allowedUserId": 46,
+      "allowedUserId": null,
       "printTemplate": null,
       "notes": null,
       "isActive": true,
@@ -75,28 +75,28 @@
         "accountLinks": [
           {
             "id": "default-1",
-            "accountId": 20,
+            "accountCode": "110101",
             "description": "الصندوق / النقد",
             "postingName": "CASH_AMOUNT",
             "postingSide": "debit"
           },
           {
             "id": "default-2",
-            "accountId": 120,
+            "accountCode": "410101",
             "description": "صافي المبيعات",
             "postingName": "NETSALES",
             "postingSide": "credit"
           },
           {
             "id": "default-3",
-            "accountId": 82,
+            "accountCode": "210501",
             "description": "الضريبة (VAT)",
             "postingName": "TAX",
             "postingSide": "credit"
           },
           {
             "id": "default-4",
-            "accountId": 22,
+            "accountCode": "110103",
             "description": "تقسيط",
             "postingName": "NOUSIR",
             "postingSide": ""
@@ -785,28 +785,28 @@
         "accountLinks": [
           {
             "id": "default-1",
-            "accountId": 20,
+            "accountCode": "110101",
             "description": "الصندوق / النقد",
             "postingName": "CASH_AMOUNT",
             "postingSide": "debit"
           },
           {
             "id": "default-2",
-            "accountId": 120,
+            "accountCode": "410101",
             "description": "صافي المبيعات",
             "postingName": "NETSALES",
             "postingSide": "credit"
           },
           {
             "id": "default-3",
-            "accountId": 82,
+            "accountCode": "210501",
             "description": "الضريبة (VAT)",
             "postingName": "TAX",
             "postingSide": "credit"
           },
           {
             "id": "default-4",
-            "accountId": 22,
+            "accountCode": "110103",
             "description": "تقسيط",
             "postingName": "NOUSIR",
             "postingSide": ""
@@ -5323,28 +5323,28 @@
         "accountLinks": [
           {
             "id": "default-1",
-            "accountId": 20,
+            "accountCode": "110101",
             "description": "الصندوق / النقد",
             "postingName": "CASH_AMOUNT",
             "postingSide": "debit"
           },
           {
             "id": "default-2",
-            "accountId": 120,
+            "accountCode": "410101",
             "description": "صافي المبيعات",
             "postingName": "NETSALES",
             "postingSide": "credit"
           },
           {
             "id": "default-3",
-            "accountId": 82,
+            "accountCode": "210501",
             "description": "الضريبة (VAT)",
             "postingName": "TAX",
             "postingSide": "credit"
           },
           {
             "id": "default-4",
-            "accountId": 22,
+            "accountCode": "110103",
             "description": "تقسيط",
             "postingName": "NOUSIR",
             "postingSide": ""
@@ -5458,7 +5458,7 @@
       "defaultCurrency": "SAR",
       "defaultPayMethod": "cash",
       "allowedUserGroup": null,
-      "allowedUserId": 46,
+      "allowedUserId": null,
       "printTemplate": null,
       "notes": null,
       "isActive": true,

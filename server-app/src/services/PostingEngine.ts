@@ -45,6 +45,8 @@ export type PostingResult = {
 
 export type AccountLinkConfig = {
   accountId:    number | null;
+  accountCode?: string | null;
+  accountSystemKey?: string | null;
   postingName:  string;
   postingSide:  string;
   description:  string;
@@ -227,7 +229,10 @@ export async function buildLinesFromAccountLinks(
 
   const accs = accIds.length
     ? await db.query.chartOfAccounts.findMany({
-        where: (a, { inArray }) => inArray(a.id, accIds),
+        where: (a, { and, eq, inArray }) => and(
+          inArray(a.id, accIds),
+          eq(a.orgId, orgId),
+        ),
       })
     : [];
   const accMap = new Map(accs.map(a => [a.id, a]));
@@ -241,6 +246,9 @@ export async function buildLinesFromAccountLinks(
     if (value === 0) continue;
 
     const acc    = accMap.get(link.accountId);
+    if (!acc) {
+      throw new Error(`الحساب المرتبط "${link.accountId}" غير موجود في المنظمة الحالية`);
+    }
     const isDebit = link.postingSide === 'debit';
     const lineDesc = link.description
       ? `${link.description} - ${invoice.invoiceNumber}`

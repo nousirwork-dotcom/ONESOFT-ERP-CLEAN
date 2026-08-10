@@ -49,6 +49,10 @@ CREATE TABLE IF NOT EXISTS "organizations" (
     "status" "org_status" NOT NULL DEFAULT 'trial',
     "subscription_expiry" TIMESTAMP,
     "max_users" INTEGER NOT NULL DEFAULT 5,
+    "foundation_snapshot_hash" VARCHAR(64),
+    "foundation_applied_at" TIMESTAMP,
+    "foundation_status" VARCHAR(30) NOT NULL DEFAULT 'pending',
+    "foundation_last_error" TEXT,
     "created_at" TIMESTAMP NOT NULL DEFAULT now(),
     "updated_at" TIMESTAMP NOT NULL DEFAULT now(),
     UNIQUE ("code")

@@ -29,6 +29,10 @@ export const organizations = pgTable('organizations', {
   maxUsers: integer('max_users').notNull().default(5),
   zatcaConfig: jsonb('zatca_config'),
   themeSettings: jsonb('theme_settings'),
+  foundationSnapshotHash: varchar('foundation_snapshot_hash', { length: 64 }),
+  foundationAppliedAt: timestamp('foundation_applied_at'),
+  foundationStatus: varchar('foundation_status', { length: 30 }).notNull().default('pending'),
+  foundationLastError: text('foundation_last_error'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });

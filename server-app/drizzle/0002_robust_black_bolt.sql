@@ -1,5 +1,5 @@
 ALTER TYPE "public"."invoice_type" ADD VALUE IF NOT EXISTS 'order';--> statement-breakpoint
-CREATE TABLE "document_templates" (
+CREATE TABLE IF NOT EXISTS "document_templates" (
         "id" serial PRIMARY KEY NOT NULL,
         "org_id" integer NOT NULL,
         "code" varchar(30) NOT NULL,
@@ -17,7 +17,7 @@ CREATE TABLE "document_templates" (
         "updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "document_types" (
+CREATE TABLE IF NOT EXISTS "document_types" (
         "id" serial PRIMARY KEY NOT NULL,
         "org_id" integer NOT NULL,
         "type_id" varchar(30) NOT NULL,
@@ -58,7 +58,7 @@ CREATE TABLE "document_types" (
         "updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "purchase_invoice_items" (
+CREATE TABLE IF NOT EXISTS "purchase_invoice_items" (
         "id" serial PRIMARY KEY NOT NULL,
         "invoice_id" integer NOT NULL,
         "org_id" integer NOT NULL,
@@ -76,119 +76,172 @@ CREATE TABLE "purchase_invoice_items" (
         "sort_order" integer DEFAULT 0
 );
 --> statement-breakpoint
-ALTER TABLE "document_journals" DROP CONSTRAINT "document_journals_branch_id_branches_id_fk";
+-- The bootstrap schema already contains some of these constraints. Drop them
+-- defensively before recreating the migration's canonical definitions.
+ALTER TABLE "document_templates" DROP CONSTRAINT IF EXISTS "document_templates_org_id_organizations_id_fk";
+ALTER TABLE "document_types" DROP CONSTRAINT IF EXISTS "document_types_org_id_organizations_id_fk";
+ALTER TABLE "purchase_invoice_items" DROP CONSTRAINT IF EXISTS "purchase_invoice_items_invoice_id_purchase_invoices_id_fk";
+ALTER TABLE "purchase_invoice_items" DROP CONSTRAINT IF EXISTS "purchase_invoice_items_org_id_organizations_id_fk";
+ALTER TABLE "purchase_invoice_items" DROP CONSTRAINT IF EXISTS "purchase_invoice_items_product_id_products_id_fk";
+ALTER TABLE "document_journals" DROP CONSTRAINT IF EXISTS "document_journals_branch_id_branches_id_fk";
+ALTER TABLE "document_journals" DROP CONSTRAINT IF EXISTS "document_journals_sales_account_id_chart_of_accounts_id_fk";
+ALTER TABLE "document_journals" DROP CONSTRAINT IF EXISTS "document_journals_cash_account_id_chart_of_accounts_id_fk";
+ALTER TABLE "document_journals" DROP CONSTRAINT IF EXISTS "document_journals_credit_account_id_chart_of_accounts_id_fk";
+ALTER TABLE "document_journals" DROP CONSTRAINT IF EXISTS "document_journals_tax_account_id_chart_of_accounts_id_fk";
+ALTER TABLE "document_journals" DROP CONSTRAINT IF EXISTS "document_journals_discount_account_id_chart_of_accounts_id_fk";
+ALTER TABLE "document_journals" DROP CONSTRAINT IF EXISTS "document_journals_allowed_user_id_users_id_fk";
+ALTER TABLE "free_products" DROP CONSTRAINT IF EXISTS "free_products_product_id_products_id_fk";
+ALTER TABLE "inventory" DROP CONSTRAINT IF EXISTS "inventory_warehouse_id_warehouses_id_fk";
+ALTER TABLE "inventory_count_items" DROP CONSTRAINT IF EXISTS "inventory_count_items_product_id_products_id_fk";
+ALTER TABLE "inventory_counts" DROP CONSTRAINT IF EXISTS "inventory_counts_branch_id_branches_id_fk";
+ALTER TABLE "inventory_counts" DROP CONSTRAINT IF EXISTS "inventory_counts_user_id_users_id_fk";
+ALTER TABLE "journal_entries" DROP CONSTRAINT IF EXISTS "journal_entries_user_id_users_id_fk";
+ALTER TABLE "journal_entry_lines" DROP CONSTRAINT IF EXISTS "journal_entry_lines_account_id_chart_of_accounts_id_fk";
+ALTER TABLE "payment_vouchers" DROP CONSTRAINT IF EXISTS "payment_vouchers_account_id_chart_of_accounts_id_fk";
+ALTER TABLE "payment_vouchers" DROP CONSTRAINT IF EXISTS "payment_vouchers_contra_account_id_chart_of_accounts_id_fk";
+ALTER TABLE "payment_vouchers" DROP CONSTRAINT IF EXISTS "payment_vouchers_user_id_users_id_fk";
+ALTER TABLE "products" DROP CONSTRAINT IF EXISTS "products_group_id_product_groups_id_fk";
+ALTER TABLE "products" DROP CONSTRAINT IF EXISTS "products_unit_id_units_id_fk";
+ALTER TABLE "purchase_invoices" DROP CONSTRAINT IF EXISTS "purchase_invoices_user_id_users_id_fk";
+ALTER TABLE "purchase_invoices" DROP CONSTRAINT IF EXISTS "purchase_invoices_supplier_id_suppliers_id_fk";
+ALTER TABLE "purchase_invoices" DROP CONSTRAINT IF EXISTS "purchase_invoices_warehouse_id_warehouses_id_fk";
+ALTER TABLE "receipt_vouchers" DROP CONSTRAINT IF EXISTS "receipt_vouchers_account_id_chart_of_accounts_id_fk";
+ALTER TABLE "receipt_vouchers" DROP CONSTRAINT IF EXISTS "receipt_vouchers_contra_account_id_chart_of_accounts_id_fk";
+ALTER TABLE "receipt_vouchers" DROP CONSTRAINT IF EXISTS "receipt_vouchers_user_id_users_id_fk";
+ALTER TABLE "sales_invoice_items" DROP CONSTRAINT IF EXISTS "sales_invoice_items_product_id_products_id_fk";
+ALTER TABLE "sales_invoices" DROP CONSTRAINT IF EXISTS "sales_invoices_customer_id_customers_id_fk";
+ALTER TABLE "sales_invoices" DROP CONSTRAINT IF EXISTS "sales_invoices_warehouse_id_warehouses_id_fk";
+ALTER TABLE "sales_invoices" DROP CONSTRAINT IF EXISTS "sales_invoices_branch_id_branches_id_fk";
+ALTER TABLE "sales_invoices" DROP CONSTRAINT IF EXISTS "sales_invoices_user_id_users_id_fk";
+ALTER TABLE "stock_voucher_items" DROP CONSTRAINT IF EXISTS "stock_voucher_items_product_id_products_id_fk";
+ALTER TABLE "stock_vouchers" DROP CONSTRAINT IF EXISTS "stock_vouchers_branch_id_branches_id_fk";
+ALTER TABLE "stock_vouchers" DROP CONSTRAINT IF EXISTS "stock_vouchers_supplier_id_suppliers_id_fk";
+ALTER TABLE "stock_vouchers" DROP CONSTRAINT IF EXISTS "stock_vouchers_user_id_users_id_fk";
+ALTER TABLE "vouchers" DROP CONSTRAINT IF EXISTS "vouchers_account_id_chart_of_accounts_id_fk";
+ALTER TABLE "vouchers" DROP CONSTRAINT IF EXISTS "vouchers_user_id_users_id_fk";
+ALTER TABLE "warehouse_account_links" DROP CONSTRAINT IF EXISTS "warehouse_account_links_account_id_chart_of_accounts_id_fk";
+ALTER TABLE "warehouses" DROP CONSTRAINT IF EXISTS "warehouses_branch_id_branches_id_fk";
+ALTER TABLE "warehouses" DROP CONSTRAINT IF EXISTS "warehouses_inv_account_id_chart_of_accounts_id_fk";
+ALTER TABLE "warehouses" DROP CONSTRAINT IF EXISTS "warehouses_cogs_account1_id_chart_of_accounts_id_fk";
+ALTER TABLE "warehouses" DROP CONSTRAINT IF EXISTS "warehouses_cogs_account2_id_chart_of_accounts_id_fk";
+ALTER TABLE "warehouses" DROP CONSTRAINT IF EXISTS "warehouses_cash_account_id_chart_of_accounts_id_fk";
+ALTER TABLE "warehouses" DROP CONSTRAINT IF EXISTS "warehouses_bank_account_id_chart_of_accounts_id_fk";
+ALTER TABLE "warehouses" DROP CONSTRAINT IF EXISTS "warehouses_sales_account1_id_chart_of_accounts_id_fk";
+ALTER TABLE "warehouses" DROP CONSTRAINT IF EXISTS "warehouses_allowed_user_id_users_id_fk";
 --> statement-breakpoint
-ALTER TABLE "document_journals" DROP CONSTRAINT "document_journals_sales_account_id_chart_of_accounts_id_fk";
+ALTER TABLE "document_journals" DROP CONSTRAINT IF EXISTS "document_journals_branch_id_branches_id_fk";
 --> statement-breakpoint
-ALTER TABLE "document_journals" DROP CONSTRAINT "document_journals_cash_account_id_chart_of_accounts_id_fk";
+ALTER TABLE "document_journals" DROP CONSTRAINT IF EXISTS "document_journals_sales_account_id_chart_of_accounts_id_fk";
 --> statement-breakpoint
-ALTER TABLE "document_journals" DROP CONSTRAINT "document_journals_credit_account_id_chart_of_accounts_id_fk";
+ALTER TABLE "document_journals" DROP CONSTRAINT IF EXISTS "document_journals_cash_account_id_chart_of_accounts_id_fk";
 --> statement-breakpoint
-ALTER TABLE "document_journals" DROP CONSTRAINT "document_journals_tax_account_id_chart_of_accounts_id_fk";
+ALTER TABLE "document_journals" DROP CONSTRAINT IF EXISTS "document_journals_credit_account_id_chart_of_accounts_id_fk";
 --> statement-breakpoint
-ALTER TABLE "document_journals" DROP CONSTRAINT "document_journals_discount_account_id_chart_of_accounts_id_fk";
+ALTER TABLE "document_journals" DROP CONSTRAINT IF EXISTS "document_journals_tax_account_id_chart_of_accounts_id_fk";
 --> statement-breakpoint
-ALTER TABLE "document_journals" DROP CONSTRAINT "document_journals_allowed_user_id_users_id_fk";
+ALTER TABLE "document_journals" DROP CONSTRAINT IF EXISTS "document_journals_discount_account_id_chart_of_accounts_id_fk";
 --> statement-breakpoint
-ALTER TABLE "free_products" DROP CONSTRAINT "free_products_product_id_products_id_fk";
+ALTER TABLE "document_journals" DROP CONSTRAINT IF EXISTS "document_journals_allowed_user_id_users_id_fk";
 --> statement-breakpoint
-ALTER TABLE "inventory" DROP CONSTRAINT "inventory_warehouse_id_warehouses_id_fk";
+ALTER TABLE "free_products" DROP CONSTRAINT IF EXISTS "free_products_product_id_products_id_fk";
 --> statement-breakpoint
-ALTER TABLE "inventory_count_items" DROP CONSTRAINT "inventory_count_items_product_id_products_id_fk";
+ALTER TABLE "inventory" DROP CONSTRAINT IF EXISTS "inventory_warehouse_id_warehouses_id_fk";
 --> statement-breakpoint
-ALTER TABLE "inventory_counts" DROP CONSTRAINT "inventory_counts_branch_id_branches_id_fk";
+ALTER TABLE "inventory_count_items" DROP CONSTRAINT IF EXISTS "inventory_count_items_product_id_products_id_fk";
 --> statement-breakpoint
-ALTER TABLE "inventory_counts" DROP CONSTRAINT "inventory_counts_user_id_users_id_fk";
+ALTER TABLE "inventory_counts" DROP CONSTRAINT IF EXISTS "inventory_counts_branch_id_branches_id_fk";
 --> statement-breakpoint
-ALTER TABLE "journal_entries" DROP CONSTRAINT "journal_entries_user_id_users_id_fk";
+ALTER TABLE "inventory_counts" DROP CONSTRAINT IF EXISTS "inventory_counts_user_id_users_id_fk";
 --> statement-breakpoint
-ALTER TABLE "journal_entry_lines" DROP CONSTRAINT "journal_entry_lines_account_id_chart_of_accounts_id_fk";
+ALTER TABLE "journal_entries" DROP CONSTRAINT IF EXISTS "journal_entries_user_id_users_id_fk";
 --> statement-breakpoint
-ALTER TABLE "payment_vouchers" DROP CONSTRAINT "payment_vouchers_account_id_chart_of_accounts_id_fk";
+ALTER TABLE "journal_entry_lines" DROP CONSTRAINT IF EXISTS "journal_entry_lines_account_id_chart_of_accounts_id_fk";
 --> statement-breakpoint
-ALTER TABLE "payment_vouchers" DROP CONSTRAINT "payment_vouchers_contra_account_id_chart_of_accounts_id_fk";
+ALTER TABLE "payment_vouchers" DROP CONSTRAINT IF EXISTS "payment_vouchers_account_id_chart_of_accounts_id_fk";
 --> statement-breakpoint
-ALTER TABLE "payment_vouchers" DROP CONSTRAINT "payment_vouchers_user_id_users_id_fk";
+ALTER TABLE "payment_vouchers" DROP CONSTRAINT IF EXISTS "payment_vouchers_contra_account_id_chart_of_accounts_id_fk";
 --> statement-breakpoint
-ALTER TABLE "products" DROP CONSTRAINT "products_group_id_product_groups_id_fk";
+ALTER TABLE "payment_vouchers" DROP CONSTRAINT IF EXISTS "payment_vouchers_user_id_users_id_fk";
 --> statement-breakpoint
-ALTER TABLE "products" DROP CONSTRAINT "products_unit_id_units_id_fk";
+ALTER TABLE "products" DROP CONSTRAINT IF EXISTS "products_group_id_product_groups_id_fk";
 --> statement-breakpoint
-ALTER TABLE "purchase_invoices" DROP CONSTRAINT "purchase_invoices_supplier_id_suppliers_id_fk";
+ALTER TABLE "products" DROP CONSTRAINT IF EXISTS "products_unit_id_units_id_fk";
 --> statement-breakpoint
-ALTER TABLE "purchase_invoices" DROP CONSTRAINT "purchase_invoices_warehouse_id_warehouses_id_fk";
+ALTER TABLE "purchase_invoices" DROP CONSTRAINT IF EXISTS "purchase_invoices_supplier_id_suppliers_id_fk";
 --> statement-breakpoint
-ALTER TABLE "receipt_vouchers" DROP CONSTRAINT "receipt_vouchers_account_id_chart_of_accounts_id_fk";
+ALTER TABLE "purchase_invoices" DROP CONSTRAINT IF EXISTS "purchase_invoices_warehouse_id_warehouses_id_fk";
 --> statement-breakpoint
-ALTER TABLE "receipt_vouchers" DROP CONSTRAINT "receipt_vouchers_contra_account_id_chart_of_accounts_id_fk";
+ALTER TABLE "receipt_vouchers" DROP CONSTRAINT IF EXISTS "receipt_vouchers_account_id_chart_of_accounts_id_fk";
 --> statement-breakpoint
-ALTER TABLE "receipt_vouchers" DROP CONSTRAINT "receipt_vouchers_user_id_users_id_fk";
+ALTER TABLE "receipt_vouchers" DROP CONSTRAINT IF EXISTS "receipt_vouchers_contra_account_id_chart_of_accounts_id_fk";
 --> statement-breakpoint
-ALTER TABLE "sales_invoice_items" DROP CONSTRAINT "sales_invoice_items_product_id_products_id_fk";
+ALTER TABLE "receipt_vouchers" DROP CONSTRAINT IF EXISTS "receipt_vouchers_user_id_users_id_fk";
 --> statement-breakpoint
-ALTER TABLE "sales_invoices" DROP CONSTRAINT "sales_invoices_customer_id_customers_id_fk";
+ALTER TABLE "sales_invoice_items" DROP CONSTRAINT IF EXISTS "sales_invoice_items_product_id_products_id_fk";
 --> statement-breakpoint
-ALTER TABLE "sales_invoices" DROP CONSTRAINT "sales_invoices_warehouse_id_warehouses_id_fk";
+ALTER TABLE "sales_invoices" DROP CONSTRAINT IF EXISTS "sales_invoices_customer_id_customers_id_fk";
 --> statement-breakpoint
-ALTER TABLE "sales_invoices" DROP CONSTRAINT "sales_invoices_branch_id_branches_id_fk";
+ALTER TABLE "sales_invoices" DROP CONSTRAINT IF EXISTS "sales_invoices_warehouse_id_warehouses_id_fk";
 --> statement-breakpoint
-ALTER TABLE "sales_invoices" DROP CONSTRAINT "sales_invoices_user_id_users_id_fk";
+ALTER TABLE "sales_invoices" DROP CONSTRAINT IF EXISTS "sales_invoices_branch_id_branches_id_fk";
 --> statement-breakpoint
-ALTER TABLE "stock_voucher_items" DROP CONSTRAINT "stock_voucher_items_product_id_products_id_fk";
+ALTER TABLE "sales_invoices" DROP CONSTRAINT IF EXISTS "sales_invoices_user_id_users_id_fk";
 --> statement-breakpoint
-ALTER TABLE "stock_vouchers" DROP CONSTRAINT "stock_vouchers_branch_id_branches_id_fk";
+ALTER TABLE "stock_voucher_items" DROP CONSTRAINT IF EXISTS "stock_voucher_items_product_id_products_id_fk";
 --> statement-breakpoint
-ALTER TABLE "stock_vouchers" DROP CONSTRAINT "stock_vouchers_supplier_id_suppliers_id_fk";
+ALTER TABLE "stock_vouchers" DROP CONSTRAINT IF EXISTS "stock_vouchers_branch_id_branches_id_fk";
 --> statement-breakpoint
-ALTER TABLE "stock_vouchers" DROP CONSTRAINT "stock_vouchers_user_id_users_id_fk";
+ALTER TABLE "stock_vouchers" DROP CONSTRAINT IF EXISTS "stock_vouchers_supplier_id_suppliers_id_fk";
 --> statement-breakpoint
-ALTER TABLE "vouchers" DROP CONSTRAINT "vouchers_account_id_chart_of_accounts_id_fk";
+ALTER TABLE "stock_vouchers" DROP CONSTRAINT IF EXISTS "stock_vouchers_user_id_users_id_fk";
 --> statement-breakpoint
-ALTER TABLE "vouchers" DROP CONSTRAINT "vouchers_user_id_users_id_fk";
+ALTER TABLE "vouchers" DROP CONSTRAINT IF EXISTS "vouchers_account_id_chart_of_accounts_id_fk";
 --> statement-breakpoint
-ALTER TABLE "warehouse_account_links" DROP CONSTRAINT "warehouse_account_links_account_id_chart_of_accounts_id_fk";
+ALTER TABLE "vouchers" DROP CONSTRAINT IF EXISTS "vouchers_user_id_users_id_fk";
 --> statement-breakpoint
-ALTER TABLE "warehouses" DROP CONSTRAINT "warehouses_branch_id_branches_id_fk";
+ALTER TABLE "warehouse_account_links" DROP CONSTRAINT IF EXISTS "warehouse_account_links_account_id_chart_of_accounts_id_fk";
 --> statement-breakpoint
-ALTER TABLE "warehouses" DROP CONSTRAINT "warehouses_inv_account_id_chart_of_accounts_id_fk";
+ALTER TABLE "warehouses" DROP CONSTRAINT IF EXISTS "warehouses_branch_id_branches_id_fk";
 --> statement-breakpoint
-ALTER TABLE "warehouses" DROP CONSTRAINT "warehouses_cogs_account1_id_chart_of_accounts_id_fk";
+ALTER TABLE "warehouses" DROP CONSTRAINT IF EXISTS "warehouses_inv_account_id_chart_of_accounts_id_fk";
 --> statement-breakpoint
-ALTER TABLE "warehouses" DROP CONSTRAINT "warehouses_cogs_account2_id_chart_of_accounts_id_fk";
+ALTER TABLE "warehouses" DROP CONSTRAINT IF EXISTS "warehouses_cogs_account1_id_chart_of_accounts_id_fk";
 --> statement-breakpoint
-ALTER TABLE "warehouses" DROP CONSTRAINT "warehouses_cash_account_id_chart_of_accounts_id_fk";
+ALTER TABLE "warehouses" DROP CONSTRAINT IF EXISTS "warehouses_cogs_account2_id_chart_of_accounts_id_fk";
 --> statement-breakpoint
-ALTER TABLE "warehouses" DROP CONSTRAINT "warehouses_bank_account_id_chart_of_accounts_id_fk";
+ALTER TABLE "warehouses" DROP CONSTRAINT IF EXISTS "warehouses_cash_account_id_chart_of_accounts_id_fk";
 --> statement-breakpoint
-ALTER TABLE "warehouses" DROP CONSTRAINT "warehouses_sales_account1_id_chart_of_accounts_id_fk";
+ALTER TABLE "warehouses" DROP CONSTRAINT IF EXISTS "warehouses_bank_account_id_chart_of_accounts_id_fk";
 --> statement-breakpoint
-ALTER TABLE "warehouses" DROP CONSTRAINT "warehouses_allowed_user_id_users_id_fk";
+ALTER TABLE "warehouses" DROP CONSTRAINT IF EXISTS "warehouses_sales_account1_id_chart_of_accounts_id_fk";
+--> statement-breakpoint
+ALTER TABLE "warehouses" DROP CONSTRAINT IF EXISTS "warehouses_allowed_user_id_users_id_fk";
 --> statement-breakpoint
 ALTER TABLE "inventory" ALTER COLUMN "warehouse_id" DROP NOT NULL;--> statement-breakpoint
 ALTER TABLE "document_journals" ADD COLUMN IF NOT EXISTS "print_template_2" varchar(100);--> statement-breakpoint
-ALTER TABLE "document_journals" ADD COLUMN "reset_frequency" varchar(20) DEFAULT 'none';--> statement-breakpoint
-ALTER TABLE "document_journals" ADD COLUMN "auto_serial" boolean DEFAULT false NOT NULL;--> statement-breakpoint
-ALTER TABLE "document_journals" ADD COLUMN "print_on_save" boolean DEFAULT false NOT NULL;--> statement-breakpoint
-ALTER TABLE "document_journals" ADD COLUMN "posting_mode" varchar(20) DEFAULT 'manual';--> statement-breakpoint
-ALTER TABLE "document_journals" ADD COLUMN "allow_unpost" boolean DEFAULT true NOT NULL;--> statement-breakpoint
-ALTER TABLE "document_journals" ADD COLUMN "allow_edit_after_post" boolean DEFAULT false NOT NULL;--> statement-breakpoint
-ALTER TABLE "purchase_invoices" ADD COLUMN "invoice_type" varchar(20) DEFAULT 'invoice' NOT NULL;--> statement-breakpoint
-ALTER TABLE "purchase_invoices" ADD COLUMN "due_date" timestamp;--> statement-breakpoint
-ALTER TABLE "purchase_invoices" ADD COLUMN "journal_id" integer;--> statement-breakpoint
-ALTER TABLE "purchase_invoices" ADD COLUMN "currency" varchar(10) DEFAULT 'SAR';--> statement-breakpoint
-ALTER TABLE "purchase_invoices" ADD COLUMN "exchange_rate" numeric(18, 6) DEFAULT '1';--> statement-breakpoint
-ALTER TABLE "purchase_invoices" ADD COLUMN "discount_percent" numeric(5, 2) DEFAULT '0';--> statement-breakpoint
-ALTER TABLE "purchase_invoices" ADD COLUMN "remaining_amount" numeric(18, 4) DEFAULT '0';--> statement-breakpoint
-ALTER TABLE "purchase_invoices" ADD COLUMN "payment_method" varchar(20) DEFAULT 'cash';--> statement-breakpoint
-ALTER TABLE "purchase_invoices" ADD COLUMN "user_id" integer;--> statement-breakpoint
-ALTER TABLE "purchase_invoices" ADD COLUMN "is_posted" boolean DEFAULT false NOT NULL;--> statement-breakpoint
-ALTER TABLE "purchase_invoices" ADD COLUMN "posted_at" timestamp;--> statement-breakpoint
-ALTER TABLE "purchase_invoices" ADD COLUMN "posted_journal_entry_id" integer;--> statement-breakpoint
-ALTER TABLE "purchase_invoices" ADD COLUMN "updated_at" timestamp DEFAULT now() NOT NULL;--> statement-breakpoint
-ALTER TABLE "sales_invoices" ADD COLUMN "journal_id" integer;--> statement-breakpoint
-ALTER TABLE "sales_invoices" ADD COLUMN "is_posted" boolean DEFAULT false NOT NULL;--> statement-breakpoint
-ALTER TABLE "sales_invoices" ADD COLUMN "posted_at" timestamp;--> statement-breakpoint
-ALTER TABLE "sales_invoices" ADD COLUMN "posted_journal_entry_id" integer;--> statement-breakpoint
+ALTER TABLE "document_journals" ADD COLUMN IF NOT EXISTS "reset_frequency" varchar(20) DEFAULT 'none';--> statement-breakpoint
+ALTER TABLE "document_journals" ADD COLUMN IF NOT EXISTS "auto_serial" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "document_journals" ADD COLUMN IF NOT EXISTS "print_on_save" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "document_journals" ADD COLUMN IF NOT EXISTS "posting_mode" varchar(20) DEFAULT 'manual';--> statement-breakpoint
+ALTER TABLE "document_journals" ADD COLUMN IF NOT EXISTS "allow_unpost" boolean DEFAULT true NOT NULL;--> statement-breakpoint
+ALTER TABLE "document_journals" ADD COLUMN IF NOT EXISTS "allow_edit_after_post" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "purchase_invoices" ADD COLUMN IF NOT EXISTS "invoice_type" varchar(20) DEFAULT 'invoice' NOT NULL;--> statement-breakpoint
+ALTER TABLE "purchase_invoices" ADD COLUMN IF NOT EXISTS "due_date" timestamp;--> statement-breakpoint
+ALTER TABLE "purchase_invoices" ADD COLUMN IF NOT EXISTS "journal_id" integer;--> statement-breakpoint
+ALTER TABLE "purchase_invoices" ADD COLUMN IF NOT EXISTS "currency" varchar(10) DEFAULT 'SAR';--> statement-breakpoint
+ALTER TABLE "purchase_invoices" ADD COLUMN IF NOT EXISTS "exchange_rate" numeric(18, 6) DEFAULT '1';--> statement-breakpoint
+ALTER TABLE "purchase_invoices" ADD COLUMN IF NOT EXISTS "discount_percent" numeric(5, 2) DEFAULT '0';--> statement-breakpoint
+ALTER TABLE "purchase_invoices" ADD COLUMN IF NOT EXISTS "remaining_amount" numeric(18, 4) DEFAULT '0';--> statement-breakpoint
+ALTER TABLE "purchase_invoices" ADD COLUMN IF NOT EXISTS "payment_method" varchar(20) DEFAULT 'cash';--> statement-breakpoint
+ALTER TABLE "purchase_invoices" ADD COLUMN IF NOT EXISTS "user_id" integer;--> statement-breakpoint
+ALTER TABLE "purchase_invoices" ADD COLUMN IF NOT EXISTS "is_posted" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "purchase_invoices" ADD COLUMN IF NOT EXISTS "posted_at" timestamp;--> statement-breakpoint
+ALTER TABLE "purchase_invoices" ADD COLUMN IF NOT EXISTS "posted_journal_entry_id" integer;--> statement-breakpoint
+ALTER TABLE "purchase_invoices" ADD COLUMN IF NOT EXISTS "updated_at" timestamp DEFAULT now() NOT NULL;--> statement-breakpoint
+ALTER TABLE "sales_invoices" ADD COLUMN IF NOT EXISTS "journal_id" integer;--> statement-breakpoint
+ALTER TABLE "sales_invoices" ADD COLUMN IF NOT EXISTS "is_posted" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "sales_invoices" ADD COLUMN IF NOT EXISTS "posted_at" timestamp;--> statement-breakpoint
+ALTER TABLE "sales_invoices" ADD COLUMN IF NOT EXISTS "posted_journal_entry_id" integer;--> statement-breakpoint
 ALTER TABLE "document_templates" ADD CONSTRAINT "document_templates_org_id_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "document_types" ADD CONSTRAINT "document_types_org_id_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "purchase_invoice_items" ADD CONSTRAINT "purchase_invoice_items_invoice_id_purchase_invoices_id_fk" FOREIGN KEY ("invoice_id") REFERENCES "public"."purchase_invoices"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint

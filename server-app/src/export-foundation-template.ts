@@ -36,10 +36,15 @@ const whRows = await q(
 const warehouseFkMap = new Map<number, string>(whRows.map((r: any) => [r.id, r.foundation_key]));
 
 const acctRows = await q(
-  `SELECT id, system_key FROM chart_of_accounts WHERE org_id=$1 AND system_key IS NOT NULL`,
+  `SELECT id, system_key, code FROM chart_of_accounts WHERE org_id=$1`,
   [SOURCE_ORG_ID]
 );
-const accountSkMap = new Map<number, string>(acctRows.map((r: any) => [r.id, r.system_key]));
+const accountSkMap = new Map<number, string>(
+  acctRows
+    .filter((r: any) => r.system_key || r.code)
+    .map((r: any) => [r.id, r.system_key ?? r.code]),
+);
+const accountCodeMap = new Map<number, string>(acctRows.map((r: any) => [r.id, r.code]));
 
 console.log(`  خريطة الفروع:   ${branchFkMap.size} سجل`);
 console.log(`  خريطة المخازن:  ${warehouseFkMap.size} سجل`);
@@ -106,6 +111,16 @@ function rowToCamel(row: Record<string, unknown>): Record<string, unknown> {
   return out;
 }
 
+// User IDs are scoped to the source organization and must never be copied
+// into a foundation snapshot for another organization. A null value keeps the
+// journal/warehouse available while leaving user assignment to the target org.
+function clearOrganizationLocalReferences(row: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...row,
+    allowedUserId: null,
+  };
+}
+
 // ─── helper: حقن مراجع FK في السجل ──────────────────────────────────────────
 
 function enrichFkRefs(
@@ -130,6 +145,24 @@ function enrichFkRefs(
       const dbField = camelField.replace(/([A-Z])/g, '_$1').toLowerCase().slice(1);
       const sk = accountSkMap.get(id);
       enriched[`_${camelField}_fk`] = sk ?? null;
+    }
+  }
+
+  const config = enriched.paymentTypesConfig;
+  if (tbl === 'documentJournals' && config && typeof config === 'object' && !Array.isArray(config)) {
+    const paymentConfig = config as Record<string, unknown>;
+    if (Array.isArray(paymentConfig.accountLinks)) {
+      paymentConfig.accountLinks = paymentConfig.accountLinks.map((rawLink) => {
+        if (!rawLink || typeof rawLink !== 'object' || Array.isArray(rawLink)) return rawLink;
+        const link = { ...(rawLink as Record<string, unknown>) };
+        const accountId = link.accountId;
+        if (typeof accountId === 'number') {
+          link.accountCode = accountCodeMap.get(accountId) ?? null;
+          delete link.accountId;
+        }
+        return link;
+      });
+      enriched.paymentTypesConfig = paymentConfig;
     }
   }
 
@@ -164,7 +197,7 @@ for (const tbl of TABLES) {
     for (const [k, v] of Object.entries(row)) {
       if (!STRIP_COLS.has(k)) stripped[k] = v;
     }
-    const camel = rowToCamel(stripped);
+    const camel = clearOrganizationLocalReferences(rowToCamel(stripped));
     return enrichFkRefs(camel, dataKey);
   });
   console.log(`  ${tbl}: ${rows.length} سجل → ${dataKey}`);

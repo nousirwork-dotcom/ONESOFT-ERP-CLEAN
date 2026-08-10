@@ -37,6 +37,7 @@ const uploadsDir = process.env.UPLOADS_DIR
 
 console.log('[3/6] All modules loaded — creating HTTP app...');
 const app = express();
+let startupReady = false;
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
 app.use(cors({ origin: true, credentials: true }));
@@ -142,8 +143,9 @@ app.post('/api/upload/logo', async (req, res) => {
   }
 });
 
-app.get('/api/health', (_req, res) => res.json({
-  status:    'ok',
+app.get('/api/health', (_req, res) => res.status(startupReady ? 200 : 503).json({
+  status:    startupReady ? 'ok' : 'starting',
+  ready:     startupReady,
   version:   '1.0.0',
   env:       ENV.nodeEnv,
   port:      ENV.port,
@@ -441,12 +443,18 @@ try {
 // يُضيف السجلات التأسيسية الجديدة فقط (idempotent — لا يُعدّل أو يحذف أي سجل).
 try {
   const { runFoundationUpdateForAllOrgs } = await import('./foundation-update.js');
-  await runFoundationUpdateForAllOrgs(ENV.dbUrl);
+  const foundationResult = await runFoundationUpdateForAllOrgs(ENV.dbUrl);
+  if (!foundationResult.ok) {
+    console.error('[startup] ❌ FOUNDATION_INCOMPLETE — server will not announce readiness.', foundationResult);
+    process.exit(1);
+  }
 } catch (err) {
-  console.error('[startup] ⚠️ foundation-update error:', err);
+  console.error('[startup] ❌ FOUNDATION_INCOMPLETE — server startup aborted:', err);
+  process.exit(1);
 }
 
 console.log('[6/6] ✅ PostgreSQL connected — schema OK — server fully ready');
+startupReady = true;
 
 // Durable Mock-only ZATCA queue. It is started only after schema validation,
 // survives process restarts through PostgreSQL, and never contacts Production.

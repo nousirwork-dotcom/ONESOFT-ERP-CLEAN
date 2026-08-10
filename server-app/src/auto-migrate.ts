@@ -5,7 +5,6 @@ import { fileURLToPath } from 'url';
 import { REQUIRED_SCHEMA_VERSION } from './schema-version.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
 /**
  * autoMigrate — يطبّق ملفات SQL من drizzle/ مباشرة عبر pg، بدون أي اعتماد
  * على pnpm أو drizzle-kit أو المُثبِّت (installer).
@@ -99,7 +98,6 @@ export async function autoMigrate(pool: Pool): Promise<{ ok: boolean; error?: st
       'SELECT COUNT(*)::text AS count FROM __drizzle_migrations',
     );
     const ledgerWasEmpty = Number(ledgerCountResult.rows[0]?.count ?? 0) === 0;
-
     // Legacy installations may have been stamped before the migration ledger
     // existed. Reconstruct only the already-completed prefix; never mark
     // migrations beyond the stamped version as applied. Once the ledger has
