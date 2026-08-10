@@ -1821,7 +1821,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
               <span><b>العميل:</b> {sourceInvoice.customerName || "—"}</span>
               <span><b>العملة:</b> {sourceInvoice.currency || "SAR"}</span>
               <span><b>الحالة:</b> {sourceInvoice.status || "—"}</span>
-              <span><b>الإجمالي:</b> {sourceInvoice.total || "0"}</span>
+              <span><b>الإجمالي:</b> {(sourceInvoice as { total?: string | number }).total || "0"}</span>
               <span><b>المخزن/الفرع:</b> {sourceInvoice.warehouseName || "—"}</span>
               <span><b>دفتر الفاتورة:</b> {sourceInvoice.journal?.name || sourceInvoice.journalId || "—"}</span>
               <span>

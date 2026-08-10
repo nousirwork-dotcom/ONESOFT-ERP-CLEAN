@@ -11,7 +11,6 @@ export default function Settings() {
   const { user } = useAuth();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isSyncing, setIsSyncing] = useState(false);
-  const utils = trpc.useUtils();
 
   useEffect(() => {
     const on = () => setIsOnline(true);
@@ -21,22 +20,13 @@ export default function Settings() {
     return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
   }, []);
 
-  const { data: pendingSync } = trpc.sync.pending.useQuery(undefined, { refetchInterval: 10000 });
-  const markDone = trpc.sync.markDone.useMutation();
+  const pendingSync: never[] = [];
 
   const handleSync = async () => {
     if (!isOnline) { toast.error("لا يوجد اتصال بالإنترنت"); return; }
     setIsSyncing(true);
     try {
-      if (pendingSync && pendingSync.length > 0) {
-        for (const item of pendingSync) {
-          await markDone.mutateAsync({ id: item.id });
-        }
-        utils.sync.pending.invalidate();
-        toast.success(`تمت مزامنة ${pendingSync.length} عملية`);
-      } else {
-        toast.success("كل البيانات محدّثة");
-      }
+      toast.info("المزامنة غير متاحة في هذه النسخة");
     } catch (e: any) {
       toast.error(e.message ?? "فشلت المزامنة");
     } finally {
@@ -67,7 +57,7 @@ export default function Settings() {
           </div>
           <div className="flex justify-between items-center py-2 border-b border-border">
             <span className="text-sm text-muted-foreground">البريد الإلكتروني</span>
-            <span className="text-sm font-medium">{user?.email ?? "—"}</span>
+            <span className="text-sm font-medium">{user?.username ?? "—"}</span>
           </div>
           <div className="flex justify-between items-center py-2">
             <span className="text-sm text-muted-foreground">الدور</span>

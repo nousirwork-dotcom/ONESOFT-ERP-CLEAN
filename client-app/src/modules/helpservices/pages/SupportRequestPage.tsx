@@ -17,12 +17,12 @@ type Tab = "new" | "my-tickets" | "new-replies";
 type Ticket = {
   id: number; ticketNumber: string; subject: string; description: string;
   category: string; priority: string; status: string;
-  unreadReplies: number; submittedAt: string | null; createdAt: string;
-  updatedAt: string; rating: number | null; lcTicketRef: string | null;
+  unreadReplies: number; submittedAt: string | Date | null; createdAt: string | Date;
+  updatedAt: string | Date; rating: number | null; lcTicketRef: string | null;
 };
 type Message = {
   id: number; senderType: string; senderName: string | null;
-  body: string; isRead: boolean; sentAt: string; createdAt: string;
+  body: string; isRead: boolean; sentAt: string | Date; createdAt: string | Date;
 };
 
 // ─── تعريفات ──────────────────────────────────────────────────────────────────
@@ -68,14 +68,14 @@ function priorityBadge(priority: string) {
   );
 }
 
-function fmtDate(d: string | null | undefined) {
+function fmtDate(d: string | Date | null | undefined) {
   if (!d) return "—";
   try {
     return new Date(d).toLocaleDateString("ar-SA", {
       year: "numeric", month: "short", day: "numeric",
       hour: "2-digit", minute: "2-digit",
     });
-  } catch { return d; }
+  } catch { return String(d); }
 }
 
 function StarRating({ value, onChange }: { value: number; onChange: (v: number) => void }) {
@@ -450,7 +450,7 @@ function TicketsList({ filter, onSelectTicket, onNewTicket }: {
     return () => clearInterval(id);
   }, []);
 
-  const tickets: Ticket[] = (listQ.data ?? []) as Ticket[];
+  const tickets: Ticket[] = (listQ.data ?? []) as unknown as Ticket[];
   const filtered = filter === "unread"
     ? tickets.filter(t => t.unreadReplies > 0)
     : tickets;

@@ -18,6 +18,7 @@ import {
   DollarSign, Receipt, Plus, Search,
   Printer, CheckCircle, RefreshCw, ArrowRight, Filter,
   Bell, Activity, X,
+  Clock,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/core/ui/card";
 import { Button } from "@/core/ui/button";
@@ -723,7 +724,7 @@ function CustomersPage() {
   const [search,     setSearch]    = useState("");
   const [dialogOpen, setDialog]    = useState(false);
   const [editData,   setEditData]  = useState<any>(null);
-  const { data: customers, isLoading, refetch } = trpc.customers.list.useQuery({});
+  const { data: customers, isLoading, refetch } = trpc.customers.list.useQuery();
 
   const openCreate = () => { setEditData(null); setDialog(true); };
   const openEdit   = (c: any) => { setEditData(c); setDialog(true); };
@@ -2668,7 +2669,7 @@ function SalesContent({ activeId, onSelect, settings, onSettingsChange }: {
     case "sales-totals-reports":   return <SalesTotalsReports />;
     case "sales-invoices-report":  return <SalesInvoicesReport />;
     case "sales-items-reports":    return <ComingSoon title="تقارير أصناف المبيعات" />;
-    default:                      return <SalesOverview onSelect={onSelect} />;
+    default:                      return <SalesOverview onSelect={onSelect} settings={settings} onSettingsChange={onSettingsChange} />;
   }
 }
 

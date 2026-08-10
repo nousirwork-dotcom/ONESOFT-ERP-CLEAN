@@ -329,7 +329,11 @@ export const rePurchasesRouter = router({
     if(!existing) throw new TRPCError({ code:'NOT_FOUND', message:'الفاتورة غير موجودة' });
     if(d.supplierTaxId && !allowDuplicate){ const dup=await findDuplicate(d.supplierTaxId,d.invoiceNumber!,input.id); if(dup) throw new TRPCError({ code:'CONFLICT', message:'تنبيه: توجد فاتورة مسجلة سابقاً.' }); }
     // Phase 3c: tax rate comes from the statement, only total is editable
-    const [stmt]=await db.select({ defaultTaxRate: rePurchaseStatements.defaultTaxRate }).from(rePurchaseStatements).where(eq(rePurchaseStatements.id, existing.statementId));
+    const [stmt] = existing.statementId
+      ? await db.select({ defaultTaxRate: rePurchaseStatements.defaultTaxRate })
+          .from(rePurchaseStatements)
+          .where(eq(rePurchaseStatements.id, existing.statementId))
+      : [];
     const taxRate = Number(stmt?.defaultTaxRate ?? 15);
     const calc = calcFromTotal(d.totalValue ?? 0, taxRate);
     const [row]=await db.update(rePurchases).set({

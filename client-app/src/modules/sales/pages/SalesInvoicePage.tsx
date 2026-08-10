@@ -332,16 +332,16 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
   }, [focusAndSelectCell]);
 
   // ── Queries ───────────────────────────────────────────────────────────────
-  const customersQuery   = trpc.customers.list.useQuery({});
+  const customersQuery   = trpc.customers.list.useQuery();
   const warehousesQuery  = trpc.warehouses.list.useQuery();
-  const productsQuery    = trpc.products.list.useQuery({});
+  const productsQuery    = trpc.products.list.useQuery();
   const activeTaxesQuery = trpc.taxDefinitions.list.useQuery({ activeOnly: true }, { staleTime: 60000 });
   const activeTaxes = activeTaxesQuery.data ?? [];
   const journalsQuery    = trpc.documentJournals.list.useQuery({ docType: "sales_invoice" });
   const salespersonsQuery = trpc.users.listSalespersons.useQuery({ warehouseId: warehouseId ?? undefined });
   const nextNumberQuery  = trpc.salesInvoices.nextNumber.useQuery({ prefix: "INV" });
   const docTypesQuery    = trpc.documentTypes.list.useQuery({ typeId: "sales" });
-  const allInvoicesQuery = trpc.salesInvoices.list.useQuery({});
+  const allInvoicesQuery = trpc.salesInvoices.list.useQuery();
   const qrSettingsQuery       = trpc.qrSettings.get.useQuery();
   const orgQuery              = trpc.orgs.currentOrg.useQuery();
   const effectiveSellerLegalName = sellerLegalNameSnapshot.trim() ||
@@ -2240,15 +2240,15 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
                   🔑 البيانات التقنية
                 </div>
                 <div style={{ padding: "14px 16px", display: "grid", gridTemplateColumns: "140px 1fr", rowGap: "10px", alignItems: "start", fontSize: "var(--work-font-size, 12px)" }}>
-                  {[
+                  {([
                     { label: "UUID الفاتورة",      value: zatcaQuery.data.zatcaUuid },
                     { label: "Hash التشفيري",       value: zatcaQuery.data.zatcaHash },
                     { label: "PIH (الفاتورة السابقة)", value: zatcaQuery.data.zatcaPih },
                     { label: "رقم تسلسلي (Counter)", value: zatcaQuery.data.zatcaInvoiceCounter?.toString() },
-                  ].map(row => row.value ? (
+                  ] as Array<{ label: string; value: string | null | undefined }>).map(row => row.value ? (
                     <React.Fragment key={row.label}>
                       <div style={{ fontWeight: 700, color: "#6b7280", paddingLeft: 8 }}>{row.label}</div>
-                      <div style={{ fontFamily: "monospace", fontSize: "10px", color: "#1e293b", background: "#f8fafc", padding: "3px 8px", borderRadius: 4, wordBreak: "break-all" }}>{row.value}</div>
+                      <div style={{ fontFamily: "monospace", fontSize: "10px", color: "#1e293b", background: "#f8fafc", padding: "3px 8px", borderRadius: 4, wordBreak: "break-all" }}>{String(row.value)}</div>
                     </React.Fragment>
                   ) : null)}
                   {!zatcaQuery.data.zatcaUuid && (
@@ -2272,7 +2272,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
               )}
 
               {/* استجابة الهيئة */}
-              {zatcaQuery.data.zatcaResponse && (
+              {Boolean(zatcaQuery.data.zatcaResponse) && (
                 <div style={{ marginTop: 16, background: "#fff", borderRadius: 10, border: "1px solid #e2e8f0", overflow: "hidden" }}>
                   <div style={{ background: "#f8fafc", padding: "10px 16px", fontWeight: 700, fontSize: "var(--work-font-size, 12px)", color: "#374151", borderBottom: "1px solid #e2e8f0" }}>
                     📋 استجابة الهيئة
@@ -2819,7 +2819,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
           docTypeName="فاتورة مبيعات"
           amount={(() => {
             try {
-              const n = Number(lines.reduce((s, l) => s + (parseFloat(l.total) || 0), 0) - (parseFloat(discountAmount) || 0));
+              const n = Number(lines.reduce((s, l) => s + (parseFloat(l.total) || 0), 0) - totalDiscount);
               return new Intl.NumberFormat("ar-SA", { minimumFractionDigits: 2 }).format(n);
             } catch { return "0.00"; }
           })()}

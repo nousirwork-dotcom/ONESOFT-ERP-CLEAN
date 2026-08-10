@@ -53,12 +53,12 @@ function parseNum(str: string): number {
 function fmtN(n: number): string {
   return (n ?? 0).toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
-function fmtD(d: string | Date | null): string {
+function fmtD(d: string | Date | null | undefined): string {
   if (!d) return "—";
   const dt = typeof d === "string" ? new Date(d) : d;
   return dt.toLocaleDateString("ar-SA", { year: "numeric", month: "2-digit", day: "2-digit" });
 }
-function fmtDateExcel(d: string | Date | null): Date | null {
+function fmtDateExcel(d: string | Date | null | undefined): Date | null {
   if (!d) return null;
   const dt = typeof d === "string" ? new Date(d) : d;
   return isNaN(dt.getTime()) ? null : dt;
@@ -451,7 +451,7 @@ export default function RePurchasesPage() {
     const stmt = getStmtQ.data;
     const rows = listInvQ.data?.rows ?? [];
     const totals = listInvQ.data?.totals ?? { preTax: 0, tax: 0, total: 0, count: 0 };
-    const orgName = user?.orgName ?? (ar ? "المؤسسة" : "Organization");
+    const orgName = ar ? "المؤسسة" : "Organization";
     const now = new Date().toLocaleString("ar-SA");
     const taxRate = getStatementTaxRate();
     const html = `
@@ -1127,7 +1127,7 @@ ${rows.map((r: any, i: number) => {
 
   // ─── Render: Statements List ───────────────────────────────────────────────────────────────────────────────
   const stmtRows = listStmtQ.data?.rows ?? [];
-  const stmtTotals = listStmtQ.data?.totals ?? { count: 0, preTaxTotal: 0, taxTotal: 0, grandTotal: 0 };
+  const stmtTotals = listStmtQ.data?.totals ?? { count: 0, preTax: 0, tax: 0, total: 0 };
 
   return (
     <div className="h-full flex flex-col bg-background" dir={dir}>
@@ -1208,9 +1208,9 @@ ${rows.map((r: any, i: number) => {
       <div className="shrink-0 px-4 py-2 border-t flex flex-wrap gap-4 items-center" style={{ background: "#F2F0EC", borderColor: C.border, fontSize: 12 }}>
         <span className="font-semibold text-foreground">{ar ? "الإجماليات" : "Totals"}:</span>
         <span>{ar ? "البيانات" : "Statements"}: <strong>{stmtTotals.count}</strong></span>
-        <span>{ar ? "قبل الضريبة" : "Pre-Tax"}: <strong>{fmtN(stmtTotals.preTaxTotal)}</strong></span>
-        <span>{ar ? "الضريبة" : "Tax"}: <strong>{fmtN(stmtTotals.taxTotal)}</strong></span>
-        <span>{ar ? "الإجمالي" : "Total"}: <strong style={{ color: C.primary }}>{fmtN(stmtTotals.grandTotal)}</strong></span>
+        <span>{ar ? "قبل الضريبة" : "Pre-Tax"}: <strong>{fmtN(stmtTotals.preTax)}</strong></span>
+        <span>{ar ? "الضريبة" : "Tax"}: <strong>{fmtN(stmtTotals.tax)}</strong></span>
+        <span>{ar ? "الإجمالي" : "Total"}: <strong style={{ color: C.primary }}>{fmtN(stmtTotals.total)}</strong></span>
       </div>
     </div>
   );

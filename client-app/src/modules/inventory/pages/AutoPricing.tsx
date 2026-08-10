@@ -10,16 +10,8 @@ import { toast } from "sonner";
 import { TrendingUp, Calculator, Zap, AlertTriangle } from "lucide-react";
 
 export default function AutoPricing() {
-  const utils = trpc.useUtils();
   const { data: products = [], isLoading } = trpc.products.list.useQuery();
   const { data: warehouses = [] } = trpc.warehouses.list.useQuery();
-  const priceMutation = trpc.pricing.autoPrice.useMutation({
-    onSuccess: (data) => {
-      utils.products.list.invalidate();
-      toast.success(`تم تحديث أسعار ${data?.updated ?? 0} صنف بنجاح`);
-    },
-    onError: (e) => toast.error(e.message),
-  });
 
   const [margin, setMargin] = useState("30");
   const [warehouseId, setWarehouseId] = useState("");
@@ -29,7 +21,7 @@ export default function AutoPricing() {
     if (!warehouseId) return toast.error("اختر المخزن أولاً");
     const m = Number(margin);
     if (isNaN(m) || m < 0 || m > 500) return toast.error("نسبة الربح يجب أن تكون بين 0 و 500");
-    priceMutation.mutate({ warehouseId: Number(warehouseId), marginPercent: m });
+    toast.info("التسعير الآلي غير متاح: لا توجد عملية خادم معتمدة لهذه الدورة.");
   };
 
   const previewProducts = (products as any[]).filter(p => Number(p.costPrice ?? 0) > 0);
@@ -82,7 +74,7 @@ export default function AutoPricing() {
               <Calculator className="w-4 h-4" />
               {preview ? "إخفاء المعاينة" : "معاينة"}
             </Button>
-            <Button onClick={handleApply} disabled={priceMutation.isPending} className="flex-1 gap-2 bg-amber-600 hover:bg-amber-700">
+            <Button onClick={handleApply} className="flex-1 gap-2 bg-amber-600 hover:bg-amber-700">
               <Zap className="w-4 h-4" />
               تطبيق
             </Button>

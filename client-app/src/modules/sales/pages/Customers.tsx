@@ -13,7 +13,7 @@ export default function Customers() {
   const [dialogOpen, setDialog]   = useState(false);
   const [editData,   setEditData] = useState<any>(null);
 
-  const { data: customers, isLoading, refetch } = trpc.customers.list.useQuery({});
+  const { data: customers, isLoading, refetch } = trpc.customers.list.useQuery();
 
   const openCreate = () => { setEditData(null); setDialog(true); };
   const openEdit   = (c: any) => { setEditData(c); setDialog(true); };

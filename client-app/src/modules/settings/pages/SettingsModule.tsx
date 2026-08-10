@@ -5559,7 +5559,7 @@ function FieldDictionaryPage() {
     setDlgOpen(true);
   }
 
-  const rows = (listQ.data ?? []) as FDRow[];
+  const rows = (listQ.data ?? []) as unknown as FDRow[];
   const sq = search.toLowerCase();
   const filtered = rows.filter(r =>
     (!sq || r.code.toLowerCase().includes(sq) || r.nameAr.includes(sq) || r.nameEn.toLowerCase().includes(sq)) &&

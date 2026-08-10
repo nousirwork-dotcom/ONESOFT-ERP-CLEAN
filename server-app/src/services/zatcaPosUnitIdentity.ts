@@ -142,7 +142,8 @@ export async function lockAndGetNextPosCode(
 
   return nextManagedPosCode(
     rows
-      .filter(row => row.commonName != null && row.egsSerialNumber != null)
-      .map(row => row.unitCode),
+      .filter((row: { commonName: string | null; egsSerialNumber: string | null }) =>
+        row.commonName != null && row.egsSerialNumber != null)
+      .map((row: { unitCode: string }) => row.unitCode),
   );
 }

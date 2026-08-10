@@ -68,10 +68,10 @@ export default function POS() {
   const { data: orgData }          = trpc.orgs.currentOrg.useQuery();
   const { data: qrSettingsData }   = trpc.qrSettings.get.useQuery();
   const { data: posTemplateData }  = trpc.documentTemplates.getDefault.useQuery({ docType: "pos_receipt" });
-  const createInvoice = trpc.invoices.create.useMutation({
+  const createInvoice = trpc.salesInvoices.create.useMutation({
     onSuccess: () => {
       utils.dashboard.stats.invalidate();
-      utils.invoices.list.invalidate();
+      utils.salesInvoices.list.invalidate();
     },
   });
 
@@ -147,32 +147,42 @@ export default function POS() {
     setIsSubmitting(true);
     try {
       const id = await createInvoice.mutateAsync({
+        invoiceNumber: `POS-${Date.now()}`,
+        invoiceDate: new Date().toISOString().slice(0, 10),
         warehouseId: DEFAULT_WAREHOUSE_ID,
-        branchId: DEFAULT_BRANCH_ID,
         customerId: selectedCustomerId,
         items: cart.map((i) => ({
           productId: i.productId,
           productName: i.productName,
-          barcode: i.barcode,
           quantity: String(i.quantity),
           unitPrice: String(i.unitPrice),
-          costPrice: String(i.costPrice),
-          discount: String(i.discount),
+          discountPercent: "0",
+          discountAmount: String(i.discount),
           total: String(i.total),
         })),
         subtotal: String(subtotal),
-        discount: String(totalDiscount),
+        discountAmount: String(totalDiscount),
         total: String(total),
-        paymentMethod,
+        paymentMethod: paymentMethod === "cash"
+          ? "cash"
+          : paymentMethod === "credit"
+            ? "credit"
+            : paymentMethod === "card"
+              ? "other"
+              : "bank",
         notes: notes || undefined,
       });
-      toast.success(`تم حفظ الفاتورة #${id} بنجاح ✓`);
+      const createdInvoiceNumber =
+        typeof id === "object" && id !== null && "invoiceNumber" in id
+          ? String(id.invoiceNumber)
+          : String(id);
+      toast.success(`تم حفظ الفاتورة #${createdInvoiceNumber} بنجاح ✓`);
       const now = new Date();
       const customerName = selectedCustomerId
         ? customers?.find(c => c.id === selectedCustomerId)?.name
         : undefined;
       const rData: POSReceiptData = {
-        invoiceNumber: id,
+        invoiceNumber: createdInvoiceNumber,
         invoiceDate: fmtDate(now),
         invoiceTime: now.toTimeString().slice(0, 8),
         cashierName: user?.name ?? (user as any)?.username ?? undefined,

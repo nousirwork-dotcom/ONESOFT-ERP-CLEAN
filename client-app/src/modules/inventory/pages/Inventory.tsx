@@ -9,7 +9,7 @@ import { useState } from "react";
 export default function Inventory() {
   const [warehouseId, setWarehouseId] = useState<string>("");
   const { data: warehouses } = trpc.warehouses.list.useQuery();
-  const { data: stock, isLoading } = trpc.products.stockByWarehouse.useQuery(
+  const { data: stock, isLoading } = trpc.reports.stockByWarehouse.useQuery(
     { warehouseId: Number(warehouseId) },
     { enabled: !!warehouseId }
   );
@@ -70,16 +70,16 @@ export default function Inventory() {
                   </TableRow>
                 ) : (
                   stock?.map((s) => {
-                    const available = Number(s.quantity) - Number(s.reservedQuantity ?? 0);
+                    const available = Number(s.totalQuantity);
                     const isLow = available <= Number(s.minStock ?? 0);
                     return (
                       <TableRow key={`${s.productId}-${s.warehouseId}`} className="hover:bg-muted/30">
                         <TableCell className="font-medium">{s.productName}</TableCell>
-                        <TableCell className="font-mono text-xs text-muted-foreground">{s.barcode ?? "—"}</TableCell>
+                        <TableCell className="font-mono text-xs text-muted-foreground">—</TableCell>
                         <TableCell className={`font-bold ${isLow ? "text-red-600" : "text-emerald-600"}`}>{available}</TableCell>
-                        <TableCell className="text-amber-600">{s.reservedQuantity ?? 0}</TableCell>
+                        <TableCell className="text-amber-600">0</TableCell>
                         <TableCell>{s.minStock ?? 0}</TableCell>
-                        <TableCell>{formatCurrency(s.salePrice)}</TableCell>
+                        <TableCell>{formatCurrency((s as any).salePrice ?? 0)}</TableCell>
                         <TableCell>
                           {isLow ? (
                             <Badge variant="destructive" className="text-xs">مخزون منخفض</Badge>

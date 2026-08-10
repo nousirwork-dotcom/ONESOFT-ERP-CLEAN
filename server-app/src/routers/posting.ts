@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { eq, and, inArray, gte, lte, sql } from 'drizzle-orm';
+import { eq, and, inArray, gte, lte, sql, isNull } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
 import {
@@ -540,21 +540,27 @@ export const postingRouter = router({
           })
           .where(and(eq(purchaseInvoices.id, input.invoiceId), eq(purchaseInvoices.orgId, orgId)));
 
+        const accountLinkCondition = invoice.postedJournalEntryId != null
+          ? eq(pendingAccountMovements.linkedJournalEntryId, invoice.postedJournalEntryId)
+          : isNull(pendingAccountMovements.linkedJournalEntryId);
         await tx.update(pendingAccountMovements)
           .set({ status: 'unposted', linkedJournalEntryId: null, linkedStockVoucherId: null, updatedAt: new Date() })
           .where(and(
             eq(pendingAccountMovements.orgId, orgId),
             eq(pendingAccountMovements.sourceDocType, 'purchase_invoice'),
             eq(pendingAccountMovements.sourceDocId, invoice.id),
-            eq(pendingAccountMovements.linkedJournalEntryId, invoice.postedJournalEntryId),
+            accountLinkCondition,
           ));
+        const stockLinkCondition = invoice.generatedStockJournalEntryId != null
+          ? eq(pendingStockMovements.linkedJournalEntryId, invoice.generatedStockJournalEntryId)
+          : isNull(pendingStockMovements.linkedJournalEntryId);
         await tx.update(pendingStockMovements)
           .set({ status: 'unposted', linkedJournalEntryId: null, linkedStockVoucherId: null, updatedAt: new Date() })
           .where(and(
             eq(pendingStockMovements.orgId, orgId),
             eq(pendingStockMovements.sourceDocType, 'purchase_invoice'),
             eq(pendingStockMovements.sourceDocId, invoice.id),
-            eq(pendingStockMovements.linkedJournalEntryId, invoice.generatedStockJournalEntryId),
+            stockLinkCondition,
           ));
 
         return { success: true };

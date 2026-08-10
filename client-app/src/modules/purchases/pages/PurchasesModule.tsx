@@ -124,8 +124,8 @@ function PurchasesMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id
 
 // ─── Overview ─────────────────────────────────────────────────────────────────
 function PurchasesOverview({ onSelect }: { onSelect: (id: MenuId) => void }) {
-  const listQuery = trpc.purchases.list.useQuery({});
-  const suppliersQuery = trpc.suppliers.list.useQuery({});
+  const listQuery = trpc.purchases.list.useQuery();
+  const suppliersQuery = trpc.suppliers.list.useQuery();
 
   const totalPurchases = listQuery.data?.reduce((s, i) => s + parseFloat(i.total ?? "0"), 0) ?? 0;
   const pendingCount = listQuery.data?.filter(i => i.status === "draft").length ?? 0;
@@ -229,7 +229,7 @@ function SupplierDirectoryPage() {
 }
 
 function SuppliersListPage() {
-  const listQuery = trpc.suppliers.list.useQuery({});
+  const listQuery = trpc.suppliers.list.useQuery();
 
   const [showForm, setShowForm] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
@@ -553,8 +553,8 @@ function SuppliersListPage() {
 type InvoiceType = "invoice" | "return" | "order";
 
 function PurchaseDocPage({ invoiceType }: { invoiceType: InvoiceType }) {
-  const suppliersQuery = trpc.suppliers.list.useQuery({});
-  const productsQuery = trpc.products.list.useQuery({});
+  const suppliersQuery = trpc.suppliers.list.useQuery();
+  const productsQuery = trpc.products.list.useQuery();
   const listQuery = trpc.purchases.list.useQuery({ invoiceType });
   const createMutation = trpc.purchases.create.useMutation({
     onSuccess: () => {
@@ -611,25 +611,22 @@ function PurchaseDocPage({ invoiceType }: { invoiceType: InvoiceType }) {
 
     const typeLabels: Record<InvoiceType, string> = { invoice: "PUR", return: "RET", order: "ORD" };
     createMutation.mutate({
-      invoice: {
         invoiceNumber: `${typeLabels[invoiceType]}-${Date.now()}`,
-        invoiceDate: new Date(form.invoiceDate),
+        invoiceDate: form.invoiceDate,
         supplierId: parseInt(form.supplierId),
         invoiceType,
         currency: form.currency,
-        basedOn: form.basedOn || undefined,
-        analyticCode: form.analyticCode || undefined,
+        basedOnNumber: form.basedOn || undefined,
         notes: form.notes || undefined,
         subtotal: totalAmount.toFixed(3),
         discountPercent: form.discountPercent,
         discountAmount: totalDiscount.toFixed(3),
         taxAmount: "0",
         total: totalAmount.toFixed(3),
-        paidCash: form.paidCash,
-        remaining: (totalAmount - parseFloat(form.paidCash)).toFixed(3),
-      },
-      items: validLines.map((l, i) => ({
-        lineNumber: i + 1,
+        paidAmount: form.paidCash,
+        remainingAmount: (totalAmount - parseFloat(form.paidCash)).toFixed(3),
+        items: validLines.map((l, i) => ({
+        sortOrder: i + 1,
         productId: l.productId ? parseInt(l.productId) : undefined,
         productName: l.productName,
         unit: l.unit || "قطعة",
@@ -931,8 +928,8 @@ function PurchaseDocPage({ invoiceType }: { invoiceType: InvoiceType }) {
 
 // ─── Reports ──────────────────────────────────────────────────────────────────
 function ReportBySupplier() {
-  const listQuery = trpc.purchases.list.useQuery({});
-  const suppliersQuery = trpc.suppliers.list.useQuery({});
+  const listQuery = trpc.purchases.list.useQuery();
+  const suppliersQuery = trpc.suppliers.list.useQuery();
 
   const bySupplier = useMemo(() => {
     const map: Record<string, { name: string; count: number; total: number }> = {};

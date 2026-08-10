@@ -249,8 +249,8 @@ function QuotationForm({
 
   // Queries
   const nextNum    = trpc.salesInvoices.nextNumber.useQuery({ prefix: "QT" });
-  const customers  = trpc.customers.list.useQuery({});
-  const productsQ  = trpc.products.list.useQuery({});
+  const customers  = trpc.customers.list.useQuery();
+  const productsQ  = trpc.products.list.useQuery();
   const existing   = trpc.salesInvoices.get.useQuery({ id: existingId! }, { enabled: !!existingId });
   const filteredCustomers = (customers.data as any[] || []).filter(c =>
     !customerSearch || c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||

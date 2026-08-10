@@ -296,7 +296,7 @@ export default function BrandingSettingsPage() {
             <RotateCcw className="w-3.5 h-3.5 ml-1" />
             استعادة الافتراضيات
           </Button>
-          <Button size="sm" onClick={() => saveMutation.mutate(form)} disabled={saveMutation.isPending}>
+          <Button size="sm" onClick={() => saveMutation.mutate(form as Parameters<typeof saveMutation.mutate>[0])} disabled={saveMutation.isPending}>
             <Save className="w-3.5 h-3.5 ml-1" />
             {saveMutation.isPending ? 'جارٍ الحفظ...' : 'حفظ التغييرات'}
           </Button>
