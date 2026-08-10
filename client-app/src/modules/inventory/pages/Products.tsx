@@ -16,6 +16,7 @@ import { trpc } from "@/shared/lib/trpc";
 import * as XLSX from "xlsx";
 import {
   Archive,
+  AlertTriangle,
   Download,
   Edit,
   FileUp,
@@ -486,7 +487,32 @@ export function ProductCard({
     syncExtRows(extRows.filter((_, i) => i !== idx));
   };
 
-  let stockData: { total?: string | number; avgCost?: string | number; rows?: unknown[] } | undefined;
+  const { data: stockRows = [], isLoading: loadingStock } = trpc.reports.stockByWarehouse.useQuery(
+    undefined,
+    { enabled: isEdit && activeTab === "qty" }
+  );
+  const stockData = useMemo(() => {
+    const rows = (stockRows as Array<{
+      productId: number;
+      warehouseId: number | null;
+      warehouseName: string;
+      totalQuantity: string | number;
+      costPrice: string | number;
+    }>).filter((row) => row.productId === productId);
+    const total = rows.reduce((sum, row) => sum + Number(row.totalQuantity ?? 0), 0);
+    const avgCost = total
+      ? rows.reduce((sum, row) => sum + Number(row.totalQuantity ?? 0) * Number(row.costPrice ?? 0), 0) / total
+      : 0;
+    return {
+      total,
+      avgCost,
+      rows: rows.map((row) => ({
+        warehouseId: row.warehouseId ?? row.warehouseName,
+        warehouseName: row.warehouseName,
+        quantity: row.totalQuantity,
+      })),
+    };
+  }, [productId, stockRows]);
   let costsData: {
     lastVoucherDate?: Date | string;
     lastSupplierName?: string;
@@ -496,7 +522,6 @@ export function ProductCard({
     lastOrderCost?: string | number;
     standardCost?: string | number;
   } | undefined;
-  const loadingStock = false;
   const loadingCosts = false;
   const set = (key: keyof ProductForm, val: string | boolean) => {
     if (!readOnly) setForm({ ...form, [key]: val });
@@ -1179,6 +1204,13 @@ export function ProductCard({
         {/* ===== التبويب 4: التكاليف ===== */}
         {activeTab === "costs" && (
           <div className="space-y-3">
+            <div className="flex items-start gap-2 rounded border border-amber-300/60 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700/50 dark:bg-amber-950/20 dark:text-amber-300">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <p>
+                سجل تاريخ التكلفة التفصيلي غير متاح حاليًا؛ لا توجد عملية خادم معتمدة لهذا التقرير في هذا الإصدار.
+                القيم التالية هي حقول الصنف المحفوظة فقط وليست سجل مشتريات تاريخيًا.
+              </p>
+            </div>
             {/* رأس: الموردين + آخر مشتريات */}
             <div className="border border-slate-200 dark:border-slate-700 rounded">
               <div className="bg-[#EBE7DF] dark:bg-slate-800 px-3 py-1.5 border-b border-[#CFCFCF] dark:border-slate-700 flex items-center justify-between">
