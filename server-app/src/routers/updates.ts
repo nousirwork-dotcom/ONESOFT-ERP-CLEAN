@@ -27,7 +27,7 @@ function readVersionFile(): CurrentVersionInfo {
     }
   } catch {}
   return {
-    version:       '1.0.25',
+    version:       '1.0.26',
     build:         '20260630.001',
     releaseDate:   '2026-06-30',
     schemaVersion: '0092_repair_legacy_migration_drift',
