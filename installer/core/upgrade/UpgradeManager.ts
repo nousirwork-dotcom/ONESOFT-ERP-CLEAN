@@ -4,6 +4,9 @@ import { BackupBeforeUpgrade }  from './BackupBeforeUpgrade.js';
 import { RollbackManager }      from './RollbackManager.js';
 import { MigrationRunner }      from '../database/MigrationRunner.js';
 import { ServiceManager }       from '../services/ServiceManager.js';
+import { verifyPostUpgrade }    from './PostUpgradeVerifier.js';
+import * as fs from 'fs';
+import * as path from 'path';
 
 type Emit = (e: ProgressEvent) => void;
 type StatusCb = (s: UpgradeStatus) => void;
@@ -19,6 +22,7 @@ export class UpgradeManager {
     dbOpts: DatabaseConnectionOptions;
     databaseUrl: string;
     targetVersion: string;
+    backendPort?: number;
   }, emit: Emit, onStatus?: StatusCb): Promise<{ success: boolean; backupDir?: string }> {
     const { serverAppPath, backupsDir, dbOpts, databaseUrl, targetVersion } = opts;
 
@@ -55,10 +59,33 @@ export class UpgradeManager {
       // 5. تشغيل الخدمات
       onStatus?.('starting-services');
       emit({ level: 'info', message: 'جارٍ تشغيل الخدمات...', timestamp: now() });
-      svcMgr.start('OneSoft-Server');
+      const backendStart = svcMgr.start('OneSoft-Server');
+      if (!backendStart.success) {
+        throw new Error(`تعذّر تشغيل خدمة الخادم: ${backendStart.error ?? 'خطأ غير معروف'}`);
+      }
       await sleep(2000);
-      svcMgr.start('OneSoft-Client');
+      const clientStart = svcMgr.start('OneSoft-Client');
+      if (!clientStart.success) {
+        throw new Error(`تعذّر تشغيل خدمة العميل: ${clientStart.error ?? 'خطأ غير معروف'}`);
+      }
       emit({ level: 'success', message: 'تم تشغيل الخدمات', timestamp: now() });
+
+      onStatus?.('health-check');
+      emit({ level: 'info', message: 'جارٍ التحقق من health/schema/Foundation والروابط...', timestamp: now() });
+      const journalPath = path.join(serverAppPath, 'drizzle', 'meta', '_journal.json');
+      const journal = JSON.parse(fs.readFileSync(journalPath, 'utf8')) as {
+        entries: Array<{ tag: string }>;
+      };
+      const expectedSchemaVersion = journal.entries.at(-1)?.tag;
+      if (!expectedSchemaVersion) {
+        throw new Error('Journal فارغ — لا يمكن التحقق من إصدار المخطط');
+      }
+      await verifyPostUpgrade({
+        databaseUrl,
+        backendPort: opts.backendPort ?? 3000,
+        serverAppPath,
+        expectedSchemaVersion,
+      }, emit);
 
       onStatus?.('complete');
       emit({ level: 'success', message: `✅ اكتملت الترقية إلى v${targetVersion} بنجاح`, timestamp: now() });

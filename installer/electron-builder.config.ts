@@ -8,7 +8,7 @@ const config: Configuration = {
 
   // ── Windows metadata (shows in Settings → Apps & Programs and Features) ──
   extraMetadata: {
-    version: '1.0.0',
+    version: '1.0.25',
   },
 
   directories: {
@@ -35,7 +35,21 @@ const config: Configuration = {
     {
       from: 'resources/app',
       to: 'app',
+      filter: [
+        '**/*',
+        '!**/node_modules/**',
+        '!**/drizzle/**',
+        '!**/server-app/src/foundation-data.json',
+      ],
+    },
+    {
+      from: '../server-app/drizzle',
+      to: 'app/server-app/drizzle',
       filter: ['**/*'],
+    },
+    {
+      from: '../server-app/src/foundation-data.json',
+      to: 'app/server-app/src/foundation-data.json',
     },
     // Make icon available at runtime for shortcuts and notifications
     {
@@ -61,10 +75,12 @@ const config: Configuration = {
   },
 
   nsis: {
+    include: 'resources/installer.nsh',
     oneClick: false,
+    perMachine: true,
     allowToChangeInstallationDirectory: true,
-    createDesktopShortcut: false,   // handled by Installer UI
-    createStartMenuShortcut: false, // handled by Installer UI
+    createDesktopShortcut: true,
+    createStartMenuShortcut: true,
     shortcutName: 'OneSoft ERP',
     menuCategory: 'OneSoft',
     language: '1025',               // Arabic
@@ -83,9 +99,12 @@ const config: Configuration = {
     deleteAppDataOnUninstall: false,
   },
 
-  // ── Add/Remove Programs metadata ──
-  // These values appear in Settings → Installed Apps and Programs & Features
-  publish: null,
+  publish: {
+    provider: 'github',
+    owner: 'nousirwork-dotcom',
+    repo: 'ONESOFT-ERP-CLEAN',
+    releaseType: 'release',
+  },
 };
 
 export default config;

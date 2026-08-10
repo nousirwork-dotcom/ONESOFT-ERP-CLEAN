@@ -217,7 +217,7 @@ async function runUpgradeStartup(
   databaseName: string,
   orgId: number,
   customerId: number,
-): Promise<void> {
+): Promise<string> {
   const port = 39000 + (process.pid % 500);
   const output: string[] = [];
   const tsx = path.resolve('node_modules/tsx/dist/cli.mjs');
@@ -314,6 +314,7 @@ async function runUpgradeStartup(
       }, 5_000);
     });
   }
+  return output.join('');
 }
 
 const freshDatabase = `onesoft_migration_fresh_${process.pid}`;
@@ -373,6 +374,17 @@ try {
   client = null;
 
   await runUpgradeStartup(upgradeDatabase, orgId, customerId);
+  const foundationSecondRunOutput = await runUpgradeStartup(upgradeDatabase, orgId, customerId);
+  if (
+    !foundationSecondRunOutput.includes('"recordsInserted":0') ||
+    !foundationSecondRunOutput.includes('"recordsSkipped"') ||
+    !foundationSecondRunOutput.includes('"reconcile":"not-needed"')
+  ) {
+    throw new Error(
+      `second startup did not report idempotent Foundation results: ${foundationSecondRunOutput.slice(-4000)}`,
+    );
+  }
+  console.log('[migration-test] second backend startup Foundation inserted=0 + skipped reported: PASS');
 
   const verify = new Client({ connectionString: databaseUrlFor(upgradeDatabase) });
   await verify.connect();

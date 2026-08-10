@@ -1,6 +1,6 @@
 {
   "name": "erp-accounting",
-  "version": "1.0.0",
+  "version": "1.0.25",
   "type": "module",
   "license": "MIT",
   "scripts": {
@@ -11,7 +11,6 @@
     "check": "tsc --noEmit",
     "check:dates": "node scripts/check-no-date-inputs.mjs",
     "validate": "eslint src && tsc --noEmit",
-    "check": "tsc --noEmit",
     "format": "prettier --write .",
     "test": "vitest run"
   },

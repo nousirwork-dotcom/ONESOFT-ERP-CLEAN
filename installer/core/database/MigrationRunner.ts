@@ -14,8 +14,8 @@ function quoteIdent(id: string): string {
  * لا يعتمد على pnpm أو drizzle-kit أو أي أداة dev على جهاز العميل
  *
  * الترتيب:
- *   1. base_schema.sql  — ينشئ الجداول الأساسية الـ 30 (IF NOT EXISTS)
- *   2. journal entries  — ALTER TABLE / CREATE TABLE التدريجية (0000-0012)
+ *   1. base_schema.sql  — يُطبَّق على قاعدة فارغة فقط
+ *   2. journal entries  — ALTER TABLE / CREATE TABLE التدريجية
  */
 export class MigrationRunner {
   constructor(private readonly serverAppPath: string) {}
@@ -64,9 +64,16 @@ export class MigrationRunner {
     try {
       const client = await pool.connect();
       try {
-        // ── STEP 1: تطبيق base_schema.sql (ينشئ الجداول الأساسية) ────────────
+        // ── STEP 1: تطبيق base_schema.sql على قاعدة فارغة فقط ───────────────
+        // لا يجوز إعادة تشغيل الـbaseline على قاعدة عميل موجودة؛ بعض الجداول
+        // التاريخية تُنشأ في migration 0002، كما أن شكل الـbaseline قد يتغير
+        // بين الإصدارات. هذا يطابق auto-migrate في الخادم.
+        const orgCheckBeforeBase = await client.query(
+          `SELECT to_regclass('public.organizations') AS tbl`,
+        );
+        const databaseAlreadyInitialized = orgCheckBeforeBase.rows[0]?.tbl !== null;
         const baseSchemaFile = path.join(drizzleDir, 'base_schema.sql');
-        if (fs.existsSync(baseSchemaFile)) {
+        if (!databaseAlreadyInitialized && fs.existsSync(baseSchemaFile)) {
           emit({ level: 'info', message: 'تطبيق base_schema.sql (الجداول الأساسية)...', timestamp: now() });
           const baseSql = fs.readFileSync(baseSchemaFile, 'utf-8');
           try {
@@ -77,9 +84,11 @@ export class MigrationRunner {
             emit({ level: 'error', message: `❌ فشل base_schema.sql: ${msg}`, timestamp: now() });
             return { applied, skipped, failed: `base_schema.sql: ${msg}` };
           }
-        } else {
+        } else if (!databaseAlreadyInitialized) {
           emit({ level: 'error', message: `base_schema.sql غير موجود في: ${drizzleDir}`, timestamp: now() });
           return { applied, skipped, failed: 'base_schema.sql not found' };
+        } else {
+          emit({ level: 'info', message: 'قاعدة موجودة — تخطي base_schema.sql للحفاظ على بيانات العميل', timestamp: now() });
         }
 
         // ── STEP 2: التحقق من وجود جدول organizations ─────────────────────────
@@ -102,6 +111,42 @@ export class MigrationRunner {
             applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
           )
         `);
+
+        // تثبيتات OneSoft القديمة كانت تملك ختم _schema_version قبل إنشاء
+        // ledger. عند ترقية مثل هذه القاعدة نعيد بناء البادئة المنجزة فقط،
+        // ولا نسمح للختم بتجاوز SQL غير مسجل. بعد أول سجل يصبح الـledger
+        // مصدر الحقيقة الوحيد.
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS _schema_version (
+            id         INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+            version    TEXT NOT NULL,
+            stamped_at TIMESTAMP NOT NULL DEFAULT NOW()
+          )
+        `);
+        const ledgerCount = await client.query<{ count: string }>(
+          'SELECT COUNT(*)::text AS count FROM __drizzle_migrations',
+        );
+        const stampedVersion = await client.query<{ version: string }>(
+          'SELECT version FROM _schema_version WHERE id = 1',
+        );
+        const stampedTag = stampedVersion.rows[0]?.version ?? null;
+        const ledgerWasEmpty = Number(ledgerCount.rows[0]?.count ?? 0) === 0;
+        const stampedIndex = stampedTag
+          ? entries.findIndex((entry) => entry.tag === stampedTag)
+          : -1;
+        if (ledgerWasEmpty && stampedIndex >= 0) {
+          for (const entry of entries.slice(0, stampedIndex + 1)) {
+            await client.query(
+              'INSERT INTO __drizzle_migrations (tag) VALUES ($1) ON CONFLICT (tag) DO NOTHING',
+              [entry.tag],
+            );
+          }
+          emit({
+            level: 'info',
+            message: `تمت استعادة ${stampedIndex + 1} migration من ختم الإصدار القديم`,
+            timestamp: now(),
+          });
+        }
 
         // ── STEP 4: تطبيق Journal migrations بالترتيب ─────────────────────────
         emit({ level: 'info', message: `تطبيق ${entries.length} migration من الـ journal...`, timestamp: now() });
@@ -163,14 +208,6 @@ export class MigrationRunner {
         if (entries.length > 0) {
           const latestVersion = entries[entries.length - 1]!.tag;
           emit({ level: 'info', message: `جارٍ ختم إصدار المخطط: ${latestVersion}...`, timestamp: now() });
-
-          await client.query(`
-            CREATE TABLE IF NOT EXISTS _schema_version (
-              id         INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
-              version    TEXT    NOT NULL,
-              stamped_at TIMESTAMP NOT NULL DEFAULT NOW()
-            )
-          `);
 
           // ── حماية دفاعية ──────────────────────────────────────────────────
           // لو الجدول موجود بالفعل من تجربة/نسخة أقدم (بأعمدة ناقصة)،

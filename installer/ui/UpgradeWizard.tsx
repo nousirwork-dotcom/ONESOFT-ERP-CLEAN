@@ -8,7 +8,7 @@ export default function UpgradeWizard() {
   const { dbOpts, getDatabaseUrl } = useInstallerStore();
   const [phase, setPhase] = useState<Phase>('detect');
   const [currentVersion, setCurrentVersion] = useState<string | null>(null);
-  const [targetVersion] = useState('1.1.0');
+  const [targetVersion] = useState('1.0.25');
   const [log, setLog] = useState<ProgressEvent[]>([]);
   const [backupDir, setBackupDir] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);

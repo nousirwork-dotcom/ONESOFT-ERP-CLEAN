@@ -98,7 +98,7 @@ export default function Step09Services() {
 
       // ── دالة مساعدة لبناء كائن الإعدادات ─────────────────────────────────
       const buildConfig = (backendPort = 3000, frontendPort = 5000) => ({
-        version: '1.0.0', configVersion: 4,
+        version: '1.0.25', configVersion: 4,
         deploymentType, accessModes, databaseMode, machineRole, connectivityMode,
         licensingMode, updateChannel, backupPolicy, telemetry,
         database: {
@@ -194,7 +194,7 @@ export default function Step09Services() {
       // 10. كتابة Registry — يظهر في إضافة/إزالة البرامج
       await (window as any).installer?.writeRegistry?.({
         installDir,
-        version:      '1.0.0',
+        version:      '1.0.25',
         uninstallExe: `${installDir}\\OneSoft ERP Setup.exe`,
         iconPath:     `${installDir}\\resources\\icons\\onesoft.ico`,
         sizeKB:       150000,
@@ -202,7 +202,7 @@ export default function Step09Services() {
 
       // 11. تسجيل النسخة — لاكتشافها عند الترقية لاحقاً
       await (window as any).installer?.markInstalled?.({
-        version: '1.0.0',
+        version: '1.0.25',
         installDir,
       });
 

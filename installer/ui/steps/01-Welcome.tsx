@@ -66,7 +66,7 @@ export default function Step01Welcome() {
 
 
       <p style={{ color: '#9CA3AF', fontSize: 11, margin: 0 }}>
-        الإصدار 1.0.0 — OneSoft ERP
+        الإصدار 1.0.25 — OneSoft ERP
       </p>
     </div>
   );

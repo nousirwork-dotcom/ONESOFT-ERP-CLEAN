@@ -719,6 +719,7 @@ export async function runFoundationUpdateForAllOrgs(dbUrl?: string): Promise<Fou
         current[0]?.foundationStatus === 'applied' &&
         missingFoundationKeys.length === 0
       ) {
+        totalSkipped += recordsExisting;
         const organizationResult: FoundationOrganizationResult = {
           organizationId: org.id,
           organizationCode: org.code,
@@ -728,7 +729,7 @@ export async function runFoundationUpdateForAllOrgs(dbUrl?: string): Promise<Fou
           recordsInserted: 0,
           recordsPreserved: recordsExisting,
           recordsUpdated: 0,
-          recordsSkipped: 0,
+          recordsSkipped: recordsExisting,
           errors: [],
           status: 'applied',
         };

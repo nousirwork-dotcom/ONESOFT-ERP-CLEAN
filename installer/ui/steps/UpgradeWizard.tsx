@@ -8,7 +8,8 @@ export default function UpgradeWizard() {
   const { dbOpts, getDatabaseUrl } = useInstallerStore();
   const [phase, setPhase] = useState<Phase>('detect');
   const [currentVersion, setCurrentVersion] = useState<string | null>(null);
-  const [targetVersion] = useState('1.1.0');
+  const [targetVersion, setTargetVersion] = useState('1.0.25');
+  const [backendPort, setBackendPort] = useState(3000);
   const [log, setLog] = useState<ProgressEvent[]>([]);
   const [backupDir, setBackupDir] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -20,14 +21,22 @@ export default function UpgradeWizard() {
 
   useEffect(() => {
     (async () => {
-      const info = await window.installer?.detectVersion?.();
+      const [info, config] = await Promise.all([
+        window.installer?.detectVersion?.(),
+        window.installer?.getConfig?.(),
+      ]);
       if (info) {
         setCurrentVersion(info.version ?? null);
-        setPhase('confirm');
       } else {
         setCurrentVersion(null);
-        setPhase('confirm');
       }
+      const configuredPort = config?.server?.backendPort;
+      if (typeof configuredPort === 'number' && configuredPort > 0) {
+        setBackendPort(configuredPort);
+      }
+      const installedVersion = await window.installer?.getVersion?.();
+      if (installedVersion) setTargetVersion(installedVersion);
+      setPhase('confirm');
     })();
   }, []);
 
@@ -49,6 +58,7 @@ export default function UpgradeWizard() {
         databaseUrl: getDatabaseUrl(),
         backupsDir: 'C:\\ProgramData\\OneSoft\\Backups',
         targetVersion,
+        backendPort,
       });
 
       if (result?.success) {

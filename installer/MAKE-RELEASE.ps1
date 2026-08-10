@@ -9,7 +9,7 @@
     .\MAKE-RELEASE.ps1 -Version "1.0.1" -OutputDir "D:\Releases"
 #>
 param(
-    [string]$Version   = "1.0.0",
+    [string]$Version   = "1.0.25",
     [string]$OutputDir = "$PSScriptRoot\..\release"
 )
 

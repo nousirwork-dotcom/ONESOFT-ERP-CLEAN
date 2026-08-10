@@ -146,7 +146,7 @@ app.post('/api/upload/logo', async (req, res) => {
 app.get('/api/health', (_req, res) => res.status(startupReady ? 200 : 503).json({
   status:    startupReady ? 'ok' : 'starting',
   ready:     startupReady,
-  version:   '1.0.0',
+  version:   '1.0.25',
   env:       ENV.nodeEnv,
   port:      ENV.port,
   electron:  ENV.isElectron,

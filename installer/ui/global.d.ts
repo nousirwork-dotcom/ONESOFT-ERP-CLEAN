@@ -74,6 +74,7 @@ interface InstallerAPI {
 
   // Upgrade
   detectVersion: () => Promise<import('../core/types').VersionInfo | null>;
+  getVersion:    () => Promise<string>;
   runUpgrade:    (opts: unknown) => Promise<{ success: boolean; backupDir?: string }>;
   rollback:      (opts: unknown) => Promise<{ ok: boolean }>;
 

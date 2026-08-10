@@ -56,7 +56,7 @@ export function buildDefaultConfig(partial: {
   };
 
   return {
-    version:        '1.0.0',
+    version:        '1.0.25',
     configVersion:  4,
 
     // ── البنية الجديدة ──────────────────────────────────────────────────────

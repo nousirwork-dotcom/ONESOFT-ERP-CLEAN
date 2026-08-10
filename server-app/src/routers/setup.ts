@@ -22,8 +22,8 @@ const ROOT = path.resolve(__dirname, '..', '..', '..');
 function getAppVersion(): string {
   try {
     const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf-8'));
-    return pkg.version ?? '1.0.0';
-  } catch { return '1.0.0'; }
+    return pkg.version ?? '1.0.25';
+  } catch { return '1.0.25'; }
 }
 
 // ── Build Info — يُقرأ من dist/build-info.json الذي يُكتب وقت البناء ─────────
