@@ -489,11 +489,14 @@ export default function Users() {
 
   const utils = trpc.useUtils();
 
-  const { data: usersList, isLoading } = trpc.users.list.useQuery();
-  const { data: countInfo } = trpc.users.getUserCountInfo.useQuery();
-  const { data: userGroups = [] } = trpc.users.listUserGroups.useQuery();
-  const { data: warehousesList = [] } = trpc.warehouses.list.useQuery();
-  const { data: categoriesList = [] } = trpc.userCategories.list.useQuery();
+  const { data: currentUser } = trpc.auth.me.useQuery();
+  const canManageUsers = currentUser?.role === "admin" || currentUser?.role === "superadmin";
+  const { data: usersList, isLoading, isError: usersLoadFailed, error: usersLoadError } =
+    trpc.users.list.useQuery(undefined, { enabled: canManageUsers });
+  const { data: countInfo } = trpc.users.getUserCountInfo.useQuery(undefined, { enabled: canManageUsers });
+  const { data: userGroups = [] } = trpc.users.listUserGroups.useQuery(undefined, { enabled: canManageUsers });
+  const { data: warehousesList = [] } = trpc.warehouses.list.useQuery(undefined, { enabled: canManageUsers });
+  const { data: categoriesList = [] } = trpc.userCategories.list.useQuery(undefined, { enabled: canManageUsers });
 
   const PASSWORDLESS_KEY = "security.allow_passwordless_users";
   const { data: passwordlessPolicy } = trpc.appSettings.get.useQuery({ key: PASSWORDLESS_KEY });
@@ -1017,7 +1020,23 @@ export default function Users() {
           <h1 className="text-2xl font-bold">إدارة المستخدمين</h1>
           <p className="text-muted-foreground text-sm mt-0.5">إدارة المستخدمين وصلاحياتهم وخيارات الأمان</p>
         </div>
+        <Button
+          onClick={openCreate}
+          disabled={!canManageUsers || countInfo?.atLimit === true}
+          className="gap-1.5"
+          data-testid="button-add-user"
+        >
+          <Plus className="w-4 h-4" />
+          إضافة مستخدم
+        </Button>
       </div>
+
+      {currentUser && !canManageUsers && (
+        <div className="flex items-start gap-2 text-sm text-muted-foreground bg-muted/50 border rounded-lg px-4 py-3">
+          <Eye className="w-4 h-4 mt-0.5 shrink-0" />
+          <p>هذا الحساب للعرض فقط؛ لا تملك صلاحية إدارة المستخدمين.</p>
+        </div>
+      )}
 
       {/* ── سياسة كلمات المرور ── */}
       <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-4 py-3">
@@ -1088,6 +1107,16 @@ export default function Users() {
         </div>
       )}
 
+      {usersLoadFailed && (
+        <div className="flex items-start gap-2 text-sm text-destructive bg-destructive/10 border border-destructive/30 rounded-lg px-4 py-3">
+          <XCircle className="w-4 h-4 mt-0.5 shrink-0" />
+          <div>
+            <p className="font-medium">تعذّر تحميل قائمة المستخدمين</p>
+            <p className="text-xs mt-1">{usersLoadError?.message ?? "تحقق من الجلسة والصلاحيات ثم أعد المحاولة."}</p>
+          </div>
+        </div>
+      )}
+
       {/* ── جدول المستخدمين ── */}
       <Card className="border-0 shadow-sm">
         <CardContent className="p-0">
@@ -1106,7 +1135,14 @@ export default function Users() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isLoading ? (
+              {!canManageUsers ? (
+                <TableRow>
+                  <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
+                    <Eye className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                    <p>لا تملك صلاحية عرض قائمة المستخدمين</p>
+                  </TableCell>
+                </TableRow>
+              ) : isLoading ? (
                 Array.from({ length: 4 }).map((_, i) => (
                   <TableRow key={i}>
                     {Array.from({ length: 9 }).map((_, j) => (
@@ -1114,12 +1150,19 @@ export default function Users() {
                     ))}
                   </TableRow>
                 ))
+              ) : usersLoadFailed ? (
+                <TableRow>
+                  <TableCell colSpan={9} className="text-center py-12 text-destructive">
+                    <XCircle className="w-8 h-8 mx-auto mb-2 opacity-60" />
+                    <p>لم تُحمّل البيانات — لا يمكن اعتبار الجدول فارغًا</p>
+                  </TableCell>
+                </TableRow>
               ) : usersList?.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
                     <UsersIcon className="w-8 h-8 mx-auto mb-2 opacity-30" />
                     <p>لا يوجد مستخدمون</p>
-                    <Button variant="outline" size="sm" className="mt-3" onClick={openCreate}>
+                    <Button variant="outline" size="sm" className="mt-3" onClick={openCreate} disabled={!canManageUsers}>
                       <Plus className="w-3.5 h-3.5 me-1" />إضافة أول مستخدم
                     </Button>
                   </TableCell>
@@ -1230,7 +1273,7 @@ export default function Users() {
             loginTabExtension={loginTabExtension}
             workTabContent={workTabContent}
             permissionsTabContent={permissionsTabContent}
-            onToolbarNew={countInfo?.atLimit ? undefined : openCreate}
+            onToolbarNew={!canManageUsers || countInfo?.atLimit ? undefined : openCreate}
             onToolbarCopy={selectedUser ? handleCopy : undefined}
             onToolbarDelete={selectedUser ? () => setDeleteTargetUser(selectedUser) : undefined}
             onToolbarFirst={users.length > 0 ? () => openEdit(users[0]) : undefined}

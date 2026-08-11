@@ -1,12 +1,14 @@
 import { z } from 'zod';
 import { eq, and, desc, inArray } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc.js';
+import { TRPCError } from '@trpc/server';
 import { db } from '../db.js';
 import {
   purchaseInvoices, purchaseInvoiceItems, documentJournals, warehouses,
   pendingAccountMovements, pendingStockMovements, inventory, products,
 } from '../schema.js';
 import { buildPurchaseInvoiceLines } from './posting.js';
+import { resolveInvoiceTaxItems } from '../lib/invoiceTaxValidation.js';
 
 type PurchaseClient = typeof db | any;
 
@@ -150,10 +152,11 @@ async function syncUnpostedPurchaseEffects(
 }
 
 async function removeUnpostedPurchaseEffects(tx: PurchaseClient, invoice: any, orgId: number) {
+  const sourceType = 'purchase_invoice';
   const oldStock = await tx.query.pendingStockMovements.findMany({
     where: and(
       eq(pendingStockMovements.orgId, orgId),
-      eq(pendingStockMovements.sourceDocType, 'purchase_invoice'),
+      eq(pendingStockMovements.sourceDocType, sourceType),
       eq(pendingStockMovements.sourceDocId, invoice.id),
       eq(pendingStockMovements.status, 'unposted'),
     ),
@@ -170,12 +173,12 @@ async function removeUnpostedPurchaseEffects(tx: PurchaseClient, invoice: any, o
   }
   await tx.delete(pendingAccountMovements).where(and(
     eq(pendingAccountMovements.orgId, orgId),
-    eq(pendingAccountMovements.sourceDocType, 'purchase_invoice'),
+    eq(pendingAccountMovements.sourceDocType, sourceType),
     eq(pendingAccountMovements.sourceDocId, invoice.id),
   ));
   await tx.delete(pendingStockMovements).where(and(
     eq(pendingStockMovements.orgId, orgId),
-    eq(pendingStockMovements.sourceDocType, 'purchase_invoice'),
+    eq(pendingStockMovements.sourceDocType, sourceType),
     eq(pendingStockMovements.sourceDocId, invoice.id),
   ));
 }
@@ -298,7 +301,7 @@ export const purchasesRouter = router({
   create: protectedProcedure
     .input(z.object({
       invoiceNumber: z.string(),
-      invoiceType: z.string().default('invoice'),
+  invoiceType: z.string().default('invoice'),
       invoiceDate: z.string(),
       dueDate: z.string().optional(),
       supplierId: z.number().optional(),
@@ -318,8 +321,11 @@ export const purchasesRouter = router({
       paymentMethod: z.enum(['cash', 'bank', 'credit', 'check', 'other']).default('cash'),
       status: z.enum(['draft', 'confirmed', 'cancelled', 'paid']).default('confirmed'),
       notes: z.string().optional(),
+      basedOnType: z.string().optional(),
+      basedOnNumber: z.string().optional(),
       items: z.array(z.object({
         productId: z.number().optional(),
+        taxId: z.number().int().positive().optional(),
         productCode: z.string().optional(),
         productName: z.string(),
         unit: z.string().optional(),
@@ -336,8 +342,15 @@ export const purchasesRouter = router({
       })),
     }))
     .mutation(async ({ ctx, input }) => {
-      const { items, dueDate, ...invoiceData } = input;
+      const { items: rawItems, dueDate, ...invoiceData } = input;
       const orgId = ctx.user.orgId;
+      const items = await resolveInvoiceTaxItems(rawItems, orgId);
+      if (invoiceData.invoiceType === 'debit_note') {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'إشعار المدين مستند مبيعات صادر؛ لا يمكن إنشاؤه في المشتريات',
+        });
+      }
       const resolvedWarehouseId = await resolvePurchaseWarehouseId(
         db,
         invoiceData.warehouseId,
@@ -375,6 +388,7 @@ export const purchasesRouter = router({
   update: protectedProcedure
     .input(z.object({
       id: z.number(),
+      invoiceType: z.string().optional(),
       invoiceDate: z.string().optional(),
       supplierId: z.number().optional(),
       supplierName: z.string().optional(),
@@ -388,9 +402,12 @@ export const purchasesRouter = router({
       remainingAmount: z.string().optional(),
       status: z.enum(['draft', 'confirmed', 'cancelled', 'paid']).optional(),
       notes: z.string().optional(),
+      basedOnType: z.string().optional(),
+      basedOnNumber: z.string().optional(),
       docTypeId: z.number().optional(),
       items: z.array(z.object({
         productId: z.number().optional(),
+        taxId: z.number().int().positive().optional(),
         productCode: z.string().optional(),
         productName: z.string(),
         unit: z.string().optional(),
@@ -407,12 +424,20 @@ export const purchasesRouter = router({
       })).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const { id, items, invoiceDate, ...rest } = input;
+      const { id, items: rawItems, invoiceDate, ...rest } = input;
       const existing = await db.query.purchaseInvoices.findFirst({
         where: and(eq(purchaseInvoices.id, id), eq(purchaseInvoices.orgId, ctx.user.orgId)),
       });
+      const finalInvoiceType = rest.invoiceType ?? existing?.invoiceType;
+      if (finalInvoiceType === 'debit_note') {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'إشعار المدين مستند مبيعات صادر؛ لا يمكن تعديله في المشتريات',
+        });
+      }
       if (existing?.isPosted)
         throw new Error('لا يمكن تعديل مستند مرحَّل — يجب فك الترحيل أولاً');
+      const items = rawItems ? await resolveInvoiceTaxItems(rawItems, ctx.user.orgId) : undefined;
       const resolvedWarehouseId = await resolvePurchaseWarehouseId(
         db,
         rest.warehouseId ?? existing?.warehouseId,

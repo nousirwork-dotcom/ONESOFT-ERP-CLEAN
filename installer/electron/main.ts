@@ -139,7 +139,11 @@ app.on('window-all-closed', () => {
   writeLog('INFO', `window-all-closed\n${stackTrace()}`);
   if (process.platform !== 'darwin') {
     writeLog('INFO', 'calling app.quit() from window-all-closed');
-    app.quit();
+    if (process.argv.includes('--run-upgrade-wizard')) {
+      app.exit(upgradeWizardExitCode);
+    } else {
+      app.quit();
+    }
   }
 });
 
@@ -237,8 +241,10 @@ import { registerUpgradeIpc }      from './ipc/upgrade.ipc.js';
 import { registerFilesystemIpc }   from './ipc/filesystem.ipc.js';
 import { registerUninstallIpc }    from './ipc/uninstall.ipc.js';
 import { registerDeploymentIpc }   from './ipc/deployment.ipc.js';
+import { runHeadlessUpgrade }      from '../core/upgrade/HeadlessUpgrade.js';
 
 let mainWindow: BrowserWindow | null = null;
+let upgradeWizardExitCode = 1;
 
 // عدد محاولات إعادة الاتصال بالسيرفر بعد التثبيت
 let serverLoadRetries = 0;
@@ -486,6 +492,11 @@ h2{margin:0 0 12px;font-size:20px;}p{font-size:13px;color:#6B7280;margin:4px 0;w
     wc.loadURL(testUrl)
       .then(() => writeLog('INFO', 'TEST MODE: loadURL — resolved'))
       .catch((e: unknown) => writeLog('ERROR', 'TEST MODE: loadURL — rejected', e));
+  } else if (process.argv.includes('--run-upgrade-wizard')) {
+    writeLog('INFO', `upgrade wizard — loadFile ${indexPath} — start`);
+    mainWindow.loadFile(indexPath, { query: { mode: 'upgrade' } })
+      .then(() => writeLog('INFO', 'upgrade wizard loadFile — resolved'))
+      .catch((e: unknown) => writeLog('ERROR', 'upgrade wizard loadFile — rejected', e));
   } else if (isAlreadyInstalled()) {
     // البرنامج مثبَّت مسبقاً — حمِّل تطبيق العمل مباشرةً (يعمل كـ Windows service)
     const port      = readServerPort();
@@ -507,6 +518,7 @@ h2{margin:0 0 12px;font-size:20px;}p{font-size:13px;color:#6B7280;margin:4px 0;w
 
 // ─── Auto-Updater — يعمل فقط بعد اكتمال التثبيت ──────────────────────────────
 function setupAutoUpdater(): void {
+  if (process.argv.includes('--run-upgrade-wizard')) return;
   if (!isAlreadyInstalled()) return;   // لا نُشغّل المحدِّث خلال معالج التثبيت
   if (!mainWindow) return;
 
@@ -516,8 +528,20 @@ function setupAutoUpdater(): void {
 
 // ─── app.whenReady ────────────────────────────────────────────────────────────
 app.whenReady()
-  .then(() => {
+  .then(async () => {
     writeLog('INFO', 'app.whenReady() — resolved');
+
+    // NSIS invokes this packaged process after copying an upgrade and before
+    // any Windows service is started. Do not create a window or start the
+    // updater in this mode: UpgradeManager is the sole gate for migrations,
+    // Foundation verification, and service startup.
+    if (process.argv.includes('--run-upgrade-core')) {
+      writeLog('INFO', 'headless upgrade requested by NSIS');
+      const exitCode = await runHeadlessUpgrade();
+      writeLog('INFO', `headless upgrade finished with exitCode=${exitCode}`);
+      app.exit(exitCode);
+      return;
+    }
 
     // ─── UPLOADS_DIR ──────────────────────────────────────────────────────────
     // يُحدَّد هنا ويُمرَّر لأي عملية مشتقة عبر process.env
@@ -540,7 +564,15 @@ app.whenReady()
     registerServicesIpc(ipcMain, mainWindow);
     registerHealthIpc(ipcMain, mainWindow);
     registerConfigIpc(ipcMain, mainWindow);
-    registerUpgradeIpc(ipcMain, mainWindow);
+    registerUpgradeIpc(
+      ipcMain,
+      mainWindow,
+      (success) => {
+        if (process.argv.includes('--run-upgrade-wizard')) {
+          upgradeWizardExitCode = success ? 0 : 1;
+        }
+      },
+    );
     registerFilesystemIpc(ipcMain, mainWindow);
     registerUninstallIpc(ipcMain, mainWindow);
     registerDeploymentIpc(ipcMain, mainWindow);
@@ -562,7 +594,11 @@ app.whenReady()
     });
     ipcMain.handle('window:close', () => {
       writeLog('INFO', `IPC window:close\n${stackTrace()}`);
-      app.quit();
+      if (process.argv.includes('--run-upgrade-wizard')) {
+        app.exit(upgradeWizardExitCode);
+      } else {
+        app.quit();
+      }
     });
     ipcMain.handle('window:openUrl', (_, url: string) => {
       writeLog('INFO', `IPC window:openUrl  url=${url}`);

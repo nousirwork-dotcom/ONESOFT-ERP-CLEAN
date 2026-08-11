@@ -20,6 +20,8 @@
 import fs   from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 import { db }        from './db.js';
 import { logger }    from './logger.js';
 import { eq, and, inArray, sql } from 'drizzle-orm';
@@ -162,18 +164,73 @@ async function buildFoundationKeyIdMap(orgId: number): Promise<Map<string, numbe
  * يبني خريطة systemKey → ID لشجرة الحسابات في منظمة معينة.
  * تُستخدم لحل مراجع الحسابات (salesAccountId وما شابهها).
  */
-async function buildAccountSystemKeyMap(orgId: number): Promise<Map<string, number>> {
+async function buildAccountReferenceMap(orgId: number): Promise<Map<string, number>> {
   const acctMap = new Map<string, number>();
-  const rows = await db.select({ id: chartOfAccounts.id, systemKey: chartOfAccounts.systemKey })
+  const rows = await db.select({
+    id: chartOfAccounts.id,
+    systemKey: chartOfAccounts.systemKey,
+    code: chartOfAccounts.code,
+  })
     .from(chartOfAccounts)
     .where(and(
       eq(chartOfAccounts.orgId, orgId),
-      sql`${chartOfAccounts.systemKey} IS NOT NULL`,
     ));
   for (const row of rows) {
     if (row.systemKey) acctMap.set(row.systemKey, row.id);
+    if (row.code) acctMap.set(row.code, row.id);
   }
   return acctMap;
+}
+
+/**
+ * accountLinks lives inside paymentTypesConfig JSONB, so PostgreSQL cannot
+ * enforce its organization boundary. Never carry the source organization's
+ * numeric accountId through a foundation snapshot. Resolve it using the
+ * exported accountCode/accountSystemKey instead.
+ */
+function resolveNestedAccountReferences(
+  record: Record<string, unknown>,
+  acctMap: Map<string, number>,
+  unresolvedFks: string[],
+): void {
+  const config = record.paymentTypesConfig;
+  if (!config || typeof config !== 'object' || Array.isArray(config)) return;
+
+  const links = (config as Record<string, unknown>).accountLinks;
+  if (!Array.isArray(links)) return;
+
+  const resolvedLinks = links.map((rawLink, index) => {
+    if (!rawLink || typeof rawLink !== 'object' || Array.isArray(rawLink)) return rawLink;
+    const link = { ...(rawLink as Record<string, unknown>) };
+    const reference = link.accountSystemKey ?? link.accountCode;
+    const rawAccountId = link.accountId;
+
+    if (reference === null || reference === undefined || reference === '') {
+      if (typeof rawAccountId === 'number') {
+        unresolvedFks.push(
+          `paymentTypesConfig.accountLinks[${index}].accountId: رابط حساب رقمي بلا accountCode/accountSystemKey`,
+        );
+      }
+      return link;
+    }
+
+    const accountId = acctMap.get(String(reference));
+    if (accountId === undefined) {
+      unresolvedFks.push(
+        `paymentTypesConfig.accountLinks[${index}]: الحساب ذو المرجع "${reference}" غير موجود في الوجهة`,
+      );
+      return link;
+    }
+
+    link.accountId = accountId;
+    delete link.accountSystemKey;
+    return link;
+  });
+
+  record.paymentTypesConfig = {
+    ...(config as Record<string, unknown>),
+    accountLinks: resolvedLinks,
+  };
 }
 
 /**
@@ -234,6 +291,7 @@ function resolveRecordFks(
     }
   }
 
+  resolveNestedAccountReferences(out, acctMap, unresolvedFks);
   return { data: out, unresolvedFks };
 }
 
@@ -243,6 +301,38 @@ export interface ApplyResult {
   inserted: number;
   skipped:  number;
   errors:   string[];
+}
+
+export interface FoundationSnapshot {
+  data: Record<string, unknown[]>;
+  path: string;
+  hash: string;
+  exportedAt: string | null;
+  recordsExpected: number;
+}
+
+export interface FoundationOrganizationResult {
+  organizationId: number;
+  organizationCode: string;
+  snapshotHash: string;
+  recordsExpected: number;
+  recordsExisting: number;
+  recordsInserted: number;
+  recordsPreserved: number;
+  recordsUpdated: number;
+  recordsSkipped: number;
+  errors: string[];
+  status: 'applied' | 'failed';
+}
+
+export interface FoundationRunSummary {
+  ok: boolean;
+  snapshotHash: string | null;
+  exportedAt: string | null;
+  recordsExpected: number;
+  organizationsChecked: number;
+  organizations: FoundationOrganizationResult[];
+  error?: string;
 }
 
 /**
@@ -268,7 +358,7 @@ export async function applyFoundationRecords(
 
   // نبني خرائط الحسابات والـ foundationKeys مسبقاً
   const fkMap   = await buildFoundationKeyIdMap(orgId);
-  const acctMap = await buildAccountSystemKeyMap(orgId);
+  const acctMap = await buildAccountReferenceMap(orgId);
 
   // نحمل Tombstones للسجلات التي حذفها المستخدم عمداً
   const tombstoneRows = await db.select({
@@ -301,8 +391,8 @@ export async function applyFoundationRecords(
       // تحقق من Tombstone: إذا حذف المستخدم هذا السجل عمداً، لا نعيده
       if (tombstoneSet.has(`${tableName}:${fKey}`)) { skipped++; continue; }
 
-      // سياسة التحديث: سجلات flexible المحذوفة لا تُعاد إلا في أول تثبيت.
-      // إذا وصلنا هنا فالسجل غير موجود (تم حذفه) — نحترم قرار المستخدم.
+      // سياسة التحديث: سجلات flexible المحذوفة لا تُعاد أثناء الترقية.
+      // تُعاد السجلات editable/protected فقط، ما لم يكن هذا أول تثبيت.
       if (!isFirstRun) {
         const policy = record['recordPolicy'] as string | undefined;
         if (policy === 'flexible') { skipped++; continue; }
@@ -338,7 +428,15 @@ export async function applyFoundationRecords(
         inserted++;
         existingKeys.add(fKey);
       } catch (err: any) {
-        const msg = err?.message ?? String(err);
+        const cause = err?.cause;
+        const detail = [
+          err?.message ?? String(err),
+          cause?.code ? `code=${cause.code}` : '',
+          cause?.detail ? `detail=${cause.detail}` : '',
+          cause?.constraint ? `constraint=${cause.constraint}` : '',
+          cause?.message && cause.message !== err?.message ? `cause=${cause.message}` : '',
+        ].filter(Boolean).join(' | ');
+        const msg = detail;
         errors.push(`${tableName}[${fKey}]: ${msg}`);
         logger.warn('foundation-apply', `فشل إدراج ${tableName}[${fKey}]: ${msg}`);
       }
@@ -383,7 +481,7 @@ function resolveFoundationJsonPath(): string | null {
 
   // 4. مجاور للملف المُجمَّع: dist/index.mjs → dist/../src/foundation-data.json
   try {
-    const dirname = path.dirname(new URL(import.meta.url).pathname);
+    const dirname = path.dirname(fileURLToPath(import.meta.url));
     candidates.push(path.join(dirname, '..', 'src', 'foundation-data.json'));
   } catch { /* ESM import.meta.url قد لا يكون متاحاً */ }
 
@@ -396,14 +494,81 @@ function resolveFoundationJsonPath(): string | null {
   return null;
 }
 
-function loadFoundationJson(): Record<string, unknown[]> | null {
+function loadFoundationSnapshot(): FoundationSnapshot | null {
   const jsonPath = resolveFoundationJsonPath();
   if (!jsonPath) return null;
   try {
-    return JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+    const raw = fs.readFileSync(jsonPath);
+    const parsed = JSON.parse(raw.toString('utf8')) as Record<string, unknown[]>;
+    const recordsExpected = APPLY_ORDER.reduce((total, { dataKey }) => {
+      const records = parsed[dataKey];
+      return total + (Array.isArray(records)
+        ? records.filter((record) => Boolean((record as Record<string, unknown>).foundationKey)).length
+        : 0);
+    }, 0);
+    return {
+      data: parsed,
+      path: jsonPath,
+      hash: createHash('sha256').update(raw).digest('hex'),
+      exportedAt: typeof parsed.exportedAt === 'string' ? parsed.exportedAt : null,
+      recordsExpected,
+    };
   } catch {
     return null;
   }
+}
+
+function loadFoundationJson(): Record<string, unknown[]> | null {
+  return loadFoundationSnapshot()?.data ?? null;
+}
+
+async function countExistingFoundationRecords(orgId: number): Promise<number> {
+  let count = 0;
+  for (const { tableName } of APPLY_ORDER) {
+    const table = getTableRef(tableName);
+    const rows = await (db.select({ foundationKey: table.foundationKey }) as any)
+      .from(table)
+      .where(and(eq(table.orgId, orgId), sql`${table.foundationKey} IS NOT NULL`));
+    count += rows.length;
+  }
+  return count;
+}
+
+async function findMissingFoundationKeys(
+  orgId: number,
+  data: Record<string, unknown[]>,
+): Promise<string[]> {
+  const missing: string[] = [];
+  for (const { tableName, dataKey } of APPLY_ORDER) {
+    const table = getTableRef(tableName);
+    const expected = ((data[dataKey] as unknown[]) ?? [])
+      .map((record) => (record as Record<string, unknown>).foundationKey)
+      .filter((key): key is string => typeof key === 'string' && key.length > 0);
+    if (expected.length === 0) continue;
+    const rows = await (db.select({ foundationKey: table.foundationKey }) as any)
+      .from(table)
+      .where(and(eq(table.orgId, orgId), sql`${table.foundationKey} IS NOT NULL`));
+    const present = new Set(rows.map((row: { foundationKey: string | null }) => row.foundationKey));
+    for (const key of expected) {
+      if (!present.has(key)) missing.push(`${tableName}:${key}`);
+    }
+  }
+  return missing;
+}
+
+async function saveFoundationStatus(
+  orgId: number,
+  snapshotHash: string,
+  status: 'applied' | 'failed',
+  error: string | null,
+): Promise<void> {
+  await db.update(organizations).set({
+    foundationSnapshotHash: snapshotHash,
+    foundationAppliedAt: status === 'applied' ? new Date() : undefined,
+    foundationStatus: status,
+    foundationLastError: error,
+    updatedAt: new Date(),
+  }).where(eq(organizations.id, orgId));
 }
 
 /**
@@ -461,20 +626,35 @@ export async function applyFoundationUpdate(
 /**
  * يُطبّق Foundation Update على جميع المنظمات النشطة.
  * يُستدعى من index.ts بعد نجاح checkSchema.
- * هذه الدالة صامتة — لا تُوقف الخادم في حالة الخطأ.
+ * فشل أي سجل تأسيسي أساسي يجعل النتيجة غير ناجحة ويمنع إعلان startup الجاهزية.
  *
  * سياسة النسخ الاحتياطي:
  *  - إذا تم توفير dbUrl يُحاوَل إنشاء نسخة احتياطية pg_dump قبل البدء.
  *  - فشل النسخة الاحتياطية = تحذير فقط (warn) ولا يُوقف التحديث.
  *  - نجاح النسخة الاحتياطية مُسجَّل في info مع مسار الملف.
  */
-export async function runFoundationUpdateForAllOrgs(dbUrl?: string): Promise<void> {
-  const data = loadFoundationJson();
-  if (!data) {
-    return;
+export async function runFoundationUpdateForAllOrgs(dbUrl?: string): Promise<FoundationRunSummary> {
+  const snapshot = loadFoundationSnapshot();
+  if (!snapshot) {
+    const error = 'foundation-data.json غير موجود أو غير صالح';
+    logger.error('foundation-update', 'FOUNDATION_INCOMPLETE', { error });
+    return {
+      ok: false,
+      snapshotHash: null,
+      exportedAt: null,
+      recordsExpected: 0,
+      organizationsChecked: 0,
+      organizations: [],
+      error,
+    };
   }
 
-  logger.info('foundation-update', '▶ بدء Foundation Update عند التشغيل...');
+  logger.info('foundation-update', 'FOUNDATION_START', {
+    snapshotPath: snapshot.path,
+    snapshotHash: snapshot.hash,
+    snapshotExportedAt: snapshot.exportedAt,
+    recordsExpected: snapshot.recordsExpected,
+  });
 
   // ── محاولة نسخة احتياطية (اختيارية — warn فقط عند الفشل) ────────────────
   if (dbUrl) {
@@ -499,31 +679,141 @@ export async function runFoundationUpdateForAllOrgs(dbUrl?: string): Promise<voi
       // foundation-update يجب أن يطبق القالب على أي مؤسسة عميل جديدة
       .where(inArray(organizations.status, ['active', 'trial']));
   } catch (err: any) {
-    logger.warn('foundation-update', `فشل جلب المنظمات: ${err.message}`);
-    return;
+    const error = `فشل جلب المنظمات: ${err.message}`;
+    logger.error('foundation-update', 'FOUNDATION_INCOMPLETE', { error });
+    return {
+      ok: false,
+      snapshotHash: snapshot.hash,
+      exportedAt: snapshot.exportedAt,
+      recordsExpected: snapshot.recordsExpected,
+      organizationsChecked: 0,
+      organizations: [],
+      error,
+    };
   }
 
   let totalInserted = 0;
   let totalSkipped  = 0;
+  let allOk = true;
+  const organizationResults: FoundationOrganizationResult[] = [];
 
   for (const org of orgs) {
+    let recordsExisting = 0;
     try {
-      const result = await applyFoundationRecords(org.id, data);
+      recordsExisting = await countExistingFoundationRecords(org.id);
+      logger.info('foundation-update', 'FOUNDATION_START', {
+        organizationId: org.id,
+        organizationCode: org.code,
+        snapshotHash: snapshot.hash,
+        recordsExpected: snapshot.recordsExpected,
+        recordsExisting,
+      });
+
+      const current = await db.select({
+        foundationSnapshotHash: organizations.foundationSnapshotHash,
+        foundationStatus: organizations.foundationStatus,
+      }).from(organizations).where(eq(organizations.id, org.id)).limit(1);
+      const missingFoundationKeys = await findMissingFoundationKeys(org.id, snapshot.data);
+      if (
+        current[0]?.foundationSnapshotHash === snapshot.hash &&
+        current[0]?.foundationStatus === 'applied' &&
+        missingFoundationKeys.length === 0
+      ) {
+        totalSkipped += recordsExisting;
+        const organizationResult: FoundationOrganizationResult = {
+          organizationId: org.id,
+          organizationCode: org.code,
+          snapshotHash: snapshot.hash,
+          recordsExpected: snapshot.recordsExpected,
+          recordsExisting,
+          recordsInserted: 0,
+          recordsPreserved: recordsExisting,
+          recordsUpdated: 0,
+          recordsSkipped: recordsExisting,
+          errors: [],
+          status: 'applied',
+        };
+        organizationResults.push(organizationResult);
+        logger.info('foundation-update', 'FOUNDATION_COMPLETE', {
+          ...organizationResult,
+          reconcile: 'not-needed',
+        });
+        continue;
+      }
+
+      const result = await applyFoundationRecords(org.id, snapshot.data, {
+        // An organization that has never completed Foundation reconcile must
+        // receive the complete snapshot, including flexible warehouse keys.
+        // Once a snapshot was successfully applied, flexible records deleted
+        // by the customer remain deleted on later snapshot upgrades.
+        isFirstRun: current[0]?.foundationStatus !== 'applied',
+      });
       totalInserted += result.inserted;
       totalSkipped  += result.skipped;
-      if (result.inserted > 0) {
-        logger.info('foundation-update',
-          `org ${org.code} (${org.id}): inserted=${result.inserted} skipped=${result.skipped}`);
-      }
-      if (result.errors.length) {
-        logger.warn('foundation-update',
-          `org ${org.code}: ${result.errors.length} أخطاء — ${result.errors.slice(0, 3).join(' | ')}`);
-      }
+      const status = result.errors.length > 0 ? 'failed' : 'applied';
+      const errorText = result.errors.length ? result.errors.join(' | ') : null;
+      if (status === 'failed') allOk = false;
+      await saveFoundationStatus(org.id, snapshot.hash, status, errorText);
+      const organizationResult: FoundationOrganizationResult = {
+        organizationId: org.id,
+        organizationCode: org.code,
+        snapshotHash: snapshot.hash,
+        recordsExpected: snapshot.recordsExpected,
+        recordsExisting,
+        recordsInserted: result.inserted,
+        recordsPreserved: result.skipped,
+        recordsUpdated: 0,
+        recordsSkipped: result.skipped,
+        errors: result.errors,
+        status,
+      };
+      organizationResults.push(organizationResult);
+      logger.info(
+        'foundation-update',
+        status === 'applied' ? 'FOUNDATION_COMPLETE' : 'FOUNDATION_INCOMPLETE',
+        organizationResult,
+      );
     } catch (err: any) {
-      logger.warn('foundation-update', `org ${org.code} فشل: ${err.message}`);
+      allOk = false;
+      const errorText = err?.message ?? String(err);
+      try {
+        await saveFoundationStatus(org.id, snapshot.hash, 'failed', errorText);
+      } catch (statusErr: any) {
+        logger.error('foundation-update', 'FOUNDATION_STATUS_SAVE_FAILED', {
+          organizationId: org.id,
+          error: statusErr?.message ?? String(statusErr),
+        });
+      }
+      const organizationResult: FoundationOrganizationResult = {
+        organizationId: org.id,
+        organizationCode: org.code,
+        snapshotHash: snapshot.hash,
+        recordsExpected: snapshot.recordsExpected,
+        recordsExisting,
+        recordsInserted: 0,
+        recordsPreserved: 0,
+        recordsUpdated: 0,
+        recordsSkipped: 0,
+        errors: [errorText],
+        status: 'failed',
+      };
+      organizationResults.push(organizationResult);
+      logger.error('foundation-update', 'FOUNDATION_INCOMPLETE', organizationResult);
     }
   }
 
-  logger.info('foundation-update',
-    `✓ اكتمل: ${orgs.length} منظمة | inserted=${totalInserted} skipped=${totalSkipped}`);
+  const summary: FoundationRunSummary = {
+    ok: allOk,
+    snapshotHash: snapshot.hash,
+    exportedAt: snapshot.exportedAt,
+    recordsExpected: snapshot.recordsExpected,
+    organizationsChecked: orgs.length,
+    organizations: organizationResults,
+  };
+  logger.info('foundation-update', allOk ? 'FOUNDATION_COMPLETE' : 'FOUNDATION_INCOMPLETE', {
+    ...summary,
+    totalInserted,
+    totalSkipped,
+  });
+  return summary;
 }

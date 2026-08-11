@@ -834,7 +834,21 @@ export const groupMembersRouter = router({
 
 export const qrSettingsRouter = router({
   get: protectedProcedure.query(async ({ ctx }) => {
-    const rows = await db.select().from(qrSettings)
+    const rows = await db.select({
+      id: qrSettings.id,
+      orgId: qrSettings.orgId,
+      isEnabled: qrSettings.isEnabled,
+      countrySystem: qrSettings.countrySystem,
+      customFormat: qrSettings.customFormat,
+      showOnSalesInvoice: qrSettings.showOnSalesInvoice,
+      showOnPurchaseInvoice: qrSettings.showOnPurchaseInvoice,
+      showOnReceiptVoucher: qrSettings.showOnReceiptVoucher,
+      qrSize: qrSettings.qrSize,
+      qrPosition: qrSettings.qrPosition,
+      notes: qrSettings.notes,
+      createdAt: qrSettings.createdAt,
+      updatedAt: qrSettings.updatedAt,
+    }).from(qrSettings)
       .where(eq(qrSettings.orgId, ctx.user.orgId)).limit(1);
     return rows[0] ?? null;
   }),
@@ -844,8 +858,6 @@ export const qrSettingsRouter = router({
       isEnabled:             z.boolean().optional(),
       countrySystem:         z.enum(['zatca', 'eta', 'custom']).optional(),
       customFormat:          z.string().optional().nullable(),
-      sellerName:            z.string().optional().nullable(),
-      taxNumber:             z.string().optional().nullable(),
       showOnSalesInvoice:    z.boolean().optional(),
       showOnPurchaseInvoice: z.boolean().optional(),
       showOnReceiptVoucher:  z.boolean().optional(),
@@ -858,13 +870,13 @@ export const qrSettingsRouter = router({
         .where(eq(qrSettings.orgId, ctx.user.orgId)).limit(1);
       if (existing.length) {
         const [updated] = await db.update(qrSettings)
-          .set({ ...input, updatedAt: new Date() })
+          .set({ ...input, sellerName: null, taxNumber: null, updatedAt: new Date() })
           .where(eq(qrSettings.orgId, ctx.user.orgId))
           .returning();
         return updated;
       } else {
         const [inserted] = await db.insert(qrSettings)
-          .values({ orgId: ctx.user.orgId, ...input })
+          .values({ orgId: ctx.user.orgId, ...input, sellerName: null, taxNumber: null })
           .returning();
         return inserted;
       }

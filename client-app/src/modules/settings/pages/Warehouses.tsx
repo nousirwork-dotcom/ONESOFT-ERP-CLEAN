@@ -341,7 +341,7 @@ export default function Warehouses() {
       { label: "السابق", icon: <CRight className="w-3.5 h-3.5" />,       action: () => currentIndex > 0 && safeNavigate(() => openEdit(warehouseList[currentIndex - 1])) },
       { label: "الأول",  icon: <ChevronFirst className="w-3.5 h-3.5" />, action: () => warehouseList[0] && safeNavigate(() => openEdit(warehouseList[0])) },
       { label: "حذف",    icon: <Trash2 className="w-3.5 h-3.5" />,       action: () => { if (editId) { setDeleteError(null); setShowDeleteDialog(true); } }, danger: true },
-      { label: "مطالعة", icon: <Eye className="w-3.5 h-3.5" />,          action: () => editId ? toast.info(`مخزن: ${form.nameAr || form.nameEn}`) : {} },
+      { label: "مطالعة", icon: <Eye className="w-3.5 h-3.5" />,          action: () => editId ? toast.info(`مخزن: ${form.name || form.name2}`) : {} },
       { label: "طباعة",  icon: <Printer className="w-3.5 h-3.5" />,      action: () => {} },
       { label: "خروج",   icon: <LogOut className="w-3.5 h-3.5" />,       action: () => safeNavigate(() => { setEditId(null); setView("list"); }) },
     ];

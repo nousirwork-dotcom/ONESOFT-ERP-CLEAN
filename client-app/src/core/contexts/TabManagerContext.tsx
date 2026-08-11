@@ -27,6 +27,12 @@ type TabManagerContextType = {
   isPosWorkspaceActive: boolean;
   openTab: (path: string, label: string, Icon: React.ElementType, pinned?: boolean) => void;
   closeTab: (id: string) => void;
+  registerTabCloseGuard: (
+    id: string,
+    requestClose: (afterClose: () => void) => void,
+    isDirty: boolean,
+  ) => () => void;
+  dirtyTabIds: string[];
   activateTab: (id: string) => void;
   setDashboardVisible: (v: boolean) => void;
   toggleDashboard: () => void;
@@ -39,11 +45,31 @@ type TabManagerContextType = {
 };
 
 const TabManagerContext = createContext<TabManagerContextType | null>(null);
+const TabScopeContext = createContext<string | null>(null);
 
 export function useTabManager() {
   const ctx = useContext(TabManagerContext);
   if (!ctx) throw new Error("useTabManager must be used inside TabManagerProvider");
   return ctx;
+}
+
+export function useTabManagerSafe(): TabManagerContextType | null {
+  return useContext(TabManagerContext);
+}
+
+/** Returns the AppWindow tab id for descendants that need close/dirty registration. */
+export function useTabScopeSafe(): string | null {
+  return useContext(TabScopeContext);
+}
+
+export function TabScopeProvider({
+  tabId,
+  children,
+}: {
+  tabId: string;
+  children: ReactNode;
+}) {
+  return <TabScopeContext.Provider value={tabId}>{children}</TabScopeContext.Provider>;
 }
 
 // ─── Tab Persistence Helpers ──────────────────────────────────────────────────
@@ -97,6 +123,40 @@ function isRememberEnabled(): boolean {
 
 type SavedTab = { path: string; label: string };
 
+const LEGACY_ZATCA_PATHS = new Set([
+  "/cfg/zatca",
+  "/cfg/zatca-mon",
+  "/cfg/zatca-inv",
+  "/cfg/zatca-log",
+  "/cfg/zatca-center",
+]);
+const LEGACY_QR_PATH = "/cfg/qr-settings";
+const ELECTRONIC_INVOICING_CENTER_PATH = "/cfg/e-invoicing-center";
+const ELECTRONIC_INVOICING_QR_PATH = `${ELECTRONIC_INVOICING_CENTER_PATH}/qr`;
+const ELECTRONIC_INVOICING_ZATCA_PATH = `${ELECTRONIC_INVOICING_CENTER_PATH}/zatca`;
+const ELECTRONIC_INVOICING_LABEL = "مركز الفوترة الإلكترونية";
+const REMOVED_GOVERNMENT_PATHS = new Set(["/cfg/gazt"]);
+const SETTINGS_PATH = "/settings";
+const SETTINGS_LABEL = "الإعدادات";
+
+function normalizeTabTarget(path: string, label: string): { path: string; label: string } {
+  if (REMOVED_GOVERNMENT_PATHS.has(path)) {
+    return { path: SETTINGS_PATH, label: SETTINGS_LABEL };
+  }
+  if (path === LEGACY_QR_PATH) {
+    return { path: ELECTRONIC_INVOICING_QR_PATH, label: ELECTRONIC_INVOICING_LABEL };
+  }
+  if (LEGACY_ZATCA_PATHS.has(path)) {
+    return { path: ELECTRONIC_INVOICING_ZATCA_PATH, label: ELECTRONIC_INVOICING_LABEL };
+  }
+  return { path, label };
+}
+
+type TabCloseGuard = {
+  requestClose: (afterClose: () => void) => void;
+  isDirty: boolean;
+};
+
 /** يحفظ التبويبات في sessionStorage فوراً (مستقل عن إعداد "تذكر التبويبات"). */
 export function persistSessionTabs(tabs: AppTab[]): void {
   try {
@@ -118,7 +178,10 @@ function loadSavedTabs(): AppTab[] {
     if (sessionRaw) {
       const parsed = JSON.parse(sessionRaw) as SavedTab[];
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed.map((t, i) => ({
+        const normalized = parsed
+          .map(t => normalizeTabTarget(t.path, t.label))
+          .filter((t, i, all) => all.findIndex(candidate => candidate.path === t.path) === i);
+        return normalized.map((t, i) => ({
           id:          `session-${i}-${t.path.replace(/\//g, '_')}`,
           path:        t.path,
           label:       t.label,
@@ -144,7 +207,10 @@ function loadSavedTabs(): AppTab[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw) as SavedTab[];
     if (!Array.isArray(parsed) || parsed.length === 0) return [];
-    return parsed.map((t, i) => ({
+    const normalized = parsed
+      .map(t => normalizeTabTarget(t.path, t.label))
+      .filter((t, i, all) => all.findIndex(candidate => candidate.path === t.path) === i);
+    return normalized.map((t, i) => ({
       id:          `restored-${i}-${t.path.replace(/\//g, '_')}`,
       path:        t.path,
       label:       t.label,
@@ -210,6 +276,8 @@ export function TabManagerProvider({ children }: { children: ReactNode }) {
   const [dashboardVisible, setDashboardVisible] = useState<boolean>(
     restoredTabs.length === 0
   );
+  const closeGuardsRef = useRef<Map<string, TabCloseGuard[]>>(new Map());
+  const [dirtyTabIds, setDirtyTabIds] = useState<string[]>([]);
 
   // حفظ فوري في sessionStorage عند كل تغيير في التبويبات
   useEffect(() => {
@@ -256,6 +324,9 @@ export function TabManagerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const openTab = useCallback((path: string, label: string, Icon: React.ElementType, pinned = false) => {
+    const target = normalizeTabTarget(path, label);
+    path = target.path;
+    label = target.label;
     setDashboardVisible(false);
     setTabs(prev => {
       const existing = prev.find(t => t.path === path);
@@ -285,7 +356,7 @@ export function TabManagerProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const closeTab = useCallback((id: string) => {
+  const performCloseTab = useCallback((id: string) => {
     setTabs(prev => {
       const tab = prev.find(t => t.id === id);
       if (!tab || tab.pinned) return prev;
@@ -308,6 +379,49 @@ export function TabManagerProvider({ children }: { children: ReactNode }) {
       return next;
     });
   }, [activeTabId]);
+
+  const registerTabCloseGuard = useCallback((
+    id: string,
+    requestClose: (afterClose: () => void) => void,
+    isDirty: boolean,
+  ) => {
+    const guards = closeGuardsRef.current.get(id) ?? [];
+    const guard = { requestClose, isDirty };
+    closeGuardsRef.current.set(id, [...guards, guard]);
+    setDirtyTabIds(current => {
+      if (!isDirty || current.includes(id)) return current;
+      return [...current, id];
+    });
+
+    return () => {
+      const current = closeGuardsRef.current.get(id) ?? [];
+      const next = current.filter(item => item !== guard);
+      if (next.length) closeGuardsRef.current.set(id, next);
+      else closeGuardsRef.current.delete(id);
+      setDirtyTabIds(currentIds => {
+        const stillDirty = next.some(item => item.isDirty);
+        if (stillDirty || !currentIds.includes(id)) return currentIds;
+        return currentIds.filter(tabId => tabId !== id);
+      });
+    };
+  }, []);
+
+  const closeTab = useCallback((id: string) => {
+    const guards = closeGuardsRef.current.get(id) ?? [];
+    const dirtyGuard = [...guards].reverse().find(guard => guard.isDirty);
+    if (dirtyGuard) {
+      zCounter++;
+      setTabs(prev => prev.map(tab => tab.id === id
+        ? { ...tab, zIndex: zCounter, windowState: tab.windowState === "minimized" ? "normal" : tab.windowState }
+        : tab
+      ));
+      setActiveTabId(id);
+      setDashboardVisible(false);
+      dirtyGuard.requestClose(() => performCloseTab(id));
+      return;
+    }
+    performCloseTab(id);
+  }, [performCloseTab]);
 
   const activateTab = useCallback((id: string) => {
     zCounter++;
@@ -355,15 +469,22 @@ export function TabManagerProvider({ children }: { children: ReactNode }) {
     setTabs(prev => prev.map(t => t.id === id ? { ...t, pos, size } : t));
   }, []);
 
-  return (
-    <TabManagerContext.Provider value={{
+  const contextValue = useMemo(() => ({
       tabs, activeTabId, dashboardVisible,
       isPosWorkspaceActive,
-      openTab, closeTab, activateTab,
+      openTab, closeTab, registerTabCloseGuard, dirtyTabIds, activateTab,
       setDashboardVisible, toggleDashboard, showDashboard,
       minimizeWindow, toggleMaximize, bringToFront,
       moveWindow, resizeWindow,
-    }}>
+  }), [
+    tabs, activeTabId, dashboardVisible, isPosWorkspaceActive,
+    openTab, closeTab, registerTabCloseGuard, dirtyTabIds, activateTab,
+    toggleDashboard, showDashboard, minimizeWindow, toggleMaximize,
+    bringToFront, moveWindow, resizeWindow,
+  ]);
+
+  return (
+    <TabManagerContext.Provider value={contextValue}>
       {children}
     </TabManagerContext.Provider>
   );

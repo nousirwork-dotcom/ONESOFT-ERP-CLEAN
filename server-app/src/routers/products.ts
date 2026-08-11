@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
-import { products, productGroups } from '../schema.js';
+import { products, productGroups, taxDefinitions } from '../schema.js';
 import { eq, and, or, like, desc, asc, isNotNull, ne } from 'drizzle-orm';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -28,6 +28,22 @@ async function assertProductCodeUnique(code: string, orgId: number, excludeId?: 
   });
   if (existing) {
     throw new TRPCError({ code: 'CONFLICT', message: 'يوجد صنف مسجل بنفس الكود.' });
+  }
+}
+
+async function assertProductTaxSupported(taxId: number | null | undefined, orgId: number) {
+  if (taxId == null) return;
+  const tax = await db.query.taxDefinitions.findFirst({
+    where: and(eq(taxDefinitions.id, taxId), eq(taxDefinitions.orgId, orgId)),
+  });
+  if (!tax) {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: 'تعريف الضريبة المحدد غير موجود في هذه المؤسسة.' });
+  }
+  if (!tax.isActive) {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن ربط الصنف بضريبة موقوفة؛ اختر ضريبة فعّالة أو بدون ضريبة.' });
+  }
+  if (tax.valueType !== 'percentage' || tax.category !== 'tax' || tax.applicationScope !== 'products_sales') {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: 'اختيار الصنف يدعم الضرائب النسبية الفعّالة فقط حاليًا.' });
   }
 }
 
@@ -106,6 +122,7 @@ export const productsRouter = router({
       costPrice: z.string().optional(),
       vatRate: z.string().optional(),
       taxRate: z.string().optional(),
+      taxId: z.number().int().positive().optional().nullable(),
       taxable: z.boolean().optional(),
       taxType: z.string().optional(),
       minStock: z.number().optional(),
@@ -128,7 +145,7 @@ export const productsRouter = router({
         unit, unit2, unit3, unitsJson, catsJson,
         salePrice, salePrice2, salePrice3, salePrice4, salePrice5,
         wholesalePrice, purchasePrice, costPrice,
-        vatRate, taxRate, taxable, taxType,
+        vatRate, taxRate, taxId, taxable, taxType,
         minStock, maxStock, reorderPoint,
         itemType, brand, model,
         description, notes,
@@ -137,6 +154,7 @@ export const productsRouter = router({
 
       validateProductRequired(name, sku);
       await assertProductCodeUnique(sku, ctx.user.orgId);
+      await assertProductTaxSupported(taxId, ctx.user.orgId);
 
       const resolvedGroupId = groupId ?? categoryId ?? undefined;
       const extraData: Record<string, any> = {};
@@ -175,6 +193,7 @@ export const productsRouter = router({
           salePrice:          salePrice || "0",
           purchasePrice:      costPrice || purchasePrice || "0",
           taxRate:            vatRate || taxRate || "0",
+          taxId,
           minStock:           minStock != null ? String(minStock) : "0",
           isActive:           true,
           notes:              notesStr,
@@ -269,6 +288,7 @@ export const productsRouter = router({
       costPrice: z.string().optional(),
       vatRate: z.string().optional(),
       taxRate: z.string().optional(),
+      taxId: z.number().int().positive().optional().nullable(),
       taxable: z.boolean().optional(),
       taxType: z.string().optional(),
       minStock: z.number().optional(),
@@ -285,7 +305,7 @@ export const productsRouter = router({
       includeInFoundation: z.boolean().optional(),
     }).passthrough())
     .mutation(async ({ ctx, input }) => {
-      const { id, sku, name2, nameEn, categoryId, costPrice, vatRate, taxable, taxType,
+      const { id, sku, name2, nameEn, categoryId, costPrice, vatRate, taxId, taxable, taxType,
         barcode2, barcode3, unit2, unit3, unitsJson, catsJson,
         salePrice2, salePrice3, salePrice4, salePrice5,
         wholesalePrice, maxStock, reorderPoint, itemType, brand, model, description,
@@ -294,6 +314,7 @@ export const productsRouter = router({
 
       validateProductRequired(rest.name, sku);
       await assertProductCodeUnique(sku, ctx.user.orgId, id);
+      await assertProductTaxSupported(taxId, ctx.user.orgId);
 
       const extraData: Record<string, any> = {};
       if (name2 !== undefined)         extraData.name2          = name2;
@@ -330,6 +351,7 @@ export const productsRouter = router({
       if (rest.salePrice !== undefined)                      updateData.salePrice     = rest.salePrice;
       if (costPrice !== undefined || rest.purchasePrice !== undefined) updateData.purchasePrice = costPrice || rest.purchasePrice;
       if (vatRate !== undefined || rest.taxRate !== undefined) updateData.taxRate     = vatRate || rest.taxRate;
+      if (taxId !== undefined)                                updateData.taxId        = taxId;
       if (rest.minStock !== undefined)                       updateData.minStock      = String(rest.minStock);
       if (rest.isActive !== undefined)                       updateData.isActive      = rest.isActive;
       if (notesStr !== undefined)                            updateData.notes         = notesStr;

@@ -92,17 +92,6 @@ export const menuSections: MenuSection[] = [
 
 // ─── إعادة تثبيت الفواتير ──────────────────────────────────────────────────
 function ReinstateInvoices() {
-  const [warehouseId, setWarehouseId] = useState("");
-  const [result, setResult] = useState<{ processed: number } | null>(null);
-  const { data: warehouses = [] } = trpc.warehouses.list.useQuery();
-  const mutation = trpc.maintenance.reinstateInvoices.useMutation({
-    onSuccess: (data) => {
-      setResult(data);
-      toast.success(`تمت إعادة تثبيت ${data.processed} سند بنجاح`);
-    },
-    onError: (e) => toast.error(e.message),
-  });
-
   return (
     <div className="space-y-5 max-w-xl">
       <div className="flex items-center gap-2">
@@ -112,39 +101,9 @@ function ReinstateInvoices() {
       <div className="border border-amber-400/30 bg-amber-500/5 rounded-xl p-4 flex gap-3">
         <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
         <div className="text-sm text-amber-700 dark:text-amber-400 space-y-1">
-          <p className="font-semibold">تحذير: عملية حساسة</p>
-          <p>ستقوم هذه العملية بإعادة حساب مخزون المستودع المختار بالكامل بناءً على جميع سندات التوريد والصرف المؤكدة. يُنصح بعمل نسخة احتياطية أولاً.</p>
+          <p className="font-semibold">العملية غير متاحة حاليًا</p>
+          <p>لا توجد عملية خادم معتمدة لإعادة تثبيت الفواتير في هذا الإصدار. لم يتم ربط الشاشة بسلوك غير منفّذ.</p>
         </div>
-      </div>
-      <div className="border border-border rounded-xl p-5 bg-card space-y-4">
-        <div className="space-y-1.5">
-          <Label>المستودع</Label>
-          <Select value={warehouseId} onValueChange={setWarehouseId}>
-            <SelectTrigger>
-              <SelectValue placeholder="جميع المستودعات" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">جميع المستودعات</SelectItem>
-              {(warehouses as any[]).map((w: any) => (
-                <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <Button
-          onClick={() => mutation.mutate({ warehouseId: warehouseId && warehouseId !== "all" ? Number(warehouseId) : undefined })}
-          disabled={mutation.isPending}
-          className="w-full gap-2 bg-amber-600 hover:bg-amber-700"
-        >
-          <RefreshCw className={`w-4 h-4 ${mutation.isPending ? "animate-spin" : ""}`} />
-          {mutation.isPending ? "جاري إعادة التثبيت..." : "بدء إعادة التثبيت"}
-        </Button>
-        {result && (
-          <div className="flex items-center gap-2 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
-            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-            <p className="text-sm text-emerald-700 dark:text-emerald-400">تمت العملية بنجاح — تمت معالجة {result.processed} سند</p>
-          </div>
-        )}
       </div>
     </div>
   );
@@ -152,15 +111,6 @@ function ReinstateInvoices() {
 
 // ─── إعادة توليد الأسعار ──────────────────────────────────────────────────
 function RegeneratePricing() {
-  const [result, setResult] = useState<{ updated: number } | null>(null);
-  const mutation = trpc.maintenance.regeneratePricing.useMutation({
-    onSuccess: (data) => {
-      setResult(data);
-      toast.success(`تم تحديث متوسط تكلفة ${data.updated} صنف`);
-    },
-    onError: (e) => toast.error(e.message),
-  });
-
   return (
     <div className="space-y-5 max-w-xl">
       <div className="flex items-center gap-2">
@@ -170,25 +120,9 @@ function RegeneratePricing() {
       <div className="border border-blue-400/30 bg-blue-500/5 rounded-xl p-4 flex gap-3">
         <AlertTriangle className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
         <div className="text-sm text-blue-700 dark:text-blue-400 space-y-1">
-          <p className="font-semibold">إعادة حساب متوسط التكلفة</p>
-          <p>ستقوم هذه العملية بإعادة حساب متوسط تكلفة كل صنف في كل مستودع بناءً على سندات التوريد المؤكدة.</p>
+          <p className="font-semibold">العملية غير متاحة حاليًا</p>
+          <p>لا توجد عملية خادم معتمدة لإعادة توليد متوسط التكلفة في هذا الإصدار. لم يتم ربط الشاشة بسلوك غير منفّذ.</p>
         </div>
-      </div>
-      <div className="border border-border rounded-xl p-5 bg-card">
-        <Button
-          onClick={() => mutation.mutate()}
-          disabled={mutation.isPending}
-          className="w-full gap-2"
-        >
-          <RefreshCw className={`w-4 h-4 ${mutation.isPending ? "animate-spin" : ""}`} />
-          {mutation.isPending ? "جاري إعادة الحساب..." : "إعادة حساب متوسط التكلفة"}
-        </Button>
-        {result && (
-          <div className="flex items-center gap-2 p-3 mt-4 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
-            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-            <p className="text-sm text-emerald-700 dark:text-emerald-400">تم تحديث {result.updated} صنف بنجاح</p>
-          </div>
-        )}
       </div>
     </div>
   );

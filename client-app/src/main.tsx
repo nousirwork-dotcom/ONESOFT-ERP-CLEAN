@@ -10,6 +10,10 @@ import { initArabicKeyboardShortcuts } from "@/shared/lib/arabicKeyboardShortcut
 
 initArabicKeyboardShortcuts();
 
+console.info(
+  `[OneSoft frontend] build=${__VITE_BUILD_DATE_ID__} timestamp=${__VITE_BUILD_TIMESTAMP__} commit=${__VITE_BUILD_COMMIT__} cache=${__VITE_BUILD_CACHE_NAME__}`,
+);
+
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30000 } },
 });

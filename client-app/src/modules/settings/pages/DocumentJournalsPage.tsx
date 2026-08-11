@@ -366,8 +366,10 @@ function FieldCodeSearch({
 const DOC_TYPES = [
   { id: "sales_invoice",       label: "فاتورة المبيعات",     icon: <BookOpen className="w-3.5 h-3.5" /> },
   { id: "sales_return",        label: "مردود مبيعات",        icon: <RotateCcw className="w-3.5 h-3.5" /> },
+  { id: "credit_note",         label: "إشعار دائن مبيعات",   icon: <FileText className="w-3.5 h-3.5" /> },
   { id: "purchase_invoice",    label: "فاتورة مشتريات",      icon: <BookMarked className="w-3.5 h-3.5" /> },
   { id: "purchase_return",     label: "مردود مشتريات",       icon: <RotateCcw className="w-3.5 h-3.5" /> },
+  { id: "debit_note",          label: "إشعار مدين مبيعات",   icon: <FileText className="w-3.5 h-3.5" /> },
   { id: "sales_order",         label: "أمر بيع",             icon: <ClipboardList className="w-3.5 h-3.5" /> },
   { id: "sales_quote",         label: "عرض سعر مبيعات",     icon: <Tag className="w-3.5 h-3.5" /> },
   { id: "purchase_order",      label: "أمر شراء",            icon: <ClipboardList className="w-3.5 h-3.5" /> },

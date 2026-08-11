@@ -1,6 +1,6 @@
 {
   "name": "onesoft-erp-server",
-  "version": "1.0.0",
+  "version": "1.0.28",
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
@@ -11,6 +11,8 @@
     "pipeline": "pnpm build && pnpm verify-build",
     "setup-db": "tsx scripts/setup-db.ts",
     "migrate": "pnpm check-fk:static && tsx scripts/run-migrations.ts && pnpm check-fk:db",
+    "audit:zatca-0061": "tsx scripts/audit-zatca-0061.ts",
+    "audit:zatca-0061:detail": "tsx scripts/audit-zatca-0061-detail.ts",
     "test:migrations": "tsx scripts/test-migrations.ts",
     "stamp-migration": "tsx scripts/stamp-migration.ts",
     "check-fk": "tsx ../scripts/check-fk-delete-rules.ts",
@@ -22,6 +24,7 @@
   },
   "dependencies": {
     "@trpc/server": "^11.6.0",
+    "@talha7k/zatca": "^0.11.1",
     "bcryptjs": "^2.4.3",
     "cookie": "^1.0.2",
     "cors": "^2.8.5",
@@ -31,6 +34,7 @@
     "jose": "^6.1.0",
     "nanoid": "^5.1.5",
     "pg": "^8.11.0",
+    "qrcode": "^1.5.4",
     "superjson": "^1.13.3",
     "zod": "^4.1.12"
   },

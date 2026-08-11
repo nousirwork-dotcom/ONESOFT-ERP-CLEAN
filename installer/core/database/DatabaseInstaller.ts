@@ -1,5 +1,6 @@
 import { Pool } from 'pg';
 import type { DatabaseConnectionOptions, ProgressEvent } from '../types.js';
+import { DatabaseRoleManager } from './DatabaseRoleManager.js';
 
 type Emit = (e: ProgressEvent) => void;
 
@@ -20,7 +21,7 @@ export class DatabaseInstaller {
     appUser: string,
     appPassword: string,
     emit: Emit,
-  ): Promise<void> {
+  ): Promise<{ appPassword: string }> {
     validateIdentifier(dbName, 'database name');
     validateIdentifier(appUser, 'application user');
 
@@ -49,26 +50,35 @@ export class DatabaseInstaller {
         emit({ level: 'info', message: `Database "${dbName}" already exists`, timestamp: now() });
       }
 
-      emit({ level: 'info', message: `Creating application user "${appUser}"...`, timestamp: now() });
+      emit({ level: 'info', message: `Preparing application user "${appUser}"...`, timestamp: now() });
       const userExists = await client.query(
         `SELECT 1 FROM pg_roles WHERE rolname = $1`, [appUser]
       );
 
       const safeUser = client.escapeIdentifier(appUser);
-      const safePass = client.escapeLiteral(appPassword);
+      const safePass = appPassword.trim() ? client.escapeLiteral(appPassword) : null;
 
-      if (userExists.rowCount === 0) {
+      if (safePass && userExists.rowCount === 0) {
         await client.query(`CREATE USER ${safeUser} WITH PASSWORD ${safePass}`);
         emit({ level: 'success', message: `User "${appUser}" created`, timestamp: now() });
-      } else {
+      } else if (safePass) {
         await client.query(`ALTER USER ${safeUser} WITH PASSWORD ${safePass}`);
         emit({ level: 'info', message: `Password updated for user "${appUser}"`, timestamp: now() });
       }
 
-      const safeDb = client.escapeIdentifier(dbName);
-      await client.query(`GRANT ALL PRIVILEGES ON DATABASE ${safeDb} TO ${safeUser}`);
-      await client.query(`ALTER DATABASE ${safeDb} OWNER TO ${safeUser}`);
-      emit({ level: 'success', message: 'Privileges granted successfully', timestamp: now() });
+      const roleManager = new DatabaseRoleManager();
+      const provisioned = await roleManager.provision({
+        ...adminOpts,
+        database: dbName,
+      }, dbName, appPassword.trim() || undefined);
+      await roleManager.adoptAllowlistedObjects({
+        ...adminOpts,
+        database: dbName,
+      });
+      const { MigrationCredentialStore } = await import('../security/MigrationCredentialStore.js');
+      MigrationCredentialStore.save(provisioned.migration);
+      emit({ level: 'success', message: 'أدوار قاعدة البيانات الآمنة جاهزة وتم حفظ اعتماد الترحيل محلياً', timestamp: now() });
+      return { appPassword: provisioned.appPassword };
 
     } finally {
       client.release();

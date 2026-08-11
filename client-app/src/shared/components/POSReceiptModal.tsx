@@ -140,8 +140,8 @@ export default function POSReceiptModal({ open, onClose, data, qrSettings, templ
 
   const qrContent = showQR
     ? generateQrContent(qrSettings!.countrySystem, {
-        sellerName: qrSettings?.sellerName || data.sellerName,
-        taxNumber:  qrSettings?.taxNumber  || data.sellerTaxNumber,
+        sellerName: data.sellerName,
+        taxNumber:  data.sellerTaxNumber || "",
         invoiceDateTime: `${data.invoiceDate}T${data.invoiceTime ?? "00:00:00"}`,
         totalAmount: data.grandTotal, vatAmount: taxTotal,
         invoiceNumber: String(data.invoiceNumber),

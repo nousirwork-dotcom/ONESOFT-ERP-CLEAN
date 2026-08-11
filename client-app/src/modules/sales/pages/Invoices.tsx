@@ -13,7 +13,7 @@ const paymentLabels: Record<string, string> = { cash: "نقدي", card: "بطا�
 
 export default function Invoices() {
   const [, navigate] = useLocation();
-  const { data: invoices, isLoading } = trpc.invoices.list.useQuery({ limit: 100 });
+  const { data: invoices, isLoading } = trpc.salesInvoices.list.useQuery({ limit: 100 });
 
   const formatCurrency = (val: string | number) =>
     new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR" }).format(Number(val));
@@ -84,14 +84,14 @@ export default function Invoices() {
                     <TableCell className="font-mono text-xs font-medium">{inv.invoiceNumber}</TableCell>
                     <TableCell>
                       <Badge variant="outline" className="text-xs">
-                        {inv.type === "sale" ? "بيع" : "مرتجع"}
+                        {inv.invoiceType === "sale" ? "بيع" : "مرتجع"}
                       </Badge>
                     </TableCell>
                     <TableCell>{paymentLabels[inv.paymentMethod ?? "cash"] ?? inv.paymentMethod}</TableCell>
-                    <TableCell className="font-bold text-primary">{formatCurrency(inv.total)}</TableCell>
+                    <TableCell className="font-bold text-primary">{formatCurrency(inv.total ?? 0)}</TableCell>
                     <TableCell>
-                      <Badge variant={inv.status === "completed" ? "default" : "secondary"} className="text-xs">
-                        {inv.status === "completed" ? "مكتملة" : inv.status}
+                      <Badge variant={inv.status === "confirmed" || inv.status === "paid" ? "default" : "secondary"} className="text-xs">
+                        {inv.status === "confirmed" || inv.status === "paid" ? "مكتملة" : inv.status}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground text-xs">

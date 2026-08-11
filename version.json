@@ -1,8 +1,8 @@
 {
-  "version": "1.0.0",
-  "build": "20260630.001",
-  "releaseDate": "2026-06-30",
-  "schemaVersion": "0012_zatca_database_architecture",
+  "version": "1.0.28",
+  "build": "20260811.001",
+  "releaseDate": "2026-08-11",
+  "schemaVersion": "0092_repair_legacy_migration_drift",
   "product": "OneSoft ERP",
   "channel": "stable"
 }

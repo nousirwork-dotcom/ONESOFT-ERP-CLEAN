@@ -1,6 +1,7 @@
 import { trpc } from "@/shared/lib/trpc";
 import { TRPCClientError } from "@trpc/client";
 import { useCallback, useEffect, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { clearSessionTabs } from "@/core/contexts/TabManagerContext";
 
 type UseAuthOptions = {
@@ -12,6 +13,7 @@ export function useAuth(options?: UseAuthOptions) {
   const { redirectOnUnauthenticated = false, redirectPath = '/login' } =
     options ?? {};
   const utils = trpc.useUtils();
+  const queryClient = useQueryClient();
 
   const meQuery = trpc.auth.me.useQuery(undefined, {
     retry: false,
@@ -31,15 +33,18 @@ export function useAuth(options?: UseAuthOptions) {
     } finally {
       // مسح بيانات المستخدم من localStorage و sessionStorage
       localStorage.removeItem('manus-runtime-user-info');
+      localStorage.removeItem('onesoft_user_permissions');
+      localStorage.removeItem('onesoft_current_user');
       // مسح التبويبات المحفوظة في sessionStorage
       clearSessionTabs();
       // مسح علامة الجلسة — يمنع tryAutoLogin من تجاوز شاشة الدخول
       sessionStorage.removeItem('onesoft_login_launch');
+      queryClient.clear();
       // إعادة توجيه كاملة (replace) لمنع زر Back من إظهار الصفحات المحمية
       // كذلك تمسح كل React state و cache تلقائياً بإعادة تحميل الصفحة
       window.location.replace('/login');
     }
-  }, [logoutMutation]);
+  }, [logoutMutation, queryClient]);
 
   const state = useMemo(() => {
     localStorage.setItem(

@@ -1,12 +1,12 @@
 import { fmtDate } from "@/shared/utils/dateUtils";
 import { useTabManager } from "@/core/contexts/TabManagerContext";
-import { Store } from "lucide-react";
+import { Store, X } from "lucide-react";
 import { useState, useEffect } from "react";
 
 export const TASKBAR_H = 40;
 
 export default function WindowTaskbar() {
-  const { tabs, activeTabId, activateTab, minimizeWindow, toggleDashboard, dashboardVisible, showDashboard, isPosWorkspaceActive } = useTabManager();
+  const { tabs, activeTabId, activateTab, closeTab, minimizeWindow, toggleDashboard, dashboardVisible, showDashboard, isPosWorkspaceActive } = useTabManager();
   const [clock, setClock] = useState(() => fmtTime());
 
   useEffect(() => {
@@ -72,14 +72,22 @@ export default function WindowTaskbar() {
           const isMinimized = tab.windowState === "minimized";
 
           return (
-            <button
+            <div
               key={tab.id}
+              role="button"
+              tabIndex={0}
               onClick={() => {
                 if (isMinimized || !isActive) {
                   activateTab(tab.id);
                 } else {
                   minimizeWindow(tab.id);
                 }
+              }}
+              onKeyDown={event => {
+                if (event.key !== "Enter" && event.key !== " ") return;
+                event.preventDefault();
+                if (isMinimized || !isActive) activateTab(tab.id);
+                else minimizeWindow(tab.id);
               }}
               title={tab.label}
               style={{
@@ -133,7 +141,48 @@ export default function WindowTaskbar() {
               }}>
                 {tab.label}
               </span>
-            </button>
+              {!tab.pinned && (
+                <button
+                  type="button"
+                  aria-label={`إغلاق الشاشة: ${tab.label}`}
+                  title="إغلاق الشاشة"
+                  onMouseDown={event => event.stopPropagation()}
+                  onClick={event => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    closeTab(tab.id);
+                  }}
+                  onKeyDown={event => event.stopPropagation()}
+                  style={{
+                    width: 19,
+                    height: 19,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                    border: "1px solid transparent",
+                    borderRadius: 4,
+                    padding: 0,
+                    background: "transparent",
+                    color: "rgba(255,255,255,0.58)",
+                    cursor: "pointer",
+                    transition: "background 0.12s, color 0.12s, border-color 0.12s",
+                  }}
+                  onMouseEnter={event => {
+                    event.currentTarget.style.background = "rgba(239,68,68,0.85)";
+                    event.currentTarget.style.borderColor = "rgba(255,255,255,0.2)";
+                    event.currentTarget.style.color = "#fff";
+                  }}
+                  onMouseLeave={event => {
+                    event.currentTarget.style.background = "transparent";
+                    event.currentTarget.style.borderColor = "transparent";
+                    event.currentTarget.style.color = "rgba(255,255,255,0.58)";
+                  }}
+                >
+                  <X aria-hidden="true" style={{ width: 12, height: 12 }} />
+                </button>
+              )}
+            </div>
           );
         })}
       </div>

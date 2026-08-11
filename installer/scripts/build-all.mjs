@@ -93,6 +93,27 @@ function findAll(dir, name, results = []) {
   return results;
 }
 
+function hashDirectory(dir) {
+  const files = [];
+  function visit(current, relative = '') {
+    for (const entry of fs.readdirSync(current, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      const full = path.join(current, entry.name);
+      const rel = path.join(relative, entry.name).replaceAll(path.sep, '/');
+      if (entry.isDirectory()) visit(full, rel);
+      else if (rel !== 'build-manifest.json') files.push([rel, fs.readFileSync(full)]);
+    }
+  }
+  visit(dir);
+  const hash = crypto.createHash('sha256');
+  for (const [name, contents] of files) {
+    hash.update(name);
+    hash.update('\0');
+    hash.update(contents);
+    hash.update('\0');
+  }
+  return hash.digest('hex');
+}
+
 // ════════════════════════════════════════════════════════════════════
 console.log(`\n${sep}`);
 console.log('  🏗️  OneSoft ERP — بناء المثبت الشامل');
@@ -155,6 +176,15 @@ divider();
 
 const destDist = path.join(RESOURCE_APP, 'dist');
 fs.cpSync(SERVER_DIST, destDist, { recursive: true });
+const drizzleSource = path.join(SERVER_SRC, 'drizzle');
+const drizzleDestination = path.join(RESOURCE_APP, 'drizzle');
+fs.cpSync(drizzleSource, drizzleDestination, { recursive: true });
+ok('مجلد migrations نُسخ إلى resources/app/server-app/drizzle');
+const foundationSource = path.join(SERVER_SRC, 'src', 'foundation-data.json');
+const foundationDestination = path.join(RESOURCE_APP, 'src', 'foundation-data.json');
+fs.mkdirSync(path.dirname(foundationDestination), { recursive: true });
+fs.copyFileSync(foundationSource, foundationDestination);
+ok('foundation-data.json نُسخ إلى resources/app/server-app/src');
 
 const copiedFiles = listFiles(destDist);
 sub(`الملفات المنسوخة (${copiedFiles.length}):`);
@@ -211,6 +241,27 @@ header('4/6', 'بناء واجهة المستخدم (Vite)');
 run('vite build');
 ok('UI مبنية');
 
+// ── 4.5 manifest موحّد ذري لكل المخرجات ───────────────────────────
+header('4.5/6', 'توليد manifest موحّد والتحقق من اتساق الإصدار');
+run('node ../scripts/generate-unified-manifest.mjs');
+ok('manifest موحّد نُسخ إلى server/client/installer outputs');
+
+const requiredPackageFiles = [
+  path.join(RESOURCE_APP, 'dist', 'index.mjs'),
+  path.join(RESOURCE_APP, 'dist', 'build-manifest.json'),
+  path.join(RESOURCE_APP, 'src', 'foundation-data.json'),
+  path.join(RESOURCE_APP, 'package.json'),
+  path.join(RESOURCE_APP, 'drizzle', '0092_repair_legacy_migration_drift.sql'),
+  path.join(INSTALLER, 'dist-ui', 'build-manifest.json'),
+  path.join(ROOT, 'client-app', 'dist', 'build-manifest.json'),
+];
+for (const requiredFile of requiredPackageFiles) {
+  if (!fs.existsSync(requiredFile)) {
+    throw new Error(`محتوى الحزمة ناقص: ${path.relative(ROOT, requiredFile)}`);
+  }
+}
+ok(`فحص محتوى الحزمة ناجح (${requiredPackageFiles.length} ملفات حرجة)`);
+
 // ── 5. حزم الـ installer ──────────────────────────────────────────
 header('5/6', 'حزم installer (electron-builder)');
 // إذا لم يكن PUBLISH_RELEASE=true نمرر --publish never صراحةً
@@ -218,7 +269,7 @@ header('5/6', 'حزم installer (electron-builder)');
 const publishFlag = process.env.PUBLISH_RELEASE === 'true' ? ' --publish=always' : ' --publish=never';
 if (process.env.PUBLISH_RELEASE === 'true') info('وضع النشر: --publish=always (سيتم رفع الملفات على GitHub Releases)');
 else info('وضع البناء المحلي/CI: --publish=never (لا نشر تلقائي)');
-run(`electron-builder${publishFlag}`);
+run(`electron-builder --win --x64 --ia32 --config electron-builder.yml${publishFlag}`);
 ok('installer مُحزَّم');
 
 // ── 6. تحقق نهائي ─────────────────────────────────────────────────

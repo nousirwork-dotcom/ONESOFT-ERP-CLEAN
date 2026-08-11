@@ -11,9 +11,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/core/ui/table";
 import { Textarea } from "@/core/ui/textarea";
 import { toast } from "sonner";
-import { Plus, ArrowDownCircle, ArrowUpCircle, Trash2, Search, Eye } from "lucide-react";
+import { Plus, ArrowDownCircle, ArrowUpCircle, Trash2, Eye } from "lucide-react";
 import SupplyReceiptDialog from "./SupplyReceiptDialog";
 import { DesktopWorkWindow } from "@/components/work-window";
+import ProductLookupCell from "@/shared/components/ProductLookupCell";
 
 type VoucherItem = { productId: number; productName: string; quantity: string; unitCost: string; totalCost: string; };
 
@@ -54,16 +55,7 @@ export default function StockVouchers({ initialTab = "receipt" }: { initialTab?:
     setSearchProduct("");
   };
 
-  const filteredProducts = (products as any[]).filter(p =>
-    p.name.toLowerCase().includes(searchProduct.toLowerCase()) ||
-    (p.barcode ?? "").includes(searchProduct)
-  );
-
   const addItem = (product: any) => {
-    if (items.find(i => i.productId === product.id)) {
-      toast.info("الصنف موجود بالفعل في القائمة");
-      return;
-    }
     setItems(prev => [...prev, {
       productId: product.id,
       productName: product.name,
@@ -260,26 +252,17 @@ export default function StockVouchers({ initialTab = "receipt" }: { initialTab?:
             <div className="border border-border rounded-lg p-3 space-y-3">
               <Label className="font-semibold">إضافة أصناف</Label>
               <div className="relative">
-                <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
+                <ProductLookupCell
                   value={searchProduct}
-                  onChange={e => setSearchProduct(e.target.value)}
-                  placeholder="ابحث بالاسم أو الباركود..."
+                  placeholder="ابحث بالكود أو الاسم أو الباركود..."
+                  products={products as any[]}
+                  onChange={setSearchProduct}
+                  onSelect={product => { addItem(product); setSearchProduct(""); }}
+                  onNavigate={() => {}}
+                  onInvalid={() => toast.error("الصنف غير موجود")}
                   className="pr-9"
                 />
               </div>
-              {searchProduct && (
-                <div className="border border-border rounded-lg overflow-hidden max-h-40 overflow-y-auto">
-                  {filteredProducts.slice(0, 10).map((p: any) => (
-                    <button key={p.id} onClick={() => { addItem(p); setSearchProduct(""); }}
-                      className="w-full text-right px-3 py-2 hover:bg-accent/50 flex items-center justify-between text-sm transition-colors">
-                      <span>{p.name}</span>
-                      <span className="text-muted-foreground font-mono">{p.barcode ?? ""}</span>
-                    </button>
-                  ))}
-                  {filteredProducts.length === 0 && <p className="text-center py-3 text-muted-foreground text-sm">لا توجد نتائج</p>}
-                </div>
-              )}
             </div>
 
             {/* جدول الأصناف المضافة */}

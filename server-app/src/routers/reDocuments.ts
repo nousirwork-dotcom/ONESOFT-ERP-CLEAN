@@ -316,7 +316,13 @@ export const reDocumentsRouter = router({
       assertViewPerm(ctx.user);
       const { projectId, search, documentTypeId, issuer, status, dateFrom, dateTo, sortBy, sortDir } = input;
       let conds = [eq(reDocuments.orgId, ctx.user.orgId), eq(reDocuments.projectId, projectId)];
-      if (search) conds.push(or(ilike(reDocuments.name, `%${search}%`), ilike(reDocuments.documentNumber, `%${search}%`)));
+      if (search) {
+        const searchCondition = or(
+          ilike(reDocuments.name, `%${search}%`),
+          ilike(reDocuments.documentNumber, `%${search}%`),
+        );
+        if (searchCondition) conds.push(searchCondition);
+      }
       if (documentTypeId) conds.push(eq(reDocuments.documentTypeId, documentTypeId));
       if (issuer) conds.push(ilike(reDocuments.issuer, `%${issuer}%`));
       if (dateFrom) conds.push(gte(reDocuments.issueDate, new Date(dateFrom)));

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/core/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/core/ui/dialog";
 import { Button } from "@/core/ui/button";
 import { Input } from "@/core/ui/input";
 import { trpc } from "@/shared/lib/trpc";
@@ -326,6 +326,9 @@ export default function PaymentModal({
             </svg>
             شاشة الدفع
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            إدخال وتأكيد مبالغ الدفع وطرق السداد الخاصة بفاتورة المبيعات
+          </DialogDescription>
           <div className="flex items-center gap-2 mt-0.5">
             <p className="text-white/70 text-[11px]">فاتورة رقم: {invoiceNumber || "—"}</p>
             {needsSave && (

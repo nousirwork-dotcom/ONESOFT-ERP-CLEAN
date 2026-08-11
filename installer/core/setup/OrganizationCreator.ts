@@ -25,11 +25,11 @@ export class OrganizationCreator {
         return row;
       }
 
-      // status = 'trial' مع subscription_expiry = 30 يوماً — يسمح بالاستخدام الكامل خلال التجربة
+      // status = 'trial' مع subscription_expiry = 3 أشهر تقويمية — يسمح بالاستخدام الكامل خلال التجربة
       // بعد انتهاء التجربة يُطلب ترخيص من License Center
       const result = await client.query<{ id: number; code: string }>(`
         INSERT INTO organizations (code, name, name_en, currency, status, subscription_expiry, max_users, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, 'trial', NOW() + INTERVAL '30 days', 10, NOW(), NOW())
+         VALUES ($1, $2, $3, $4, 'trial', NOW() + INTERVAL '3 months', 10, NOW(), NOW())
         RETURNING id, code
       `, [org.code, org.name, org.nameEn ?? null, org.currency]);
 

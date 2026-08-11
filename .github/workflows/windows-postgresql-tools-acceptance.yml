@@ -1,0 +1,48 @@
+name: Windows PostgreSQL Tools Acceptance
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance:
+    name: "Windows PostgreSQL resolver and Legacy Upgrade"
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL 16
+        shell: pwsh
+        run: |
+          choco install postgresql16 --yes --no-progress --params '/Password:OneSoftAcceptance2026 /Port:5432'
+          $service = Get-Service -Name 'postgresql-x64-16' -ErrorAction SilentlyContinue
+          if (-not $service) { throw 'PostgreSQL 16 service was not installed' }
+          if ($service.Status -ne 'Running') { Start-Service $service.Name }
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies without build or release
+        shell: pwsh
+        run: pnpm install --frozen-lockfile
+
+      - name: Run resolver, UTF-8, Backup/Restore and Legacy acceptance
+        shell: pwsh
+        run: |
+          $env:Path = (($env:Path -split ';') | Where-Object { $_ -and $_ -notmatch '\\PostgreSQL\\' }) -join ';'
+          ./scripts/windows-postgresql-tools-acceptance.ps1
+
+      - name: Upload acceptance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-postgresql-tools-acceptance
+          path: windows-postgresql-tools-acceptance/
+          if-no-files-found: warn
+          retention-days: 30

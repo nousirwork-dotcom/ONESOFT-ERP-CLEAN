@@ -1,0 +1,60 @@
+name: Windows Upgrade Acceptance — 1.0.21 to 1.0.25
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance:
+    name: "Windows ${{ matrix.arch }} — real updater upgrade"
+    runs-on: windows-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, ia32]
+
+    steps:
+      - name: Checkout acceptance branch
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL 16
+        shell: pwsh
+        run: |
+          choco install postgresql16 --yes --no-progress --params '/Password:OneSoftAcceptance2026 /Port:5432'
+          $service = Get-Service -Name 'postgresql-x64-16' -ErrorAction SilentlyContinue
+          if (-not $service) { throw 'PostgreSQL 16 service was not installed' }
+          if ($service.Status -ne 'Running') { Start-Service $service.Name }
+
+      - name: Install NSSM
+        shell: pwsh
+        run: |
+          choco install nssm --yes --no-progress
+          if (-not (Get-Command nssm.exe -ErrorAction SilentlyContinue)) {
+            throw 'NSSM was not installed'
+          }
+
+      - name: Setup Node.js for the real Windows service
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run real 1.0.21 to 1.0.25 acceptance
+        shell: pwsh
+        env:
+          ACCEPTANCE_MANIFEST_URL: https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/.github/acceptance-manifests/1.0.25-${{ matrix.arch }}.json
+        run: |
+          ./scripts/windows-upgrade-acceptance.ps1 `
+            -Architecture '${{ matrix.arch }}' `
+            -ManifestUrl "$env:ACCEPTANCE_MANIFEST_URL"
+
+      - name: Upload acceptance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-upgrade-acceptance-${{ matrix.arch }}
+          path: windows-acceptance-${{ matrix.arch }}/
+          if-no-files-found: warn
+          retention-days: 30

@@ -11,11 +11,10 @@ export default function SalesReturnPage() {
       partyLabel: "العميل",
       numberPrefix: "SRN",
       journalDropdownTitle: "دفاتر مردود المبيعات",
-      basedOnOptions: [
-        { value: "sale", label: "فاتورة مبيعات" },
-        { value: "order", label: "أمر بيع" },
-      ],
-      canPost: false,
+      basedOnOptions: [{ value: "sale", label: "فاتورة مبيعات" }],
+      requireReference: true,
+      requireReason: true,
+      canPost: true,
       themeColor: "#C0392B",
     }} />
   );

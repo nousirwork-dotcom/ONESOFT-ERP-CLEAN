@@ -35,6 +35,10 @@ args = "client-typecheck"
 task = "workflow.run"
 args = "server-recovery-lint"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "client-date-guard"
+
 [[workflows.workflow]]
 name = "Backend Server"
 author = "agent"
@@ -104,9 +108,28 @@ args = "cd server-app && node -e \"const fs=require('fs'); const src=fs.readFile
 [workflows.workflow.metadata]
 isValidation = true
 
+[[workflows.workflow]]
+name = "client-date-guard"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd client-app && node scripts/check-no-date-inputs.mjs"
+
+[workflows.workflow.metadata]
+isValidation = true
+
 [[ports]]
 localPort = 3000
 externalPort = 80
+
+[[ports]]
+localPort = 3001
+externalPort = 3001
+
+[[ports]]
+localPort = 3099
+externalPort = 3003
 
 [[ports]]
 localPort = 5000
@@ -119,6 +142,10 @@ externalPort = 3002
 [[ports]]
 localPort = 8080
 externalPort = 8080
+
+[[ports]]
+localPort = 13737
+externalPort = 4200
 
 [[ports]]
 localPort = 23636

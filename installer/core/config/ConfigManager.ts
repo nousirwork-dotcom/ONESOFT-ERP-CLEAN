@@ -9,6 +9,7 @@ import {
   legacyModeToDeploymentType, legacyRunModeToAccessModes,
   deploymentTypeToLegacyMode, accessModesToLegacyRunMode,
 } from '../types.js';
+import { APP_VERSION } from '../version.js';
 
 // ─── مسارات الإعدادات ─────────────────────────────────────────────────────────
 const CONFIG_DIR = process.platform === 'win32'
@@ -56,7 +57,7 @@ export function buildDefaultConfig(partial: {
   };
 
   return {
-    version:        '1.0.0',
+    version:        APP_VERSION,
     configVersion:  4,
 
     // ── البنية الجديدة ──────────────────────────────────────────────────────
@@ -187,7 +188,33 @@ export class ConfigManager {
       installMode: deploymentTypeToLegacyMode(config.deploymentType ?? 'server+client'),
       runMode:     accessModesToLegacyRunMode(config.accessModes   ?? ['desktop', 'web']),
     };
-    fs.writeFileSync(CONFIG_FILE, JSON.stringify(synced, null, 2), 'utf-8');
+    // Legacy admin credentials are accepted only as an in-memory migration
+    // input. They must never be written back to the active configuration.
+    const { adminUser: _adminUser, adminPassword: _adminPassword, ...safeDatabase } = synced.database;
+    const safeConfig: OneSoftConfig = { ...synced, database: safeDatabase };
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify(safeConfig, null, 2), 'utf-8');
+  }
+
+  static removeLegacyAdminCredentials(): void {
+    if (!fs.existsSync(CONFIG_FILE)) return;
+    try {
+      const raw = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')) as {
+        database?: Record<string, unknown>;
+      };
+      if (!raw.database) return;
+      const hadLegacy = 'adminUser' in raw.database || 'adminPassword' in raw.database;
+      if (!hadLegacy) return;
+      delete raw.database['adminUser'];
+      delete raw.database['adminPassword'];
+      const temporary = `${CONFIG_FILE}.tmp-${process.pid}`;
+      fs.writeFileSync(temporary, `${JSON.stringify(raw, null, 2)}\n`, {
+        encoding: 'utf8',
+        mode: 0o600,
+      });
+      fs.renameSync(temporary, CONFIG_FILE);
+    } catch {
+      throw new Error('تعذّر حذف اعتماد المدير القديم من ملف الإعدادات النشط');
+    }
   }
 
   static patch(updates: Partial<OneSoftConfig>): OneSoftConfig {

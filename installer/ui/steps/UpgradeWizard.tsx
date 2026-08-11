@@ -1,18 +1,30 @@
 import { useState, useEffect, useRef } from 'react';
 import { useInstallerStore } from '../store/installer.store';
 import type { ProgressEvent } from '../../core/types';
+import { APP_VERSION } from '../../core/version';
 
 type Phase = 'detect' | 'confirm' | 'running' | 'done' | 'failed';
 
 export default function UpgradeWizard() {
-  const { dbOpts, getDatabaseUrl } = useInstallerStore();
+  const { dbOpts, setDbOpts } = useInstallerStore();
   const [phase, setPhase] = useState<Phase>('detect');
   const [currentVersion, setCurrentVersion] = useState<string | null>(null);
-  const [targetVersion] = useState('1.1.0');
+  const [targetVersion, setTargetVersion] = useState(APP_VERSION);
+  const [runtimePassword, setRuntimePassword] = useState(dbOpts.password);
+  const [adminUser, setAdminUser] = useState('postgres');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [needsAdminCredential, setNeedsAdminCredential] = useState(false);
+  const [backendPort, setBackendPort] = useState(3000);
   const [log, setLog] = useState<ProgressEvent[]>([]);
   const [backupDir, setBackupDir] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
+
+  const makeRuntimePassword = (): string => {
+    const bytes = new Uint8Array(32);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  };
 
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
@@ -20,16 +32,46 @@ export default function UpgradeWizard() {
 
   useEffect(() => {
     (async () => {
-      const info = await window.installer?.detectVersion?.();
+      const [info, config] = await Promise.all([
+        window.installer?.detectVersion?.(),
+        window.installer?.getConfig?.(),
+      ]);
+      if (config?.database?.password && config.database.user === 'onesoft_app') {
+        setRuntimePassword(config.database.password);
+      }
+      if (config?.database) {
+        setDbOpts({
+          host: config.database.host,
+          port: config.database.port,
+          database: config.database.name,
+        });
+        const legacyUser = config.database.user?.trim();
+        if (legacyUser && legacyUser !== 'onesoft_app') {
+          setAdminUser(legacyUser);
+          setRuntimePassword(makeRuntimePassword());
+          setNeedsAdminCredential(true);
+        } else {
+          setNeedsAdminCredential(true);
+        }
+      }
       if (info) {
         setCurrentVersion(info.version ?? null);
-        setPhase('confirm');
       } else {
         setCurrentVersion(null);
-        setPhase('confirm');
       }
+      const configuredPort = config?.server?.backendPort;
+      if (typeof configuredPort === 'number' && configuredPort > 0) {
+        setBackendPort(configuredPort);
+      }
+      const installedVersion = await window.installer?.getVersion?.();
+      if (installedVersion) setTargetVersion(installedVersion);
+      if (config?.database?.user === 'onesoft_app') {
+        const credentialProbe = await window.installer?.hasMigrationCredential?.();
+        setNeedsAdminCredential(!credentialProbe);
+      }
+      setPhase('confirm');
     })();
-  }, []);
+  }, [setDbOpts]);
 
   const runUpgrade = async () => {
     setPhase('running');
@@ -41,21 +83,38 @@ export default function UpgradeWizard() {
     });
 
     try {
+      if (needsAdminCredential && (!adminUser.trim() || !adminPassword)) {
+        throw new Error('أدخل اسم مستخدم PostgreSQL الإداري وكلمة مروره لمرة واحدة قبل متابعة ترقية Legacy.');
+      }
       const result = await window.installer?.runUpgrade?.({
         dbOpts: {
           host: dbOpts.host, port: dbOpts.port,
-          database: dbOpts.database, user: dbOpts.user, password: dbOpts.password,
+          database: dbOpts.database, user: 'onesoft_app', password: runtimePassword,
         },
-        databaseUrl: getDatabaseUrl(),
+        ...(needsAdminCredential ? {
+          adminDbOpts: {
+            host: dbOpts.host, port: dbOpts.port,
+            database: dbOpts.database, user: adminUser.trim(), password: adminPassword,
+          },
+        } : {}),
+        forceRoleProvision: needsAdminCredential,
+        databaseUrl: `postgresql://onesoft_app:${encodeURIComponent(runtimePassword)}@${dbOpts.host}:${dbOpts.port}/${dbOpts.database}`,
         backupsDir: 'C:\\ProgramData\\OneSoft\\Backups',
         targetVersion,
+        backendPort,
       });
 
       if (result?.success) {
         setBackupDir(result.backupDir ?? null);
         setPhase('done');
       } else {
-        setError('فشلت عملية الترقية — تم استعادة النسخة السابقة تلقائياً');
+        const detail = result?.error
+          ? `${result.error}${result.stage ? ` (المرحلة: ${result.stage})` : ''}${result.migration ? ` (migration: ${result.migration})` : ''}`
+          : 'فشلت عملية الترقية — تم استعادة النسخة السابقة تلقائياً';
+        setError(detail);
+        if (result?.rollback && !result.rollback.ok) {
+          setError(`${detail} — حالة التراجع: قاعدة البيانات=${result.rollback.databaseRollback}، الأدوار=${result.rollback.roleBootstrapRollback}، الملكية=${result.rollback.ownershipRollback}`);
+        }
         setPhase('failed');
       }
     } catch (e: unknown) {
@@ -134,6 +193,28 @@ export default function UpgradeWizard() {
       <div style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#92400E' }}>
         ⚠️ لا يُمكن استرجاع البيانات بعد الترقية إلا من النسخة الاحتياطية التي ستُنشأ تلقائياً.
       </div>
+
+      {needsAdminCredential && (
+        <div style={{ background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: 10, padding: 14 }}>
+          <div style={{ fontWeight: 800, color: '#991B1B', marginBottom: 6 }}>
+            يلزم اعتماد PostgreSQL إداري لمرة واحدة
+          </div>
+          <div style={{ color: '#7F1D1D', fontSize: 12, marginBottom: 10 }}>
+            هذه القاعدة تستخدم حساب Runtime ولا تملك صلاحية إنشاء أدوار أو تعديل المخطط.
+            لن يتم حفظ كلمة المرور بعد الترقية.
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <label style={fieldLabel}>
+              المستخدم الإداري
+              <input value={adminUser} onChange={e => setAdminUser(e.target.value)} style={fieldInput} autoComplete="username" />
+            </label>
+            <label style={fieldLabel}>
+              كلمة المرور
+              <input type="password" value={adminPassword} onChange={e => setAdminPassword(e.target.value)} style={fieldInput} autoComplete="current-password" />
+            </label>
+          </div>
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
         <button onClick={() => window.installer?.close?.()} style={btnSecondary}>إلغاء</button>
@@ -224,4 +305,12 @@ const btnPrimary: React.CSSProperties = {
 const btnSecondary: React.CSSProperties = {
   background: '#fff', color: '#6B7280', border: '1px solid #D1D5DB',
   borderRadius: 8, padding: '10px 20px', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
+};
+const fieldLabel: React.CSSProperties = {
+  display: 'flex', flexDirection: 'column', gap: 5,
+  color: '#4B5563', fontSize: 12, fontWeight: 700,
+};
+const fieldInput: React.CSSProperties = {
+  border: '1px solid #D1D5DB', borderRadius: 7, padding: '9px 10px',
+  fontSize: 13, fontFamily: 'inherit', direction: 'ltr',
 };

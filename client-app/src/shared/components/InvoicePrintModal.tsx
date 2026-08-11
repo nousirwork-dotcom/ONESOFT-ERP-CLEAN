@@ -11,6 +11,7 @@ import { buildInvoiceHtml } from "@/shared/lib/buildInvoiceHtml";
 import {
   PrintEngine,
   QRCodeService,
+  QR_CODE_PRINT_PX,
   DEFAULT_TEMPLATE_CONFIG,
 } from "@/shared/lib/print";
 import type { InvDocTemplateConfig, InvPrintData } from "@/shared/lib/print";
@@ -27,25 +28,64 @@ interface InvoicePrintModalProps {
   data:            PrintInvoiceData;
   qrSettings?:     QrSettings | null;
   templateConfig?: DocTemplateConfig | null;
-  docType?:        "sales_invoice" | "purchase_invoice" | "purchase_order" | "purchase_return";
+  /** Base64 TLV QR extracted from the signed Phase 2 XML snapshot. */
+  zatcaQrCode?: string | null;
+  /** True when the invoice journal is linked to a ZATCA POS unit. */
+  zatcaPhase2?: boolean;
+  docType?:        "sales_invoice" | "sales_return" | "credit_note" | "debit_note" | "purchase_invoice" | "purchase_order" | "purchase_return";
 }
 
 /* ═══════════════════ Component ═══════════════════ */
 export default function InvoicePrintModal({
-  open, onClose, data, qrSettings, templateConfig, docType = "sales_invoice",
+  open, onClose, data, qrSettings, templateConfig, zatcaQrCode, zatcaPhase2 = false, docType = "sales_invoice",
 }: InvoicePrintModalProps) {
   const [qrDataUrl, setQrDataUrl] = useState("");
 
   const cfg   = templateConfig ?? DEFAULT_TEMPLATE_CONFIG;
   const color = cfg.primaryColor;
+  const isPurchaseDoc =
+    docType === "purchase_invoice" ||
+    docType === "purchase_order" ||
+    docType === "purchase_return";
+  const showQrSetting = isPurchaseDoc
+    ? qrSettings?.showOnPurchaseInvoice
+    : qrSettings?.showOnSalesInvoice;
+
+  // SalesInvoicePage supplies these objects inline. Depend on their actual
+  // values instead of object identity so a parent render cannot restart the
+  // QR request and briefly clear the image used by the preview iframe.
+  const qrRequestKey = [
+    qrSettings?.isEnabled ? "1" : "0",
+    qrSettings?.countrySystem ?? "",
+    qrSettings?.customFormat ?? "",
+    showQrSetting ? "1" : "0",
+    data.invoiceNumber,
+    data.invoiceDate,
+    data.invoiceTime ?? "",
+    data.sellerName,
+    data.sellerTaxNumber,
+    data.customerName,
+    data.customerTaxNumber ?? "",
+    data.grandTotal,
+    data.taxTotal,
+    zatcaQrCode ?? "",
+    zatcaPhase2 ? "1" : "0",
+  ].join("|");
 
   /* ── حل QR عبر QRCodeService ── */
   useEffect(() => {
-    if (!open) return;
+    let cancelled = false;
+
+    if (!open) {
+      setQrDataUrl("");
+      return () => {
+        cancelled = true;
+      };
+    }
 
     const invoiceData: QrInvoiceData = {
-      sellerName:      qrSettings?.sellerName || data.sellerName,
-      taxNumber:       qrSettings?.taxNumber  || data.sellerTaxNumber || "",
+      sellerName:      data.sellerName,
+      taxNumber:       data.sellerTaxNumber || "",
       invoiceDateTime: `${data.invoiceDate}T${data.invoiceTime ?? "00:00:00"}`,
       totalAmount:     data.grandTotal,
       vatAmount:       data.taxTotal,
@@ -54,25 +94,29 @@ export default function InvoicePrintModal({
       buyerTaxNumber:  data.customerTaxNumber,
     };
 
-    QRCodeService.resolveForInvoice(qrSettings, invoiceData, docType as "sales_invoice" | "purchase_invoice" | "receipt_voucher" | undefined)
-      .then(result => setQrDataUrl(result.dataUrl))
-      .catch(() => setQrDataUrl(""));
-  }, [open, data, qrSettings, docType]);
+    QRCodeService.resolveForInvoice(qrSettings, invoiceData, docType, zatcaQrCode, zatcaPhase2)
+      .then(result => {
+        if (!cancelled) setQrDataUrl(result.show ? result.dataUrl : "");
+      })
+      .catch(() => {
+        if (!cancelled) setQrDataUrl("");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, qrRequestKey, docType]);
 
   /* ── HTML الفاتورة — نفس المخرج للمعاينة والطباعة ── */
   const invoiceHtml = useMemo(() => {
-    const isPurchaseDoc = docType === "purchase_invoice" || docType === "purchase_order" || docType === "purchase_return";
-    const showQR = !!(qrSettings?.isEnabled && qrDataUrl && (
-      isPurchaseDoc
-        ? qrSettings?.showOnPurchaseInvoice
-        : qrSettings?.showOnSalesInvoice
-    ));
+    const showQR = !!(qrSettings?.isEnabled && showQrSetting && qrDataUrl);
     const qrLabel = qrSettings?.countrySystem === "zatca" ? "ZATCA QR"
                   : qrSettings?.countrySystem === "eta"   ? "ETA QR"  : "QR Code";
-    const qrSize  = qrSettings?.qrSize ?? 100;
+    // الحجم والموضع يحددهما قالب الطباعة؛ إعدادات QR العامة لا تتحكم بهما.
+    const qrSize  = QR_CODE_PRINT_PX;
 
     return buildInvoiceHtml(data, cfg, showQR ? qrDataUrl : undefined, qrLabel, qrSize, docType);
-  }, [data, cfg, qrDataUrl, qrSettings, docType]);
+  }, [data, cfg, qrDataUrl, qrSettings?.countrySystem, qrSettings?.isEnabled, showQrSetting, docType]);
 
   /* ── طباعة / تصدير PDF عبر PrintEngine ── */
   const handlePrint = () => { PrintEngine.print(invoiceHtml); };

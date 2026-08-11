@@ -16,6 +16,20 @@ export { PostgreSQLFixer }      from './requirements/fixers/PostgreSQLFixer.js';
 export { ConnectionTester }     from './database/ConnectionTester.js';
 export { DatabaseInstaller }    from './database/DatabaseInstaller.js';
 export { MigrationRunner }      from './database/MigrationRunner.js';
+export {
+  DatabaseRoleManager,
+  runRoleBootstrapTransaction,
+  runOwnershipRepairTransaction,
+  provisionRepairThenSaveCredential,
+} from './database/DatabaseRoleManager.js';
+export {
+  preflightDatabase,
+  validateAdminCredential,
+  migrationConnection,
+  safeMigrationError,
+} from './database/DatabasePreflight.js';
+export { MigrationCredentialStore } from './security/MigrationCredentialStore.js';
+export { VERSION_INFO, APP_VERSION, APP_SCHEMA_VERSION, APP_BUILD } from './version.js';
 export { ExistingDbDetector }   from './database/ExistingDbDetector.js';
 export type { ExistingDbInfo }  from './database/ExistingDbDetector.js';
 
@@ -40,6 +54,10 @@ export { VersionDetector }      from './upgrade/VersionDetector.js';
 export { BackupBeforeUpgrade }  from './upgrade/BackupBeforeUpgrade.js';
 export { RollbackManager }      from './upgrade/RollbackManager.js';
 export { UpgradeManager }       from './upgrade/UpgradeManager.js';
+export { verifyPostUpgradeDatabase } from './upgrade/PostUpgradeVerifier.js';
+export { runHeadlessUpgrade }   from './upgrade/HeadlessUpgrade.js';
+export { chooseUpgradeLaunchMode } from './upgrade/UpgradeLaunchPolicy.js';
+export { UpgradeDiagnosticLogger } from './upgrade/UpgradeDiagnosticLogger.js';
 
 // Uninstall
 export { UninstallManager }     from './uninstall/UninstallManager.js';
@@ -56,3 +74,8 @@ export { RepairManager }        from './repair/RepairManager.js';
 
 // Database Migrator — نقل DB إلى جهاز آخر
 export { DatabaseMigrator }     from './database/DatabaseMigrator.js';
+export {
+  PostgreSQLToolsResolver,
+  PostgreSQLToolsResolutionError,
+  POSTGRESQL_TOOLS_MISSING_MESSAGE,
+} from './database/PostgreSQLToolsResolver.js';

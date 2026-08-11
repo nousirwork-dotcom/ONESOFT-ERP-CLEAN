@@ -18,7 +18,7 @@
  *                  false (افتراضي): بدون حد يمين (للاقتران بزر التقويم)
  */
 import { useRef, useState, useEffect } from "react";
-import type { KeyboardEvent, CSSProperties } from "react";
+import type { KeyboardEvent, CSSProperties, MouseEvent, Ref, RefObject } from "react";
 
 export interface DateSegmentInputProps {
   value: string;
@@ -29,6 +29,12 @@ export interface DateSegmentInputProps {
   standalone?: boolean;
   tabIndex?: number;
   disabled?: boolean;
+  readOnly?: boolean;
+  selectOnFocus?: boolean;
+  inputRef?: Ref<HTMLInputElement>;
+  onMouseDown?: (event: MouseEvent<HTMLDivElement>) => void;
+  onFocus?: () => void;
+  onKeyDown?: (event: KeyboardEvent<HTMLInputElement>) => void;
 }
 
 function daysInMonth(mo: number, y: number): number {
@@ -81,6 +87,7 @@ function focusPrev(from: HTMLElement | null) {
 
 export function DateSegmentInput({
   value, onChange, onNavigate, style, className, standalone = false, tabIndex, disabled,
+  readOnly = false, selectOnFocus = true, inputRef, onMouseDown, onFocus, onKeyDown,
 }: DateSegmentInputProps) {
   const [dd,   setDd]   = useState("");
   const [mm,   setMm]   = useState("");
@@ -98,6 +105,11 @@ export function DateSegmentInput({
   const allFilled = dd.length === 2 && mm.length === 2 && yyyy.length === 4;
   const isError   = allFilled && !build(dd, mm, yyyy);
 
+  const focusSegment = (ref: RefObject<HTMLInputElement | null>) => {
+    ref.current?.focus();
+    if (selectOnFocus && !readOnly) ref.current?.select();
+  };
+
   const emit = (d: string, m: string, y: string) => {
     if (!d && !m && !y) { onChange(""); return; }
     const iso = build(d, m, y);
@@ -108,17 +120,19 @@ export function DateSegmentInput({
   const onDdChange = (raw: string) => {
     const v = raw.replace(/\D/g, "").slice(0, 2);
     setDd(v);
-    if (v.length === 2) { mmRef.current?.focus(); mmRef.current?.select(); }
+    if (v.length === 2) focusSegment(mmRef);
     emit(v, mm, yyyy);
   };
 
   const onDdKey = (e: KeyboardEvent<HTMLInputElement>) => {
+    onKeyDown?.(e);
+    if (e.defaultPrevented) return;
     if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault(); mmRef.current?.focus(); mmRef.current?.select();
+      e.preventDefault(); focusSegment(mmRef);
     } else if (e.key === "Enter" && e.shiftKey) {
       e.preventDefault(); focusPrev(ddRef.current);
     } else if (e.key === "ArrowLeft") {
-      e.preventDefault(); mmRef.current?.focus(); mmRef.current?.select();
+      e.preventDefault(); focusSegment(mmRef);
     }
   };
 
@@ -127,22 +141,24 @@ export function DateSegmentInput({
     const v = raw.replace(/\D/g, "").slice(0, 2);
     setMm(v);
     if (v.length === 2 && +v >= 1 && +v <= 12) {
-      yyyyRef.current?.focus(); yyyyRef.current?.select();
+      focusSegment(yyyyRef);
     }
     emit(dd, v, yyyy);
   };
 
   const onMmKey = (e: KeyboardEvent<HTMLInputElement>) => {
+    onKeyDown?.(e);
+    if (e.defaultPrevented) return;
     if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault(); yyyyRef.current?.focus(); yyyyRef.current?.select();
+      e.preventDefault(); focusSegment(yyyyRef);
     } else if (e.key === "Enter" && e.shiftKey) {
-      e.preventDefault(); ddRef.current?.focus(); ddRef.current?.select();
+      e.preventDefault(); focusSegment(ddRef);
     } else if (e.key === "ArrowRight") {
-      e.preventDefault(); ddRef.current?.focus(); ddRef.current?.select();
+      e.preventDefault(); focusSegment(ddRef);
     } else if (e.key === "ArrowLeft") {
-      e.preventDefault(); yyyyRef.current?.focus(); yyyyRef.current?.select();
+      e.preventDefault(); focusSegment(yyyyRef);
     } else if (e.key === "Backspace" && mm === "") {
-      e.preventDefault(); ddRef.current?.focus(); ddRef.current?.select();
+      e.preventDefault(); focusSegment(ddRef);
     }
   };
 
@@ -155,14 +171,16 @@ export function DateSegmentInput({
   };
 
   const onYyyyKey = (e: KeyboardEvent<HTMLInputElement>) => {
+    onKeyDown?.(e);
+    if (e.defaultPrevented) return;
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault(); onNavigate ? onNavigate("next") : focusNext(yyyyRef.current);
     } else if (e.key === "Enter" && e.shiftKey) {
-      e.preventDefault(); onNavigate ? onNavigate("previous") : (mmRef.current?.focus(), mmRef.current?.select());
+      e.preventDefault(); onNavigate ? onNavigate("previous") : focusSegment(mmRef);
     } else if (e.key === "ArrowRight") {
-      e.preventDefault(); mmRef.current?.focus(); mmRef.current?.select();
+      e.preventDefault(); focusSegment(mmRef);
     } else if (e.key === "Backspace" && yyyy === "") {
-      e.preventDefault(); mmRef.current?.focus(); mmRef.current?.select();
+      e.preventDefault(); focusSegment(mmRef);
     }
   };
 
@@ -179,6 +197,7 @@ export function DateSegmentInput({
     <div
       dir="ltr"
       className={className}
+      onMouseDown={onMouseDown}
       data-nav-internal="true"
       data-no-desktop-field
       title={isError ? "تاريخ غير صحيح" : undefined}
@@ -198,15 +217,20 @@ export function DateSegmentInput({
         CSS order  : YYYY(1) - sep(2) - MM(3) - sep(4) - DD(5)  ← العرض البصري
       */}
       <input
-        ref={ddRef}
+         ref={element => {
+           ddRef.current = element;
+           if (typeof inputRef === "function") inputRef(element);
+           else if (inputRef && "current" in inputRef) inputRef.current = element;
+         }}
         value={dd}
         onChange={e => onDdChange(e.target.value)}
-        onKeyDown={onDdKey}
-        onFocus={e => e.target.select()}
+         onKeyDown={onDdKey}
+         onFocus={e => { if (selectOnFocus && !readOnly) e.currentTarget.select(); onFocus?.(); }}
         placeholder="DD"
         maxLength={2}
         inputMode="numeric"
         disabled={disabled}
+         readOnly={readOnly}
         tabIndex={tabIndex}
         style={{ ...seg, width: 20, order: 5 }}
       />
@@ -214,12 +238,13 @@ export function DateSegmentInput({
         ref={mmRef}
         value={mm}
         onChange={e => onMmChange(e.target.value)}
-        onKeyDown={onMmKey}
-        onFocus={e => e.target.select()}
+         onKeyDown={onMmKey}
+         onFocus={e => { if (selectOnFocus && !readOnly) e.currentTarget.select(); onFocus?.(); }}
         placeholder="MM"
         maxLength={2}
         inputMode="numeric"
         disabled={disabled}
+         readOnly={readOnly}
         tabIndex={tabIndex !== undefined ? -1 : undefined}
         style={{ ...seg, width: 20, order: 3 }}
       />
@@ -227,12 +252,13 @@ export function DateSegmentInput({
         ref={yyyyRef}
         value={yyyy}
         onChange={e => onYyyyChange(e.target.value)}
-        onKeyDown={onYyyyKey}
-        onFocus={e => e.target.select()}
+         onKeyDown={onYyyyKey}
+         onFocus={e => { if (selectOnFocus && !readOnly) e.currentTarget.select(); onFocus?.(); }}
         placeholder="YYYY"
         maxLength={4}
         inputMode="numeric"
         disabled={disabled}
+         readOnly={readOnly}
         tabIndex={tabIndex !== undefined ? -1 : undefined}
         style={{ ...seg, width: 34, order: 1 }}
       />

@@ -14,6 +14,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { eq, sql } from 'drizzle-orm';
 import process from 'process';
+import { APP_VERSION } from '../app-version.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..', '..', '..');
@@ -22,8 +23,8 @@ const ROOT = path.resolve(__dirname, '..', '..', '..');
 function getAppVersion(): string {
   try {
     const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf-8'));
-    return pkg.version ?? '1.0.0';
-  } catch { return '1.0.0'; }
+    return pkg.version ?? APP_VERSION;
+  } catch { return APP_VERSION; }
 }
 
 // ── Build Info — يُقرأ من dist/build-info.json الذي يُكتب وقت البناء ─────────
@@ -185,8 +186,9 @@ export const setupRouter = router({
 
       logger.info('setup', 'first-run wizard started');
 
-      // إنشاء المؤسسة — وضع تجريبي (trial) 30 يومًا
-      const trialExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      // إنشاء المؤسسة — وضع تجريبي لمدة 3 أشهر تقويمية
+      const trialExpiry = new Date();
+      trialExpiry.setMonth(trialExpiry.getMonth() + 3);
       const [org] = await db.insert(organizations).values({
         code:             'TRIAL',
         name:             input.company.name,

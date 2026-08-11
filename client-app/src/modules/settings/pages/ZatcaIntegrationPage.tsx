@@ -15,6 +15,8 @@ type ZatcaTab = "settings" | "monitor" | "invoices" | "logs" | "errors" | "xmlch
 // ─── مساعدات العرض ────────────────────────────────────────────────────────────
 const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> = {
   not_submitted: { label: "لم تُرسَل",    color: "#6b7280", bg: "#f3f4f6" },
+  reporting_pending: { label: "تم الإصدار — بانتظار الإبلاغ", color: "#2563eb", bg: "#dbeafe" },
+  clearance_pending: { label: "تم الإصدار — بانتظار التخليص", color: "#2563eb", bg: "#dbeafe" },
   pending:       { label: "في الانتظار",  color: "#d97706", bg: "#fef3c7" },
   cleared:       { label: "مُخلَّصة",     color: "#16a34a", bg: "#dcfce7" },
   reported:      { label: "مُبلَّغة",     color: "#0ea5e9", bg: "#e0f2fe" },
@@ -176,21 +178,21 @@ function ZatcaSettings() {
         </div>
         <div style={grp}>
           <label style={lbl}>السجل التجاري</label>
-          <input style={fld} value={cfg.crNumber ?? ""} onChange={e => set("crNumber", e.target.value)} placeholder="10XXXXXXXX" readOnly={!isAdmin} />
+          <input style={fld} value={cfg.commercialReg ?? ""} onChange={e => set("commercialReg", e.target.value)} placeholder="10XXXXXXXX" readOnly={!isAdmin} />
         </div>
         <div style={grp}>
           <label style={lbl}>اسم المنشأة (عربي)</label>
-          <input style={fld} value={cfg.businessName ?? ""} onChange={e => set("businessName", e.target.value)} readOnly={!isAdmin} />
+          <input style={fld} value={cfg.legalName ?? ""} onChange={e => set("legalName", e.target.value)} readOnly={!isAdmin} />
         </div>
         <div style={grp}>
           <label style={lbl}>اسم المنشأة (إنجليزي)</label>
-          <input style={{ ...fld, direction: "ltr" }} value={cfg.businessNameEn ?? ""} onChange={e => set("businessNameEn", e.target.value)} readOnly={!isAdmin} />
+          <input style={{ ...fld, direction: "ltr" }} value={cfg.englishName ?? ""} onChange={e => set("englishName", e.target.value)} readOnly={!isAdmin} />
         </div>
 
         {/* العنوان */}
         <SectionTitle icon="📍" title="عنوان المنشأة" />
         <div style={grp}><label style={lbl}>رقم المبنى</label><input style={fld} value={cfg.buildingNumber ?? ""} onChange={e => set("buildingNumber", e.target.value)} readOnly={!isAdmin} /></div>
-        <div style={grp}><label style={lbl}>اسم الشارع</label><input style={fld} value={cfg.streetName ?? ""} onChange={e => set("streetName", e.target.value)} readOnly={!isAdmin} /></div>
+        <div style={grp}><label style={lbl}>اسم الشارع</label><input style={fld} value={cfg.street ?? ""} onChange={e => set("street", e.target.value)} readOnly={!isAdmin} /></div>
         <div style={grp}><label style={lbl}>الحي</label><input style={fld} value={cfg.district ?? ""} onChange={e => set("district", e.target.value)} readOnly={!isAdmin} /></div>
         <div style={grp}><label style={lbl}>المدينة</label><input style={fld} value={cfg.city ?? ""} onChange={e => set("city", e.target.value)} readOnly={!isAdmin} /></div>
         <div style={grp}><label style={lbl}>الرمز البريدي</label><input style={fld} value={cfg.postalCode ?? ""} onChange={e => set("postalCode", e.target.value)} readOnly={!isAdmin} /></div>
@@ -237,10 +239,15 @@ function ZatcaSettings() {
               <label style={lbl}>Secret Key (المفتاح السري)</label>
               <input type="password" style={{ ...fld, direction: "ltr", fontFamily: "monospace", fontSize: 11 }} value={cfg.secretKey ?? ""} onChange={e => set("secretKey", e.target.value)} placeholder="••••••••••••••••" />
             </div>
-            <div style={{ gridColumn: "1 / -1", ...grp }}>
-              <label style={lbl}>رابط API الهيئة</label>
-              <input style={{ ...fld, direction: "ltr", fontSize: 11 }} value={cfg.apiBaseUrl ?? ""} onChange={e => set("apiBaseUrl", e.target.value)} />
-            </div>
+             <div style={{ gridColumn: "1 / -1", ...grp }}>
+               <label style={lbl}>رابط API الهيئة الرسمي (مشتق من البيئة)</label>
+               <input
+                 style={{ ...fld, direction: "ltr", fontSize: 11, background: "#f8fafc", color: "#475569" }}
+                 value={cfg.apiBaseUrl ?? ""}
+                 readOnly
+                 aria-readonly="true"
+               />
+             </div>
             <SectionTitle icon="🛡️" title="معلومات الشهادة" />
             <div style={grp}>
               <label style={lbl}>رقم تسلسل الشهادة</label>
@@ -456,6 +463,9 @@ function ZatcaInvoices() {
             {rows.length === 0 ? (
               <tr><td colSpan={13} style={{ textAlign: "center", padding: 30, color: "#9ca3af" }}>لا توجد فواتير</td></tr>
             ) : rows.map((inv, i) => {
+              const responseText = typeof inv.zatcaResponse === "string"
+                ? inv.zatcaResponse
+                : JSON.stringify(inv.zatcaResponse ?? "");
               const resp = inv.zatcaResponse as any;
               const clearance = resp?.clearanceStatus ?? "—";
               const reporting = resp?.reportingStatus ?? "—";
@@ -498,8 +508,8 @@ function ZatcaInvoices() {
                           XML
                         </button>
                       )}
-                      {inv.zatcaResponse && (
-                        <button onClick={() => setResponseModal(inv.zatcaResponse)}
+                      {responseText !== "" && (
+                       <button onClick={() => setResponseModal(responseText)}
                           style={{ height: 20, padding: "0 7px", background: "#f3e8ff", color: "#7c3aed", border: "1px solid #7c3aed", borderRadius: 3, fontSize: 9, fontWeight: 700, cursor: "pointer" }}>
                           JSON
                         </button>

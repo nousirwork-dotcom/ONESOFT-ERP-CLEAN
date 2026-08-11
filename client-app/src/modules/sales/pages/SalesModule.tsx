@@ -7,6 +7,8 @@ import CustomerFormDialog from "@/shared/components/CustomerFormDialog";
 import SalesInvoicePageNew from "./SalesInvoicePage";
 import SalesQuotation from "./SalesQuotation";
 import SalesReturnPage from "./SalesReturnPage";
+import SalesCreditNotePage from "./SalesCreditNotePage";
+import SalesDebitNotePage from "./SalesDebitNotePage";
 import SalesQuotePage from "./SalesQuotePage";
 import SalesOrderPage from "./SalesOrderPage";
 import { useTabManager } from "@/core/contexts/TabManagerContext";
@@ -16,6 +18,7 @@ import {
   DollarSign, Receipt, Plus, Search,
   Printer, CheckCircle, RefreshCw, ArrowRight, Filter,
   Bell, Activity, X,
+  Clock,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/core/ui/card";
 import { Button } from "@/core/ui/button";
@@ -47,6 +50,7 @@ export const menuSections = [
       { id: "sales-invoice",    label: "فاتورة مبيعات",      icon: Receipt,      path: "/sales/invoice" },
       { id: "sales-return",     label: "مردود المبيعات",      icon: RotateCcw,    path: "/sales/return" },
       { id: "credit-note",      label: "إشعار دائن",          icon: FileText,     path: "/sales/credit-note" },
+      { id: "debit-note",       label: "إشعار مدين",          icon: DollarSign,  path: "/sales/debit-note" },
       { id: "quotation",        label: "عرض سعر مبيعات",     icon: Tag,          path: "/sales/quotation" },
       { id: "sales-order",      label: "أمر بيع",             icon: ClipboardList,path: "/sales/order" },
       { id: "delivery-order",   label: "أمر تسليم مبيعات",   icon: ArrowRight,   path: "/sales/delivery" },
@@ -720,7 +724,7 @@ function CustomersPage() {
   const [search,     setSearch]    = useState("");
   const [dialogOpen, setDialog]    = useState(false);
   const [editData,   setEditData]  = useState<any>(null);
-  const { data: customers, isLoading, refetch } = trpc.customers.list.useQuery({});
+  const { data: customers, isLoading, refetch } = trpc.customers.list.useQuery();
 
   const openCreate = () => { setEditData(null); setDialog(true); };
   const openEdit   = (c: any) => { setEditData(c); setDialog(true); };
@@ -2650,8 +2654,9 @@ function SalesContent({ activeId, onSelect, settings, onSettingsChange }: {
     case "overview":              return <SalesOverview onSelect={onSelect} settings={settings} onSettingsChange={onSettingsChange} />;
     case "all-transactions":      return <SalesTransactionsView />;
     case "sales-invoice":         return <SalesInvoiceListView />;
-    case "sales-return":          return <ComingSoon title="مردود المبيعات" />;
-    case "credit-note":           return <ComingSoon title="إشعار دائن" />;
+    case "sales-return":          return <SalesReturnPage />;
+    case "credit-note":           return <SalesCreditNotePage />;
+    case "debit-note":            return <SalesDebitNotePage />;
     case "quotation":             return <SalesQuotation />;
     case "sales-order":           return <ComingSoon title="أمر بيع" />;
     case "delivery-order":        return <DeliveryOrderPage />;
@@ -2664,7 +2669,7 @@ function SalesContent({ activeId, onSelect, settings, onSettingsChange }: {
     case "sales-totals-reports":   return <SalesTotalsReports />;
     case "sales-invoices-report":  return <SalesInvoicesReport />;
     case "sales-items-reports":    return <ComingSoon title="تقارير أصناف المبيعات" />;
-    default:                      return <SalesOverview onSelect={onSelect} />;
+    default:                      return <SalesOverview onSelect={onSelect} settings={settings} onSettingsChange={onSettingsChange} />;
   }
 }
 
@@ -2672,7 +2677,8 @@ function SalesContent({ activeId, onSelect, settings, onSettingsChange }: {
 export function SalesTransactionsTab()  { return <div className="h-full flex flex-col" dir="rtl" style={{ height: "100%" }}><SalesTransactionsView /></div>; }
 export function SalesInvoiceTab()       { return <div className="h-full flex flex-col" dir="rtl" style={{ height: "100%" }}><SalesInvoiceListView /></div>; }
 export function SalesReturnTab()        { return <div className="h-full flex flex-col" dir="rtl" style={{ height: "100%" }}><SalesReturnPage /></div>; }
-export function SalesCreditNoteTab()    { return <div className="h-full overflow-auto p-5" dir="rtl"><ComingSoon title="إشعار دائن" /></div>; }
+export function SalesCreditNoteTab()    { return <div className="h-full flex flex-col" dir="rtl" style={{ height: "100%" }}><SalesCreditNotePage /></div>; }
+export function SalesDebitNoteTab()     { return <div className="h-full flex flex-col" dir="rtl" style={{ height: "100%" }}><SalesDebitNotePage /></div>; }
 export function SalesQuotationTab()     { return <div className="h-full flex flex-col" dir="rtl" style={{ height: "100%" }}><SalesQuotePage /></div>; }
 export function SalesOrderTab()         { return <div className="h-full flex flex-col" dir="rtl" style={{ height: "100%" }}><SalesOrderPage /></div>; }
 export function SalesDeliveryTab()      { return <div className="h-full overflow-auto p-5" dir="rtl"><DeliveryOrderPage /></div>; }

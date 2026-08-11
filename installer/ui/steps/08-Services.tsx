@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useInstallerStore } from '../store/installer.store';
 import type { ProgressEvent } from '../../core/types';
+import { APP_VERSION } from '../../core/version';
 
 const LEVEL_COLOR: Record<string, string> = {
   info: '#374151', success: '#15803D', warning: '#D97706',
@@ -53,7 +54,6 @@ export default function Step09Services() {
     setDbError(null);
 
     try {
-      const databaseUrl = getDatabaseUrl();
       const adminOpts = {
         host: dbOpts.host, port: dbOpts.port,
         database: 'postgres', user: dbOpts.user, password: dbOpts.password,
@@ -90,21 +90,22 @@ export default function Step09Services() {
       const paths        = buildPaths();
 
       // بناء DATABASE_URL لمستخدم التطبيق (onesoft_app) — يختلف عن adminOpts
-      const appDatabaseUrl = [
+      let runtimePassword = dbOpts.password;
+      let appDatabaseUrl = [
         'postgresql://onesoft_app',
-        `:${encodeURIComponent(dbOpts.password)}`,
+        `:${encodeURIComponent(runtimePassword)}`,
         `@${dbOpts.host}:${dbOpts.port}/${dbOpts.database}`,
       ].join('');
 
       // ── دالة مساعدة لبناء كائن الإعدادات ─────────────────────────────────
       const buildConfig = (backendPort = 3000, frontendPort = 5000) => ({
-        version: '1.0.0', configVersion: 4,
+        version: APP_VERSION, configVersion: 4,
         deploymentType, accessModes, databaseMode, machineRole, connectivityMode,
         licensingMode, updateChannel, backupPolicy, telemetry,
         database: {
           host: dbOpts.host, port: dbOpts.port,
           name: dbOpts.database, user: 'onesoft_app',
-          password: dbOpts.password, poolMin: 2, poolMax: 10,
+           password: runtimePassword, poolMin: 2, poolMax: 10,
         },
         server: { backendPort, frontendPort, host: '0.0.0.0', allowedOrigins: ['localhost'] },
         paths,
@@ -115,13 +116,19 @@ export default function Step09Services() {
 
       // 2. إنشاء قاعدة البيانات (فقط إذا كان النوع يتطلبها)
       if (needsLocalDb) {
-        await window.installer?.createDatabase?.({
+        const databaseResult = await window.installer?.createDatabase?.({
           adminOpts, dbName: dbOpts.database,
-          appUser: 'onesoft_app', appPassword: dbOpts.password,
+          appUser: 'onesoft_app', appPassword: '',
         });
+        runtimePassword = (databaseResult as { appPassword?: string } | undefined)?.appPassword ?? runtimePassword;
+        appDatabaseUrl = [
+          'postgresql://onesoft_app',
+          `:${encodeURIComponent(runtimePassword)}`,
+          `@${dbOpts.host}:${dbOpts.port}/${dbOpts.database}`,
+        ].join('');
 
         // 3. تشغيل Migrations
-        const migrateResult = await window.installer?.runMigrations?.(databaseUrl);
+        const migrateResult = await window.installer?.runMigrations?.(appDatabaseUrl);
         if (migrateResult && (migrateResult as any).failed) {
           setRunning(false);
           setInstallRunning(false);
@@ -137,7 +144,7 @@ export default function Step09Services() {
         } else {
           // 4. إنشاء المؤسسة
           const orgResult = await window.installer?.createOrganization?.({
-            databaseUrl, org: organization,
+              databaseUrl: appDatabaseUrl, org: organization,
           });
           if (orgResult?.id) {
             setOrgId(orgResult.id);
@@ -147,13 +154,13 @@ export default function Step09Services() {
           // 5. إنشاء المستخدم الأول
           if (orgResult?.id) {
             await window.installer?.createUser?.({
-              databaseUrl, orgId: orgResult.id, user: firstUser,
+              databaseUrl: appDatabaseUrl, orgId: orgResult.id, user: firstUser,
             });
           }
 
           // 6. بذر شجرة الحسابات (فقط لـ server و server+client — ليس branch)
           if (deploymentType !== 'branch') {
-            await window.installer?.seedAccounts?.(databaseUrl);
+            await window.installer?.seedAccounts?.(appDatabaseUrl);
           }
         }
       }
@@ -194,7 +201,7 @@ export default function Step09Services() {
       // 10. كتابة Registry — يظهر في إضافة/إزالة البرامج
       await (window as any).installer?.writeRegistry?.({
         installDir,
-        version:      '1.0.0',
+        version:      APP_VERSION,
         uninstallExe: `${installDir}\\OneSoft ERP Setup.exe`,
         iconPath:     `${installDir}\\resources\\icons\\onesoft.ico`,
         sizeKB:       150000,
@@ -202,7 +209,7 @@ export default function Step09Services() {
 
       // 11. تسجيل النسخة — لاكتشافها عند الترقية لاحقاً
       await (window as any).installer?.markInstalled?.({
-        version: '1.0.0',
+        version: APP_VERSION,
         installDir,
       });
 

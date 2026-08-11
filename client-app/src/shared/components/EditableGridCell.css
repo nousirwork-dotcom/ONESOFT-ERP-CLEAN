@@ -1,0 +1,31 @@
+.document-grid-cell {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  min-height: 26px;
+  border: 1.5px solid transparent;
+  box-sizing: border-box;
+}
+
+.document-grid-cell.is-selected {
+  outline: 1.5px solid #8a5a2b;
+  outline-offset: -1px;
+  background: rgba(138, 90, 43, 0.05);
+}
+
+.document-grid-cell.is-editing {
+  outline: 1.5px solid #8a5a2b;
+  outline-offset: -1px;
+  background: #fff;
+}
+
+.document-grid-cell.is-selected:not(.is-editing) input {
+  caret-color: transparent;
+}
+
+.document-grid-cell > input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+}

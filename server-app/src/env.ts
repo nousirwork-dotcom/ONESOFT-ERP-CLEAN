@@ -43,6 +43,41 @@ function loadConfig(): ConfigResult {
   const isProduction = (process.env['NODE_ENV'] ?? 'development') === 'production';
   const configExists = fs.existsSync(CONFIG_PATH);
 
+  // The installer may run a bundled, non-listening Foundation pass before
+  // starting the Windows service. This override is intentionally limited to
+  // that one-shot mode; normal production startup remains config-file-only.
+  const foundationOnlyUrl = process.env['ONESOFT_FOUNDATION_ONLY'] === '1'
+    ? process.env['ONESOFT_UPGRADE_DATABASE_URL']
+    : undefined;
+  if (foundationOnlyUrl) {
+    try {
+      const parsed = new URL(foundationOnlyUrl);
+      const user = decodeURIComponent(parsed.username);
+      const password = decodeURIComponent(parsed.password);
+      const dbName = decodeURIComponent(parsed.pathname.replace(/^\//, ''));
+      const pgPort = Number(parsed.port || 5432);
+      if (!user || !dbName || !Number.isInteger(pgPort)) throw new Error('invalid upgrade database URL');
+      return {
+        dbUrl: foundationOnlyUrl,
+        host: parsed.hostname,
+        pgPort,
+        user,
+        dbName,
+        passwordLen: password.length,
+        backendPort: 0,
+        frontendPort: 0,
+        source: 'ONESOFT_UPGRADE_DATABASE_URL',
+        urlSource: 'headless-foundation',
+        configExists,
+      };
+    } catch {
+      return {
+        ...devFallback(configExists),
+        fatal: 'ONESOFT_UPGRADE_DATABASE_URL is invalid',
+      };
+    }
+  }
+
   // ── 1. محاولة قراءة config.json ──────────────────────────────────────────
   if (configExists) {
     let raw: Record<string, unknown>;

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { eq, and, inArray, gte, lte, sql } from 'drizzle-orm';
+import { eq, and, inArray, gte, lte, sql, isNull } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
 import {
@@ -175,9 +175,15 @@ export const postingRouter = router({
         orgId,
         userId:          ctx.user.id,
         date:            invoice.invoiceDate,
-        description:     `ترحيل فاتورة مبيعات ${invoice.invoiceNumber}`,
+        description:     `ترحيل ${invoice.invoiceType === 'debit_note' ? 'إشعار مدين' : 'مستند مبيعات'} ${invoice.invoiceNumber}`,
         reference:       invoice.invoiceNumber,
-        sourceDocType:   'sales_invoice',
+        sourceDocType:   invoice.invoiceType === 'debit_note'
+          ? 'debit_note'
+          : invoice.invoiceType === 'credit_note'
+            ? 'credit_note'
+            : invoice.invoiceType === 'return'
+              ? 'sales_return'
+              : 'sales_invoice',
         sourceDocId:     invoice.id,
         sourceDocNumber: invoice.invoiceNumber,
         lines,
@@ -317,6 +323,10 @@ export const postingRouter = router({
         const lockedRow = locked.rows[0] as { id: number; isPosted: boolean } | undefined;
         if (!lockedRow) throw new Error('الفاتورة غير موجودة');
         if (lockedRow.isPosted) throw new Error('الفاتورة مرحَّلة مسبقاً');
+
+        if (invoice.invoiceType === 'debit_note') {
+          throw new Error('إشعار المدين مستند مبيعات صادر ولا يجوز ترحيله من مسار المشتريات');
+        }
 
         const issuance = parseIssuanceConfig(journal?.issuanceConfig);
         const outputJournal = await tx.query.documentJournals.findFirst({
@@ -530,21 +540,27 @@ export const postingRouter = router({
           })
           .where(and(eq(purchaseInvoices.id, input.invoiceId), eq(purchaseInvoices.orgId, orgId)));
 
+        const accountLinkCondition = invoice.postedJournalEntryId != null
+          ? eq(pendingAccountMovements.linkedJournalEntryId, invoice.postedJournalEntryId)
+          : isNull(pendingAccountMovements.linkedJournalEntryId);
         await tx.update(pendingAccountMovements)
           .set({ status: 'unposted', linkedJournalEntryId: null, linkedStockVoucherId: null, updatedAt: new Date() })
           .where(and(
             eq(pendingAccountMovements.orgId, orgId),
             eq(pendingAccountMovements.sourceDocType, 'purchase_invoice'),
             eq(pendingAccountMovements.sourceDocId, invoice.id),
-            eq(pendingAccountMovements.linkedJournalEntryId, invoice.postedJournalEntryId),
+            accountLinkCondition,
           ));
+        const stockLinkCondition = invoice.generatedStockJournalEntryId != null
+          ? eq(pendingStockMovements.linkedJournalEntryId, invoice.generatedStockJournalEntryId)
+          : isNull(pendingStockMovements.linkedJournalEntryId);
         await tx.update(pendingStockMovements)
           .set({ status: 'unposted', linkedJournalEntryId: null, linkedStockVoucherId: null, updatedAt: new Date() })
           .where(and(
             eq(pendingStockMovements.orgId, orgId),
             eq(pendingStockMovements.sourceDocType, 'purchase_invoice'),
             eq(pendingStockMovements.sourceDocId, invoice.id),
-            eq(pendingStockMovements.linkedJournalEntryId, invoice.generatedStockJournalEntryId),
+            stockLinkCondition,
           ));
 
         return { success: true };

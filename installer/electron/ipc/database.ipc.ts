@@ -1,5 +1,8 @@
 import type { IpcMain, BrowserWindow } from 'electron';
-import { ConnectionTester, DatabaseInstaller, MigrationRunner, ExistingDbDetector } from '../../core/index.js';
+import {
+  ConnectionTester, DatabaseInstaller, MigrationRunner, ExistingDbDetector,
+  MigrationCredentialStore, migrationConnection,
+} from '../../core/index.js';
 import { PostgreSQLFixer } from '../../core/requirements/fixers/PostgreSQLFixer.js';
 import type { DatabaseConnectionOptions } from '../../core/types.js';
 import * as path from 'path';
@@ -33,14 +36,18 @@ export function registerDatabaseIpc(ipc: IpcMain, win: BrowserWindow | null) {
     appPassword: string;
   }) => {
     const installer = new DatabaseInstaller();
-    await installer.createDatabase(opts.adminOpts, opts.dbName, opts.appUser, opts.appPassword, emit as any);
-    return { ok: true };
+    const result = await installer.createDatabase(opts.adminOpts, opts.dbName, opts.appUser, opts.appPassword, emit as any);
+    return { ok: true, ...result };
   });
 
   ipc.handle('database:migrate', async (_, databaseUrl: string) => {
     // ✅ المسار الصحيح داخل حزمة electron-builder: resources/app/server-app
     const serverAppPath = path.join(process.resourcesPath ?? process.cwd(), 'app', 'server-app');
     const runner = new MigrationRunner(serverAppPath);
-    return runner.runMigrations(databaseUrl, emit as any);
+    const credential = MigrationCredentialStore.load();
+    if (!credential) {
+      throw new Error('لا يوجد اعتماد ترحيل محمي صالح؛ لم يتم تنفيذ أي تغيير على قاعدة البيانات');
+    }
+    return runner.runMigrations(migrationConnection(credential), emit as any);
   });
 }

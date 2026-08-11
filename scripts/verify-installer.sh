@@ -6,11 +6,11 @@
 #   bash scripts/verify-installer.sh [win-unpacked-dir]
 #
 # مثال:
-#   bash scripts/verify-installer.sh electron-app/dist/win-unpacked
+#   bash scripts/verify-installer.sh installer/release/win-unpacked
 # ─────────────────────────────────────────────────────────────────────────────
 set -uo pipefail
 
-UNPACKED="${1:-electron-app/dist/win-unpacked}"
+UNPACKED="${1:-installer/release/win-unpacked}"
 RESOURCES="$UNPACKED/resources"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'

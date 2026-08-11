@@ -2,7 +2,8 @@ import { z } from 'zod';
 import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
 import { stockVouchers, stockVoucherItems, inventory, inventoryCounts, inventoryCountItems, products, documentJournals } from '../schema.js';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { TRPCError } from '@trpc/server';
+import { eq, and, desc, sql, inArray } from 'drizzle-orm';
 
 export const stockVouchersRouter = router({
   reserveNumber: protectedProcedure
@@ -73,7 +74,7 @@ export const stockVouchersRouter = router({
        receiverUserId: z.number().optional(),
       items: z.array(z.object({
         productId:   z.number(),
-        productName: z.string(),
+        productName: z.string().optional(),
         quantity:    z.string(),
         unitCost:    z.string(),
         totalCost:   z.string(),
@@ -85,46 +86,101 @@ export const stockVouchersRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const { items, ...rest } = input;
-      const totalCost = items.reduce((s, i) => s + Number(i.totalCost), 0).toFixed(4);
-
-       const last = await db.query.stockVouchers.findFirst({
-        where: eq(stockVouchers.orgId, ctx.user.orgId),
-        orderBy: [desc(stockVouchers.id)],
-      });
-      const num    = last ? parseInt(last.voucherNumber.replace(/\D/g, '') || '0') + 1 : 1;
-      const prefix = rest.type === 'receipt' ? 'SV-IN' : rest.type === 'issue' ? 'SV-OUT' : 'SV-TR';
-       const voucherNumber = rest.voucherNumber ?? `${prefix}-${String(num).padStart(4, '0')}`;
-
-      const [v] = await db.insert(stockVouchers).values({
-         ...rest, voucherDate: rest.voucherDate ? new Date(rest.voucherDate) : undefined,
-        orgId: ctx.user.orgId, userId: ctx.user.id, voucherNumber, totalCost, status: 'confirmed',
-      }).returning();
-
-      if (items.length > 0) {
-        await db.insert(stockVoucherItems).values(
-          items.map((item, i) => ({ ...item, voucherId: v.id, orgId: ctx.user.orgId, sortOrder: i }))
-        );
+      if (!items.length) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'أضف صنفًا واحدًا على الأقل' });
       }
 
-      // تحديث المخزون
-      for (const item of items) {
-        const existing = await db.query.inventory.findFirst({
-          where: and(eq(inventory.orgId, ctx.user.orgId), eq(inventory.productId, item.productId), eq(inventory.warehouseId, rest.warehouseId)),
+      return db.transaction(async (tx) => {
+        const productIds = [...new Set(items.map(item => item.productId))];
+        const productRows = await tx.query.products.findMany({
+          where: and(
+            eq(products.orgId, ctx.user.orgId),
+            eq(products.isActive, true),
+            inArray(products.id, productIds),
+          ),
         });
-        const qty  = Number(item.quantity);
-        const diff = rest.type === 'receipt' ? qty : -qty;
-        if (existing) {
-          await db.update(inventory)
-            .set({ quantity: String(Number(existing.quantity) + diff), updatedAt: new Date() })
-            .where(eq(inventory.id, existing.id));
-        } else {
-          await db.insert(inventory).values({
-            orgId: ctx.user.orgId, productId: item.productId,
-            warehouseId: rest.warehouseId, quantity: String(Math.max(0, diff)), avgCost: item.unitCost,
+        const productMap = new Map(productRows.map(product => [product.id, product]));
+        const validatedItems = items.map((item, index) => {
+          const product = productMap.get(item.productId);
+          const quantity = Number(item.quantity);
+          const unitCost = Number(item.unitCost);
+          if (!product) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: `الصنف في السطر ${index + 1} غير موجود` });
+          }
+          if (!Number.isFinite(quantity) || quantity <= 0) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: `الكمية يجب أن تكون أكبر من صفر في السطر ${index + 1}` });
+          }
+          if (!Number.isFinite(unitCost) || unitCost < 0) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: `سعر الوحدة غير صحيح في السطر ${index + 1}` });
+          }
+          const submittedCode = item.productCode?.trim();
+          const acceptedCodes = [product.code, product.barcode].filter(Boolean).map(String);
+          if (submittedCode && !acceptedCodes.includes(submittedCode)) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: `كود الصنف لا يطابق الصنف في السطر ${index + 1}` });
+          }
+          if (!(item.unit?.trim() || product.unit?.trim())) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: `الوحدة مفقودة في السطر ${index + 1}` });
+          }
+          return {
+            ...item,
+            productName: product.name,
+            productCode: product.code ?? product.barcode ?? submittedCode ?? undefined,
+            unit: item.unit?.trim() || product.unit || undefined,
+            quantity: quantity.toFixed(4),
+            unitCost: unitCost.toFixed(4),
+            totalCost: (quantity * unitCost).toFixed(4),
+          };
+        });
+        const totalCost = validatedItems.reduce((sum, item) => sum + Number(item.totalCost), 0).toFixed(4);
+
+        const last = await tx.query.stockVouchers.findFirst({
+          where: eq(stockVouchers.orgId, ctx.user.orgId),
+          orderBy: [desc(stockVouchers.id)],
+        });
+        const num = last ? parseInt(last.voucherNumber.replace(/\D/g, '') || '0') + 1 : 1;
+        const prefix = rest.type === 'receipt' ? 'SV-IN' : rest.type === 'issue' ? 'SV-OUT' : 'SV-TR';
+        const voucherNumber = rest.voucherNumber ?? `${prefix}-${String(num).padStart(4, '0')}`;
+
+        const [v] = await tx.insert(stockVouchers).values({
+          ...rest,
+          voucherDate: rest.voucherDate ? new Date(rest.voucherDate) : undefined,
+          orgId: ctx.user.orgId,
+          userId: ctx.user.id,
+          voucherNumber,
+          totalCost,
+          status: 'confirmed',
+        }).returning();
+
+        await tx.insert(stockVoucherItems).values(
+          validatedItems.map((item, i) => ({ ...item, voucherId: v.id, orgId: ctx.user.orgId, sortOrder: i })),
+        );
+
+        for (const item of validatedItems) {
+          const existing = await tx.query.inventory.findFirst({
+            where: and(
+              eq(inventory.orgId, ctx.user.orgId),
+              eq(inventory.productId, item.productId),
+              eq(inventory.warehouseId, rest.warehouseId),
+            ),
           });
+          const qty = Number(item.quantity);
+          const diff = rest.type === 'receipt' ? qty : -qty;
+          if (existing) {
+            await tx.update(inventory)
+              .set({ quantity: String(Number(existing.quantity) + diff), updatedAt: new Date() })
+              .where(eq(inventory.id, existing.id));
+          } else {
+            await tx.insert(inventory).values({
+              orgId: ctx.user.orgId,
+              productId: item.productId,
+              warehouseId: rest.warehouseId,
+              quantity: String(Math.max(0, diff)),
+              avgCost: item.unitCost,
+            });
+          }
         }
-      }
-      return v;
+        return v;
+      });
     }),
 });
 

@@ -37,6 +37,7 @@ export type LayoutElement = {
 export type TemplateLayout = {
   version:     1;
   type:        "config_v1";
+  renderer?:   string;
   paperSize:   string;
   orientation: "portrait" | "landscape";
   elements:    LayoutElement[];
@@ -478,6 +479,7 @@ export default function PrintTemplateDesigner({
 
   /* ── config_v1 state ── */
   const [cfgLanguage,  setCfgLanguage]  = useState<"ar"|"bilingual">(initialLayout?.language ?? "bilingual");
+  const [cfgRenderer,  setCfgRenderer]  = useState(initialLayout?.renderer);
   const [cfgColor,     setCfgColor]     = useState(initialLayout?.primaryColor ?? "#406B93");
   const [cfgColumns,   setCfgColumns]   = useState<TemplateLayout["columns"]>({ ...DEFAULT_COLS, ...initialLayout?.columns });
   const [cfgSections,  setCfgSections]  = useState<TemplateLayout["sections"]>({ ...DEFAULT_SECS, ...initialLayout?.sections });
@@ -540,6 +542,7 @@ export default function PrintTemplateDesigner({
       historyRef.current = [JSON.parse(JSON.stringify(els))];
       histIdxRef.current = 0;
       setHistTick(0);
+      setCfgRenderer(initialLayout.renderer);
       setCfgLanguage(initialLayout.language ?? "bilingual");
       setCfgColor(initialLayout.primaryColor ?? "#406B93");
       setCfgColumns({ ...DEFAULT_COLS, ...initialLayout.columns });
@@ -668,7 +671,7 @@ export default function PrintTemplateDesigner({
   /* ── Save ── */
   const handleSave = () => {
     const layout: TemplateLayout = {
-      version:1, type:"config_v1", paperSize, orientation: orientation as any,
+      version:1, type:"config_v1", renderer:cfgRenderer, paperSize, orientation: orientation as any,
       elements, language:cfgLanguage, primaryColor:cfgColor,
       columns:cfgColumns, sections:cfgSections, minRows:cfgMinRows,
     };
@@ -679,7 +682,7 @@ export default function PrintTemplateDesigner({
   /* ── Export JSON ── */
   const handleExport = () => {
     const layout: TemplateLayout = {
-      version:1, type:"config_v1", paperSize, orientation: orientation as any,
+      version:1, type:"config_v1", renderer:cfgRenderer, paperSize, orientation: orientation as any,
       elements, language:cfgLanguage, primaryColor:cfgColor,
       columns:cfgColumns, sections:cfgSections, minRows:cfgMinRows,
     };
@@ -701,6 +704,7 @@ export default function PrintTemplateDesigner({
         const layout = JSON.parse(ev.target?.result as string) as TemplateLayout;
         if (!layout.elements || !layout.type) throw new Error("ملف غير صالح");
         setElements(layout.elements);
+        setCfgRenderer(layout.renderer);
         setCfgLanguage(layout.language ?? "bilingual");
         setCfgColor(layout.primaryColor ?? "#406B93");
         setCfgColumns({ ...DEFAULT_COLS, ...layout.columns });
@@ -721,6 +725,7 @@ export default function PrintTemplateDesigner({
   const applyTemplate = (tpl: typeof READY_TEMPLATES[0]) => {
     if (!confirm(`سيتم استبدال التصميم الحالي بقالب «${tpl.name}». هل تريد المتابعة؟`)) return;
     setElements(tpl.layout.elements);
+    setCfgRenderer(tpl.layout.renderer);
     setCfgLanguage(tpl.layout.language);
     setCfgColor(tpl.layout.primaryColor);
     setCfgColumns({ ...DEFAULT_COLS, ...tpl.layout.columns });

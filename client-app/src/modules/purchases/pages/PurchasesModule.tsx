@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback } from "react";
 import { useUnsavedChangesGuard } from "@/core/hooks/useUnsavedChangesGuard";
 import { UnsavedChangesDialog } from "@/shared/components/UnsavedChangesDialog";
+import ProductLookupCell, { type ProductLookupOption } from "@/shared/components/ProductLookupCell";
 import { FoundationPolicyPanel } from "@/shared/components/FoundationPolicyPanel";
 import type { RecordPolicy } from "@/shared/components/FoundationPolicyPanel";
 import { DateSegmentInput } from "@/shared/components/DateSegmentInput";
@@ -40,7 +41,6 @@ export const menuSections = [
     children: [
       { id: "purchase-invoices", label: "فاتورة مشتريات",  icon: FileText,       path: "/purchases/invoices" },
       { id: "purchase-returns",  label: "مردود المشتريات", icon: RotateCcw,      path: "/purchases/returns" },
-      { id: "debit-note",        label: "إشعار مدين",      icon: DollarSign,     path: "/purchases/debit-note" },
       { id: "purchase-orders",   label: "امر شراء",        icon: ClipboardList,  path: "/purchases/orders" },
     ],
   },
@@ -124,8 +124,8 @@ function PurchasesMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id
 
 // ─── Overview ─────────────────────────────────────────────────────────────────
 function PurchasesOverview({ onSelect }: { onSelect: (id: MenuId) => void }) {
-  const listQuery = trpc.purchases.list.useQuery({});
-  const suppliersQuery = trpc.suppliers.list.useQuery({});
+  const listQuery = trpc.purchases.list.useQuery();
+  const suppliersQuery = trpc.suppliers.list.useQuery();
 
   const totalPurchases = listQuery.data?.reduce((s, i) => s + parseFloat(i.total ?? "0"), 0) ?? 0;
   const pendingCount = listQuery.data?.filter(i => i.status === "draft").length ?? 0;
@@ -229,7 +229,7 @@ function SupplierDirectoryPage() {
 }
 
 function SuppliersListPage() {
-  const listQuery = trpc.suppliers.list.useQuery({});
+  const listQuery = trpc.suppliers.list.useQuery();
 
   const [showForm, setShowForm] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
@@ -553,8 +553,8 @@ function SuppliersListPage() {
 type InvoiceType = "invoice" | "return" | "order";
 
 function PurchaseDocPage({ invoiceType }: { invoiceType: InvoiceType }) {
-  const suppliersQuery = trpc.suppliers.list.useQuery({});
-  const productsQuery = trpc.products.list.useQuery({});
+  const suppliersQuery = trpc.suppliers.list.useQuery();
+  const productsQuery = trpc.products.list.useQuery();
   const listQuery = trpc.purchases.list.useQuery({ invoiceType });
   const createMutation = trpc.purchases.create.useMutation({
     onSuccess: () => {
@@ -611,25 +611,22 @@ function PurchaseDocPage({ invoiceType }: { invoiceType: InvoiceType }) {
 
     const typeLabels: Record<InvoiceType, string> = { invoice: "PUR", return: "RET", order: "ORD" };
     createMutation.mutate({
-      invoice: {
         invoiceNumber: `${typeLabels[invoiceType]}-${Date.now()}`,
-        invoiceDate: new Date(form.invoiceDate),
+        invoiceDate: form.invoiceDate,
         supplierId: parseInt(form.supplierId),
         invoiceType,
         currency: form.currency,
-        basedOn: form.basedOn || undefined,
-        analyticCode: form.analyticCode || undefined,
+        basedOnNumber: form.basedOn || undefined,
         notes: form.notes || undefined,
         subtotal: totalAmount.toFixed(3),
         discountPercent: form.discountPercent,
         discountAmount: totalDiscount.toFixed(3),
         taxAmount: "0",
         total: totalAmount.toFixed(3),
-        paidCash: form.paidCash,
-        remaining: (totalAmount - parseFloat(form.paidCash)).toFixed(3),
-      },
-      items: validLines.map((l, i) => ({
-        lineNumber: i + 1,
+        paidAmount: form.paidCash,
+        remainingAmount: (totalAmount - parseFloat(form.paidCash)).toFixed(3),
+        items: validLines.map((l, i) => ({
+        sortOrder: i + 1,
         productId: l.productId ? parseInt(l.productId) : undefined,
         productName: l.productName,
         unit: l.unit || "قطعة",
@@ -806,21 +803,32 @@ function PurchaseDocPage({ invoiceType }: { invoiceType: InvoiceType }) {
                       <TableRow key={i} className="hover:bg-muted/5">
                         <TableCell className="text-center text-xs text-muted-foreground">{i + 1}</TableCell>
                         <TableCell>
-                          <Select value={line.productId} onValueChange={v => {
-                            const prod = productsQuery.data?.find(p => p.id.toString() === v);
-                            setLines(prev => prev.map((l, idx) => idx === i ? {
-                              ...l, productId: v,
-                              productName: prod?.name ?? l.productName,
-                              unitPrice: prod?.purchasePrice ?? l.unitPrice,
-                            } : l));
-                          }}>
-                            <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="اختر..." /></SelectTrigger>
-                            <SelectContent>
-                              {productsQuery.data?.map(p => (
-                                <SelectItem key={p.id} value={p.id.toString()}>{p.sku ?? p.id} - {p.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <ProductLookupCell
+                            value={line.productName}
+                            placeholder="كود أو اسم أو باركود..."
+                            products={(productsQuery.data ?? []).map(p => ({
+                              id: p.id,
+                              name: p.name,
+                              code: (p as any).sku ?? (p as any).code,
+                              barcode: (p as any).barcode,
+                              unit: (p as any).unit,
+                              purchasePrice: (p as any).purchasePrice ?? (p as any).costPrice,
+                            })) as ProductLookupOption[]}
+                            onChange={value => setLines(prev => prev.map((l, idx) => idx === i
+                              ? { ...l, productId: "", productName: value }
+                              : l))}
+                            onSelect={product => setLines(prev => prev.map((l, idx) => idx === i ? {
+                              ...l,
+                              productId: String(product.id),
+                              productName: product.name,
+                              unit: product.unit ?? l.unit,
+                              unitPrice: product.purchasePrice ?? product.costPrice ?? l.unitPrice,
+                            } : l))}
+                            displayValue={product => product.name}
+                            onInvalid={() => toast.error("الصنف غير موجود")}
+                            onNavigate={() => {}}
+                            className="h-7 text-xs"
+                          />
                         </TableCell>
                         <TableCell>
                           <Input value={line.productName} onChange={e => updateLine(i, "productName", e.target.value)} className="h-7 text-xs" />
@@ -920,8 +928,8 @@ function PurchaseDocPage({ invoiceType }: { invoiceType: InvoiceType }) {
 
 // ─── Reports ──────────────────────────────────────────────────────────────────
 function ReportBySupplier() {
-  const listQuery = trpc.purchases.list.useQuery({});
-  const suppliersQuery = trpc.suppliers.list.useQuery({});
+  const listQuery = trpc.purchases.list.useQuery();
+  const suppliersQuery = trpc.suppliers.list.useQuery();
 
   const bySupplier = useMemo(() => {
     const map: Record<string, { name: string; count: number; total: number }> = {};
@@ -1071,7 +1079,6 @@ function PurchasesContent({ activeId, onSelect }: { activeId: MenuId; onSelect: 
     case "overview":           return <PurchasesOverview onSelect={onSelect} />;
     case "purchase-invoices":  return <PurchaseInvoicePage />;
     case "purchase-returns":   return <PurchaseReturnPage />;
-    case "debit-note":         return <ComingSoon label="إشعار مدين" />;
     case "purchase-orders":    return <PurchaseOrderPage />;
     case "suppliers-list":     return <SupplierDirectoryPage />;
     case "supplier-groups":    return <SupplierGroupsPage />;

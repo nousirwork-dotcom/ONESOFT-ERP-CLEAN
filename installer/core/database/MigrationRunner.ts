@@ -14,8 +14,8 @@ function quoteIdent(id: string): string {
  * لا يعتمد على pnpm أو drizzle-kit أو أي أداة dev على جهاز العميل
  *
  * الترتيب:
- *   1. base_schema.sql  — ينشئ الجداول الأساسية الـ 30 (IF NOT EXISTS)
- *   2. journal entries  — ALTER TABLE / CREATE TABLE التدريجية (0000-0012)
+ *   1. base_schema.sql  — يُطبَّق على قاعدة فارغة فقط
+ *   2. journal entries  — ALTER TABLE / CREATE TABLE التدريجية
  */
 export class MigrationRunner {
   constructor(private readonly serverAppPath: string) {}
@@ -64,9 +64,22 @@ export class MigrationRunner {
     try {
       const client = await pool.connect();
       try {
-        // ── STEP 1: تطبيق base_schema.sql (ينشئ الجداول الأساسية) ────────────
+        // The migrator is allowed to LOGIN, but all OneSoft objects must be
+        // owned by the NOLOGIN schema-owner role. SET ROLE makes every DDL
+        // statement below execute as that owner without granting SUPERUSER to
+        // either the runtime or migrator login.
+        await client.query('SET ROLE "onesoft_schema_owner"');
+
+        // ── STEP 1: تطبيق base_schema.sql على قاعدة فارغة فقط ───────────────
+        // لا يجوز إعادة تشغيل الـbaseline على قاعدة عميل موجودة؛ بعض الجداول
+        // التاريخية تُنشأ في migration 0002، كما أن شكل الـbaseline قد يتغير
+        // بين الإصدارات. هذا يطابق auto-migrate في الخادم.
+        const orgCheckBeforeBase = await client.query(
+          `SELECT to_regclass('public.organizations') AS tbl`,
+        );
+        const databaseAlreadyInitialized = orgCheckBeforeBase.rows[0]?.tbl !== null;
         const baseSchemaFile = path.join(drizzleDir, 'base_schema.sql');
-        if (fs.existsSync(baseSchemaFile)) {
+        if (!databaseAlreadyInitialized && fs.existsSync(baseSchemaFile)) {
           emit({ level: 'info', message: 'تطبيق base_schema.sql (الجداول الأساسية)...', timestamp: now() });
           const baseSql = fs.readFileSync(baseSchemaFile, 'utf-8');
           try {
@@ -75,11 +88,23 @@ export class MigrationRunner {
           } catch (baseErr: unknown) {
             const msg = baseErr instanceof Error ? baseErr.message : String(baseErr);
             emit({ level: 'error', message: `❌ فشل base_schema.sql: ${msg}`, timestamp: now() });
-            return { applied, skipped, failed: `base_schema.sql: ${msg}` };
+            return {
+              applied,
+              skipped,
+              failed: `base_schema.sql: ${msg}`,
+              failedMigration: 'base_schema.sql',
+            };
           }
-        } else {
+        } else if (!databaseAlreadyInitialized) {
           emit({ level: 'error', message: `base_schema.sql غير موجود في: ${drizzleDir}`, timestamp: now() });
-          return { applied, skipped, failed: 'base_schema.sql not found' };
+          return {
+            applied,
+            skipped,
+            failed: 'base_schema.sql not found',
+            failedMigration: 'base_schema.sql',
+          };
+        } else {
+          emit({ level: 'info', message: 'قاعدة موجودة — تخطي base_schema.sql للحفاظ على بيانات العميل', timestamp: now() });
         }
 
         // ── STEP 2: التحقق من وجود جدول organizations ─────────────────────────
@@ -90,7 +115,12 @@ export class MigrationRunner {
         if (!orgExists) {
           const msg = 'The database schema was not created successfully (organizations table missing).';
           emit({ level: 'error', message: msg, timestamp: now() });
-          return { applied, skipped, failed: msg };
+          return {
+            applied,
+            skipped,
+            failed: msg,
+            failedMigration: 'schema-check',
+          };
         }
         emit({ level: 'success', message: '✅ جدول organizations موجود', timestamp: now() });
 
@@ -102,6 +132,42 @@ export class MigrationRunner {
             applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
           )
         `);
+
+        // تثبيتات OneSoft القديمة كانت تملك ختم _schema_version قبل إنشاء
+        // ledger. عند ترقية مثل هذه القاعدة نعيد بناء البادئة المنجزة فقط،
+        // ولا نسمح للختم بتجاوز SQL غير مسجل. بعد أول سجل يصبح الـledger
+        // مصدر الحقيقة الوحيد.
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS _schema_version (
+            id         INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+            version    TEXT NOT NULL,
+            stamped_at TIMESTAMP NOT NULL DEFAULT NOW()
+          )
+        `);
+        const ledgerCount = await client.query<{ count: string }>(
+          'SELECT COUNT(*)::text AS count FROM __drizzle_migrations',
+        );
+        const stampedVersion = await client.query<{ version: string }>(
+          'SELECT version FROM _schema_version WHERE id = 1',
+        );
+        const stampedTag = stampedVersion.rows[0]?.version ?? null;
+        const ledgerWasEmpty = Number(ledgerCount.rows[0]?.count ?? 0) === 0;
+        const stampedIndex = stampedTag
+          ? entries.findIndex((entry) => entry.tag === stampedTag)
+          : -1;
+        if (ledgerWasEmpty && stampedIndex >= 0) {
+          for (const entry of entries.slice(0, stampedIndex + 1)) {
+            await client.query(
+              'INSERT INTO __drizzle_migrations (tag) VALUES ($1) ON CONFLICT (tag) DO NOTHING',
+              [entry.tag],
+            );
+          }
+          emit({
+            level: 'info',
+            message: `تمت استعادة ${stampedIndex + 1} migration من ختم الإصدار القديم`,
+            timestamp: now(),
+          });
+        }
 
         // ── STEP 4: تطبيق Journal migrations بالترتيب ─────────────────────────
         emit({ level: 'info', message: `تطبيق ${entries.length} migration من الـ journal...`, timestamp: now() });
@@ -140,7 +206,12 @@ export class MigrationRunner {
             await client.query('ROLLBACK');
             const msg = sqlErr instanceof Error ? sqlErr.message : String(sqlErr);
             emit({ level: 'error', message: `❌ فشل ${entry.tag}: ${msg}`, timestamp: now() });
-            return { applied, skipped, failed: msg };
+            return {
+              applied,
+              skipped,
+              failed: msg,
+              failedMigration: entry.tag,
+            };
           }
         }
 
@@ -151,7 +222,12 @@ export class MigrationRunner {
         if (finalCheck.rows[0]?.tbl === null) {
           const msg = 'The database schema was not created successfully.';
           emit({ level: 'error', message: msg, timestamp: now() });
-          return { applied, skipped, failed: msg };
+          return {
+            applied,
+            skipped,
+            failed: msg,
+            failedMigration: 'schema-check',
+          };
         }
 
         // ── STEP 6: ختم _schema_version ─────────────────────────────────────
@@ -163,14 +239,6 @@ export class MigrationRunner {
         if (entries.length > 0) {
           const latestVersion = entries[entries.length - 1]!.tag;
           emit({ level: 'info', message: `جارٍ ختم إصدار المخطط: ${latestVersion}...`, timestamp: now() });
-
-          await client.query(`
-            CREATE TABLE IF NOT EXISTS _schema_version (
-              id         INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
-              version    TEXT    NOT NULL,
-              stamped_at TIMESTAMP NOT NULL DEFAULT NOW()
-            )
-          `);
 
           // ── حماية دفاعية ──────────────────────────────────────────────────
           // لو الجدول موجود بالفعل من تجربة/نسخة أقدم (بأعمدة ناقصة)،
@@ -197,42 +265,6 @@ export class MigrationRunner {
           emit({
             level: 'error',
             message: '⚠️ لا توجد migrations في الـ journal — تعذّر ختم _schema_version. سيفشل فحص المخطط عند بدء تشغيل الخادم.',
-            timestamp: now(),
-          });
-        }
-
-        // ── STEP 7: نقل ملكية الجداول لحساب التشغيل (onesoft_app) ──────────
-        // سبب حرج: هذا الاتصال يعمل بحساب المدير (postgres عادة)، فكل جدول
-        // يُنشأ هنا يصبح مملوكاً لحساب المدير. لكن server-app وقت التشغيل
-        // الفعلي يتصل بحساب أقل صلاحية (onesoft_app) — وPostgreSQL لا يسمح
-        // بتعديل تركيب جدول (ALTER TABLE) إلا لمالكه أو لمستخدم Superuser.
-        // بدون هذه الخطوة، أي محاولة تعديل مستقبلية (تحديث أو إصلاح ذاتي من
-        // auto-migrate.ts) تفشل بخطأ "must be owner of table ...".
-        emit({ level: 'info', message: 'جارٍ نقل ملكية الجداول لحساب التشغيل (onesoft_app)...', timestamp: now() });
-        try {
-          const APP_DB_USER = 'onesoft_app';
-          const tablesRes = await client.query(
-            `SELECT tablename FROM pg_tables WHERE schemaname = 'public'`
-          );
-          for (const row of tablesRes.rows) {
-            await client.query(`ALTER TABLE public.${quoteIdent(row.tablename)} OWNER TO ${quoteIdent(APP_DB_USER)}`);
-          }
-          const seqRes = await client.query(
-            `SELECT sequencename FROM pg_sequences WHERE schemaname = 'public'`
-          );
-          for (const row of seqRes.rows) {
-            await client.query(`ALTER SEQUENCE public.${quoteIdent(row.sequencename)} OWNER TO ${quoteIdent(APP_DB_USER)}`);
-          }
-          emit({
-            level: 'success',
-            message: `✅ تم نقل ملكية ${tablesRes.rows.length} جدول و${seqRes.rows.length} sequence إلى ${APP_DB_USER}`,
-            timestamp: now(),
-          });
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          emit({
-            level: 'warning',
-            message: `⚠️ تعذّر نقل ملكية بعض الجداول إلى onesoft_app: ${msg} — قد تحدث أخطاء صلاحيات لاحقاً عند أي تحديث`,
             timestamp: now(),
           });
         }

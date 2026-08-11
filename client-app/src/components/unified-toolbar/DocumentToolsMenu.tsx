@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { X } from "lucide-react";
 import type { ToolbarToolItem } from "./toolbar.types";
 import { t } from "@/shared/lib/translations";
@@ -173,22 +173,22 @@ export function useDocumentToolsMenu({
   const [dialog, setDialog] = useState<DialogState>(null);
   const [reason, setReason] = useState("");
 
-  const close = () => {
+  const close = useCallback(() => {
     setDialog(null);
     setReason("");
-  };
-  const open = (action: DocumentToolsAction) => {
+  }, []);
+  const open = useCallback((action: DocumentToolsAction) => {
     setDialog(action);
     onAction?.(action);
-  };
+  }, [onAction]);
 
-  const disabledReason = (action: DocumentToolsAction) => {
+  const disabledReason = useCallback((action: DocumentToolsAction) => {
     if (!isSaved) return isAr ? "يجب حفظ المستند أولًا" : "Save the document first";
     if (action === "post" && isPosted) return isAr ? "المستند مرحّل بالفعل" : "Document is already posted";
     if (action === "unpost" && !isPosted) return isAr ? "المستند غير مرحّل" : "Document is not posted";
     if (action === "suspend" && isPosted) return isAr ? "لا يمكن تعليق مستند مرحّل" : "A posted document cannot be suspended";
     return undefined;
-  };
+  }, [isAr, isPosted, isSaved]);
 
   const toolTranslationKeys = {
     reverse: "tbReverse",
@@ -202,14 +202,17 @@ export function useDocumentToolsMenu({
   const toolIds: DocumentToolsAction[] = [
     "reverse", "post", "unpost", "suspend", "related", "activity", "attachments",
   ];
-  const tools: ToolbarToolItem[] = toolIds.map((id, index) => ({
-    id,
-    label: t(lang, toolTranslationKeys[id]),
-    enabled: !disabledReason(id as DocumentToolsAction),
-    disabledReason: disabledReason(id as DocumentToolsAction),
-    separatorBefore: index === 4,
-    onClick: () => open(id as DocumentToolsAction),
-  }));
+  const tools = useMemo<ToolbarToolItem[]>(
+    () => toolIds.map((id, index) => ({
+      id,
+      label: t(lang, toolTranslationKeys[id]),
+      enabled: !disabledReason(id),
+      disabledReason: disabledReason(id),
+      separatorBefore: index === 4,
+      onClick: () => open(id),
+    })),
+    [disabledReason, lang, open],
+  );
 
   const renderDialog = () => {
     if (!dialog) return null;

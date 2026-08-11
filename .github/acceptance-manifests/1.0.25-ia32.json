@@ -1,0 +1,15 @@
+{
+  "latestVersion": "1.0.25",
+  "minSupportedVersion": "1.0.0",
+  "mandatory": true,
+  "messageAr": "قبول ترقية Windows إلى 1.0.25",
+  "messageEn": "Windows upgrade acceptance to 1.0.25",
+  "releaseNotes": [
+    "Manifest قبول مستقل عن manifest الإنتاج",
+    "تحديث ia32 عبر updater الحقيقي"
+  ],
+  "downloadUrl": "https://github.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/releases/download/v1.0.25/OneSoftSetup-1.0.25-ia32.exe",
+  "fileSizeBytes": 76518561,
+  "sha512": "LHdRbDKG93+Ocbmn68jGybC3Kc/DFwvZa217n26ICbf9YlBkMhtaFTvJnqG1gYA/Av2FHpJ5GXc8e1DvIaY2Og==",
+  "publishedAt": "2026-07-29T13:04:01.422Z"
+}

@@ -33,6 +33,8 @@ const REVIEW_LABELS: Record<string, { ar: string; en: string; color: string }> =
   has_diff:     { ar: "فارق", en: "Diff", color: "bg-amber-100 text-amber-700" },
   needs_doc:    { ar: "يحتاج وثائق", en: "Needs docs", color: "bg-blue-100 text-blue-700" },
 };
+type AccountCategory = "assets" | "liabilities" | "equity" | "revenue" | "expenses";
+type ReviewStatus = "not_reviewed" | "reviewed" | "has_diff" | "needs_doc";
 
 function toNum(v: string | number | null | undefined): number {
   if (v == null) return 0;
@@ -73,7 +75,7 @@ export default function ReTrialBalanceFullPage() {
   const [showDel, setShowDel] = useState<number | null>(null);
 
   const [showAcctForm, setShowAcctForm] = useState(false);
-  const [acctForm, setAcctForm] = useState({ code: "", name: "", category: "assets" as string, nature: "debit" as "debit" | "credit", sortOrder: 0, parentId: null as number | null });
+  const [acctForm, setAcctForm] = useState({ code: "", name: "", category: "assets" as AccountCategory, nature: "debit" as "debit" | "credit", sortOrder: 0, parentId: null as number | null });
   const [acctEditId, setAcctEditId] = useState<number | null>(null);
 
   const [taxForm, setTaxForm] = useState<any>({});
@@ -221,7 +223,7 @@ export default function ReTrialBalanceFullPage() {
                   <td className="px-2 py-1.5 border text-center" style={{ borderColor: C.border }}>
                     <div className="flex items-center justify-center gap-1">
                       <Button size="sm" variant="ghost" onClick={() => { setSelTB(item.id); setView("detail"); setDraftEntries({}); setUnsaved(false); }}><Eye className="w-3.5 h-3.5" /></Button>
-                      {canEdit && <Button size="sm" variant="ghost" onClick={() => { setEditId(item.id); setForm({ name: item.name, periodLabel: item.periodLabel ?? "", fromDate: item.fromDate ? item.fromDate.slice(0, 10) : "", toDate: item.toDate ? item.toDate.slice(0, 10) : "", projectId: item.projectId, scope: item.scope, notes: item.notes ?? "" }); setShowForm(true); }}><Pencil className="w-3.5 h-3.5" /></Button>}
+                      {canEdit && <Button size="sm" variant="ghost" onClick={() => { setEditId(item.id); setForm({ name: item.name, periodLabel: item.periodLabel ?? "", fromDate: item.fromDate ? new Date(item.fromDate).toISOString().slice(0, 10) : "", toDate: item.toDate ? new Date(item.toDate).toISOString().slice(0, 10) : "", projectId: item.projectId, scope: item.scope, notes: item.notes ?? "" }); setShowForm(true); }}><Pencil className="w-3.5 h-3.5" /></Button>}
                       {canDelete && <Button size="sm" variant="ghost" className="text-red-600 hover:text-red-700" onClick={() => setShowDel(item.id)}><Trash2 className="w-3.5 h-3.5" /></Button>}
                     </div>
                   </td>
@@ -352,7 +354,7 @@ export default function ReTrialBalanceFullPage() {
           </div>
           <div className="flex items-center gap-1 flex-wrap">
             {unsaved && <span className="text-xs text-amber-600 font-medium px-2 py-0.5 rounded bg-amber-50 border border-amber-200">{ar ? "تغييرات غير محفوظة" : "Unsaved changes"}</span>}
-            <Button size="sm" variant="outline" onClick={handleSaveEntries} disabled={!unsaved || saveEntries.isLoading}><Save className="w-3.5 h-3.5 mr-1" />{ar ? "حفظ" : "Save"}</Button>
+            <Button size="sm" variant="outline" onClick={handleSaveEntries} disabled={!unsaved || saveEntries.isPending}><Save className="w-3.5 h-3.5 mr-1" />{ar ? "حفظ" : "Save"}</Button>
             <Button size="sm" variant="outline" className="text-indigo-700 hover:bg-indigo-50 border-indigo-200" onClick={() => setView("detail")}><Eye className="w-3.5 h-3.5 mr-1" />{ar ? "مطالعة" : "Browse"}</Button>
             <Button size="sm" variant="outline" onClick={() => setView("taxReturn")}><Receipt className="w-3.5 h-3.5 mr-1" />{ar ? "الضريبة" : "Tax"}</Button>
             <Button size="sm" variant="outline" onClick={() => setView("review")}><ClipboardCheck className="w-3.5 h-3.5 mr-1" />{ar ? "المراجعة" : "Review"}</Button>
@@ -536,7 +538,7 @@ export default function ReTrialBalanceFullPage() {
                   <td className="px-2 py-1 border text-center" style={{ borderColor: C.border }}>
                     {canChart && (
                       <div className="flex items-center justify-center gap-1">
-                        <Button size="sm" variant="ghost" onClick={() => { setAcctEditId(a.id); setAcctForm({ code: a.code, name: a.name, category: a.category, nature: a.nature as "debit" | "credit", sortOrder: a.sortOrder, parentId: a.parentId }); setShowAcctForm(true); }}><Pencil className="w-3.5 h-3.5" /></Button>
+                <Button size="sm" variant="ghost" onClick={() => { setAcctEditId(a.id); setAcctForm({ code: a.code, name: a.name, category: a.category as AccountCategory, nature: a.nature as "debit" | "credit", sortOrder: a.sortOrder, parentId: a.parentId }); setShowAcctForm(true); }}><Pencil className="w-3.5 h-3.5" /></Button>
                         {!a.isSystem && <Button size="sm" variant="ghost" className="text-red-600" onClick={() => { if (confirm(ar ? "تأكيد الحذف؟" : "Confirm delete?")) deleteAcct.mutate(a.id); }}><Trash2 className="w-3.5 h-3.5" /></Button>}
                       </div>
                     )}
@@ -560,7 +562,7 @@ export default function ReTrialBalanceFullPage() {
                 <input value={acctForm.name} onChange={(e) => setAcctForm({ ...acctForm, name: e.target.value })} className="w-full text-xs border rounded px-2 py-1" style={{ borderColor: C.border }} />
                 <div className="grid grid-cols-2 gap-2">
                   <div><label className="text-xs font-medium text-gray-600">{ar ? "التصنيف" : "Category"}</label>
-                    <select value={acctForm.category} onChange={(e) => setAcctForm({ ...acctForm, category: e.target.value })} className="w-full text-xs border rounded px-2 py-1" style={{ borderColor: C.border }}>{Object.entries(CAT_LABELS).map(([k, v]) => <option key={k} value={k}>{v[lang]}</option>)}</select></div>
+                    <select value={acctForm.category} onChange={(e) => setAcctForm({ ...acctForm, category: e.target.value as AccountCategory })} className="w-full text-xs border rounded px-2 py-1" style={{ borderColor: C.border }}>{Object.entries(CAT_LABELS).map(([k, v]) => <option key={k} value={k}>{v[lang]}</option>)}</select></div>
                   <div><label className="text-xs font-medium text-gray-600">{ar ? "الطبيعة" : "Nature"}</label>
                     <select value={acctForm.nature} onChange={(e) => setAcctForm({ ...acctForm, nature: e.target.value as "debit" | "credit" })} className="w-full text-xs border rounded px-2 py-1" style={{ borderColor: C.border }}><option value="debit">{ar ? "دائن" : "Debit"}</option><option value="credit">{ar ? "دائن" : "Credit"}</option></select></div>
                 </div>
@@ -634,7 +636,7 @@ export default function ReTrialBalanceFullPage() {
           </div>
           <div className="flex items-center gap-2">
             {allReviewed && <span className="text-xs px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 font-medium">{ar ? "جميع الحسابات مراجعة ✓" : "All accounts reviewed ✓"}</span>}
-            {canReview && <Button size="sm" onClick={() => { const payload = items.map(i => ({ accountId: i.account.id, reviewStatus: i.reviewStatus })); saveReview.mutate({ trialBalanceId: selTB!, reviews: payload }); }}><Save className="w-3.5 h-3.5 mr-1" />{ar ? "حفظ الحالة" : "Save"}</Button>}
+            {canReview && <Button size="sm" onClick={() => { const payload = items.map(i => ({ accountId: i.account.id, reviewStatus: i.reviewStatus as ReviewStatus })); saveReview.mutate({ trialBalanceId: selTB!, reviews: payload }); }}><Save className="w-3.5 h-3.5 mr-1" />{ar ? "حفظ الحالة" : "Save"}</Button>}
           </div>
         </div>
         <div className="flex-1 overflow-auto p-2">

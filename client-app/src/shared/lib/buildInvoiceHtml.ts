@@ -24,6 +24,8 @@ export type InvLayoutElement = {
 /* ══════════════ Config type ══════════════ */
 export type InvDocTemplateConfig = {
   type:         "config_v1";
+  /** Optional renderer registered by the template itself, not by document type. */
+  renderer?:    string;
   language:     "ar" | "bilingual";
   primaryColor: string;
   columns: {
@@ -46,6 +48,9 @@ export interface InvPrintData {
   invoiceNumber: string;
   invoiceDate:   string;
   invoiceTime?:  string;
+  deliveryDate?: string;
+  warehouseName?: string;
+  branchName?: string;
   customerName:  string;
   customerCode?: string;
   customerTaxNumber?:   string;
@@ -90,6 +95,490 @@ export interface InvPrintData {
   sellerAdditionalNo?: string;
   sellerAddress?:      string;
   sellerPhone?:        string;
+  sellerEmail?:        string;
+}
+
+function escapeHtml(value: unknown): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function formatPrintNumber(value: number | string, fractionDigits = 2): string {
+  const number = typeof value === "number" ? value : parseFloat(value);
+  if (!Number.isFinite(number)) return "0.00";
+  return number.toLocaleString("en-US", {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  });
+}
+
+function formatPrintDate(value?: string): string {
+  return value ? escapeHtml(value) : "—";
+}
+
+function salesInvoiceCss(): string {
+  return `
+    :root {
+      --invoice-brown: #5a2d06;
+      --invoice-brown-dark: #3e1d03;
+      --invoice-beige: #f8f1e7;
+      --invoice-beige-soft: #fcf8f3;
+      --invoice-border: #d8c4aa;
+      --invoice-text: #2b2119;
+      --invoice-white: #ffffff;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      background: #ece8e1;
+      color: var(--invoice-text);
+      font-family: Tahoma, Arial, sans-serif;
+    }
+    .invoiceScreen { min-height: 100vh; padding: 20px; }
+    .salesInvoice {
+      width: 297mm;
+      min-height: 210mm;
+      margin: 0 auto;
+      padding: 8mm;
+      direction: rtl;
+      overflow: hidden;
+      background: var(--invoice-white);
+      border: 1.5px solid var(--invoice-brown);
+      border-radius: 7px;
+      box-shadow: 0 10px 35px rgba(65, 38, 13, 0.12);
+    }
+    .topHeader {
+      display: grid;
+      grid-template-columns: 1fr 150px 1fr;
+      gap: 28px;
+      align-items: center;
+      min-height: 98px;
+    }
+    .companyBlock h1 {
+      margin: 0 0 9px;
+      color: var(--invoice-brown-dark);
+      font-size: 22px;
+      font-weight: 800;
+    }
+    .companyBlock p { margin: 3px 0; font-size: 11px; line-height: 1.35; }
+    .companyBlock--en { text-align: left; }
+    .companyBlock--ar { text-align: right; }
+    .companyBlock--ar h1 { font-size: 25px; }
+    .logoBox { display: flex; align-items: center; justify-content: center; }
+    .logoBox img { width: 140px; height: 92px; object-fit: contain; }
+    .titleBar {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 16px;
+      align-items: center;
+      margin: 6px 0 10px;
+    }
+    .titleBar__line { height: 1px; background: var(--invoice-brown); }
+    .titleBadge {
+      width: 230px;
+      overflow: hidden;
+      text-align: center;
+      border: 1px solid #b56f3c;
+      border-radius: 13px;
+    }
+    .titleBadge h2 {
+      margin: 0;
+      padding: 5px 18px;
+      color: #fff;
+      background: linear-gradient(180deg, #663607 0%, #4a2403 100%);
+      font-size: 20px;
+      line-height: 1.25;
+    }
+    .titleBadge p {
+      margin: 0;
+      padding: 4px 18px;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 18px;
+      line-height: 1.2;
+    }
+    .metadata {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 45%;
+      margin-bottom: 9px;
+    }
+    .metaCard { overflow: hidden; border: 1px solid var(--invoice-border); border-radius: 10px; }
+    .metaRow {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      min-height: 30px;
+      align-items: center;
+      border-bottom: 1px solid #eadfce;
+      font-size: 11px;
+    }
+    .metaRow:last-child { border-bottom: 0; }
+    .metaRow > * {
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 5px 8px;
+      border-left: 1px solid #eee2d3;
+    }
+    .metaRow > *:last-child { border-left: 0; }
+    .metaLabel { font-weight: 700; }
+    .parties {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .partyCard {
+      overflow: hidden;
+      border: 1px solid var(--invoice-border);
+      border-radius: 9px;
+    }
+    .partyCard__header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 5px 12px;
+      color: #fff;
+      background: linear-gradient(180deg, #633407 0%, #4d2503 100%);
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .partyRow {
+      display: grid;
+      grid-template-columns: 150px 1fr 125px;
+      min-height: 23px;
+      border-bottom: 1px solid #eadfce;
+      font-size: 10px;
+    }
+    .partyRow:last-child { border-bottom: 0; }
+    .partyRow > * {
+      display: flex;
+      align-items: center;
+      padding: 3px 8px;
+      border-left: 1px solid #eee2d3;
+    }
+    .partyRow > *:last-child { border-left: 0; }
+    .partyRow__ar { justify-content: flex-start; }
+    .partyRow__value { justify-content: center; font-weight: 700; text-align: center; overflow: hidden; text-overflow: ellipsis; }
+    .partyRow__en { justify-content: flex-start; font-weight: 600; }
+    .itemsSection { margin-bottom: 11px; }
+    .itemsTable {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      table-layout: fixed;
+      overflow: hidden;
+      border: 1px solid var(--invoice-border);
+      border-radius: 9px;
+      font-size: 9px;
+    }
+    .itemsTable th, .itemsTable td {
+      padding: 5px 4px;
+      text-align: center;
+      border-left: 1px solid #d7b995;
+      border-bottom: 1px solid #d7b995;
+    }
+    .itemsTable th:last-child, .itemsTable td:last-child { border-left: 0; }
+    .itemsTable tbody tr:last-child td { border-bottom: 0; }
+    .itemsTable thead th {
+      height: 64px;
+      color: #fff;
+      background: linear-gradient(180deg, #6b3b0d 0%, #4b2504 100%);
+      vertical-align: middle;
+      font-weight: 800;
+    }
+    .itemsTable thead span, .itemsTable thead small { display: block; }
+    .itemsTable thead small { margin-top: 4px; font-size: 8px; font-weight: 600; }
+    .itemsTable th:nth-child(1) { width: 4%; }
+    .itemsTable th:nth-child(2) { width: 13%; }
+    .itemsTable th:nth-child(3) { width: 19%; }
+    .itemsTable th:nth-child(4) { width: 8%; }
+    .itemsTable th:nth-child(5) { width: 9%; }
+    .itemsTable th:nth-child(6) { width: 8%; }
+    .itemsTable th:nth-child(7) { width: 11%; }
+    .itemsTable th:nth-child(8) { width: 7%; }
+    .itemsTable th:nth-child(9) { width: 10%; }
+    .itemsTable th:nth-child(10) { width: 11%; }
+    .itemsTable tbody td { height: 29px; background: #fff; font-size: 10px; }
+    .itemNameCell { text-align: right !important; padding-right: 12px !important; }
+    .lowerArea {
+      display: grid;
+      grid-template-columns: 1.42fr 0.78fr 180px;
+      gap: 18px;
+      align-items: stretch;
+    }
+    .totalsBox { overflow: hidden; border: 1px solid var(--invoice-border); border-radius: 9px; }
+    .totalRow {
+      display: grid;
+      grid-template-columns: 1.7fr 1.05fr 130px;
+      min-height: 31px;
+      border-bottom: 1px solid #eadfce;
+      font-size: 10px;
+    }
+    .totalRow:last-child { border-bottom: 0; }
+    .totalRow > * {
+      display: flex;
+      align-items: center;
+      padding: 5px 10px;
+      border-left: 1px solid #eadfce;
+    }
+    .totalRow > *:last-child { border-left: 0; }
+    .totalRow strong { justify-content: center; font-size: 14px; }
+    .totalRow--grand {
+      color: #fff;
+      background: linear-gradient(180deg, #6b3b0d 0%, #4b2504 100%);
+      font-weight: 800;
+    }
+    .noteBox {
+      position: relative;
+      min-height: 154px;
+      padding: 22px 14px 10px;
+      border: 1px solid var(--invoice-border);
+      border-radius: 9px;
+      background: linear-gradient(180deg, #fffdf9 0%, #fbf4ea 100%);
+    }
+    .noteBox h3 {
+      position: absolute;
+      top: -10px;
+      right: 17px;
+      left: 17px;
+      margin: 0;
+      padding: 4px 10px;
+      color: #fff;
+      text-align: center;
+      background: linear-gradient(180deg, #6b3b0d 0%, #4b2504 100%);
+      border-radius: 7px;
+      font-size: 11px;
+    }
+    .noteBox p { margin: 3px 0; font-size: 10px; white-space: pre-wrap; }
+    .qrBox {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 154px;
+      padding: 9px;
+      border: 1px solid var(--invoice-border);
+      border-radius: 9px;
+      background: #fff;
+    }
+    .qrBox img {
+      width: 40mm;
+      height: 40mm;
+      display: block;
+      object-fit: contain;
+      image-rendering: pixelated;
+    }
+    .amountWords {
+      width: 76%;
+      margin: 14px auto 0;
+      padding: 8px 15px;
+      text-align: center;
+      border: 1px solid #ecdcc8;
+      border-radius: 7px;
+      background: #fdf8f1;
+      font-size: 12px;
+    }
+    @page { size: A4 landscape; margin: 0; }
+    @media (max-width: 1150px) { .invoiceScreen { overflow-x: auto; } }
+    @media print {
+      html, body { width: 297mm; min-height: 210mm; background: #fff; }
+      .invoiceScreen { min-height: auto; padding: 0; background: #fff; }
+      .salesInvoice {
+        width: 297mm;
+        min-height: 210mm;
+        margin: 0;
+        padding: 7mm;
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+      }
+    }
+  `;
+}
+
+function partyRowsHtml(rows: Array<[string, string, string]>): string {
+  return rows.map(([ar, value, en]) => `
+    <div class="partyRow">
+      <span class="partyRow__ar">${escapeHtml(ar)}</span>
+      <strong class="partyRow__value">${escapeHtml(value || "—")}</strong>
+      <span class="partyRow__en" dir="ltr">${escapeHtml(en)}</span>
+    </div>
+  `).join("");
+}
+
+function salesPartyCard(titleAr: string, titleEn: string, rows: Array<[string, string, string]>): string {
+  return `
+    <section class="partyCard">
+      <header class="partyCard__header">
+        <span>${escapeHtml(titleAr)}</span>
+        <span dir="ltr">${escapeHtml(titleEn)}</span>
+      </header>
+      <div class="partyCard__body">${partyRowsHtml(rows)}</div>
+    </section>
+  `;
+}
+
+function buildSalesInvoiceHtml(
+  data: InvPrintData,
+  qrDataUrl?: string,
+): string {
+  const sellerCountry = data.sellerCountry || "المملكة العربية السعودية";
+  const customerCountry = data.customerCountry || "السعودية";
+  const net = data.subtotal - data.discountTotal;
+  const sellerNameEn = data.sellerNameEn || data.sellerName;
+  const sellerAddress = data.sellerAddress || "";
+  const customerAddress = data.customerStreet || "";
+  const logoUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160">
+      <defs><pattern id="p" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(35)">
+        <line x1="0" y1="0" x2="0" y2="8" stroke="#e7dfca" stroke-width="2"/>
+      </pattern></defs>
+      <rect width="240" height="160" fill="url(#p)"/>
+      <path d="M120 18C69 18 34 46 34 82c0 38 50 58 86 70 36-12 86-32 86-70 0-36-35-64-86-64z" fill="#07933d"/>
+      <path d="M120 37c34 0 58 18 58 43 0 24-33 40-58 49-25-9-58-25-58-49 0-25 24-43 58-43z" fill="#fff"/>
+      <rect x="90" y="52" width="44" height="58" rx="4" fill="#07933d"/>
+      <rect x="98" y="60" width="28" height="16" fill="#fff"/>
+      <path d="M134 63h12c8 0 13 7 13 15v25c0 5 4 9 9 9s9-4 9-9V81" fill="none" stroke="#07933d" stroke-width="7" stroke-linecap="round"/>
+      <path d="M162 64l13 13" stroke="#07933d" stroke-width="7" stroke-linecap="round"/>
+    </svg>
+  `)}`;
+  const safeLines = data.lines.length > 0 ? data.lines : [{
+    productCode: "—", productName: "—", quantity: "0", unit: "",
+    unitPrice: "0", discountPct: "0", taxPct: "0", taxAmt: "0", total: "0",
+  }];
+  const lineRows = safeLines.map((line, index) => {
+    const qty = parseFloat(line.quantity) || 0;
+    const unitPrice = parseFloat(line.unitPrice) || 0;
+    const discountPct = parseFloat(line.discountPct) || 0;
+    const taxPct = parseFloat(line.taxPct) || 0;
+    const discount = unitPrice * qty * discountPct / 100;
+    const taxable = unitPrice * qty - discount;
+    const tax = parseFloat(line.taxAmt) || taxable * taxPct / 100;
+    const total = parseFloat(line.total) || taxable + tax;
+    return `
+      <tr>
+        <td>${index + 1}</td>
+        <td>${escapeHtml(line.productCode || "—")}</td>
+        <td class="itemNameCell">${escapeHtml(line.productName || "—")}</td>
+        <td>${escapeHtml(formatPrintNumber(qty, 2))}</td>
+        <td>${escapeHtml(formatPrintNumber(unitPrice, 4))}</td>
+        <td>${escapeHtml(formatPrintNumber(discount, 2))}</td>
+        <td>${escapeHtml(formatPrintNumber(taxable, 2))}</td>
+        <td>${escapeHtml(formatPrintNumber(taxPct, 0))}%</td>
+        <td>${escapeHtml(formatPrintNumber(tax, 2))}</td>
+        <td>${escapeHtml(formatPrintNumber(total, 2))}</td>
+      </tr>
+    `;
+  }).join("");
+  const note = data.notes?.trim() || "• 0";
+  const qr = qrDataUrl
+    ? `<img src="${escapeHtml(qrDataUrl)}" alt="ZATCA QR code" />`
+    : "";
+  const sellerRows: Array<[string, string, string]> = [
+    ["الاسم", data.sellerName, "Name"],
+    ["رقم المبنى", data.sellerBuildingNo || "—", "Building No"],
+    ["اسم الشارع", data.sellerStreet || sellerAddress || "—", "Street Name"],
+    ["سجل تجاري", data.sellerCommercialReg || "—", "Commercial Reg."],
+    ["المدينة", data.sellerCity || "—", "City"],
+    ["البلد", sellerCountry, "Country"],
+    ["رقم البريد", data.sellerPostalCode || "—", "Postal Code"],
+    ["رقم العنوان الإضافي", data.sellerAdditionalNo || "—", "Additional No"],
+    ["رقم تسجيل ضريبة القيمة المضافة", data.sellerTaxNumber, "VAT Number"],
+    ["المعرف أخرى", data.sellerPhone || "—", "Other ID"],
+  ];
+  const customerRows: Array<[string, string, string]> = [
+    ["الاسم", data.customerName, "Name"],
+    ["رقم المبنى", data.customerBuildingNo || "—", "Building No"],
+    ["اسم الشارع", data.customerStreet || customerAddress || "—", "Street Name"],
+    ["الحي", data.customerDistrict || "—", "District"],
+    ["المدينة", data.customerCity || "—", "City"],
+    ["البلد", customerCountry, "Country"],
+    ["رقم البريد", data.customerPostalCode || "—", "Postal Code"],
+    ["رقم العنوان الإضافي", data.customerAdditionalNo || "—", "Additional No"],
+    ["رقم تسجيل ضريبة القيمة المضافة", data.customerTaxNumber || "—", "VAT Number"],
+    ["المعرف أخرى", data.customerCode || "—", "Other ID"],
+  ];
+  const paymentText = data.paymentType === "cash" ? "نقداً" : data.paymentType === "credit" ? "آجل" : "جزئي";
+  return `<!DOCTYPE html>
+<html dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <title>فاتورة مبيعات ${escapeHtml(data.invoiceNumber)}</title>
+  <style>${salesInvoiceCss()}</style>
+</head>
+<body>
+  <div class="invoiceScreen">
+    <article class="salesInvoice" id="sales-invoice-print">
+      <header class="topHeader">
+        <section class="companyBlock companyBlock--en" dir="ltr">
+          <h1>${escapeHtml(sellerNameEn)}</h1>
+          ${data.sellerCity || sellerCountry ? `<p>📍 ${escapeHtml([data.sellerCity, sellerCountry].filter(Boolean).join(" - "))}</p>` : ""}
+          ${data.sellerPhone ? `<p>☎ ${escapeHtml(data.sellerPhone)}</p>` : ""}
+          ${data.sellerEmail ? `<p>✉ ${escapeHtml(data.sellerEmail)}</p>` : ""}
+        </section>
+        <div class="logoBox"><img src="${logoUrl}" alt="Company logo" /></div>
+        <section class="companyBlock companyBlock--ar"><h1>${escapeHtml(data.sellerName)}</h1></section>
+      </header>
+      <section class="titleBar">
+        <span class="titleBar__line"></span>
+        <div class="titleBadge"><h2>فاتورة مبيعات</h2><p>SALES INVOICE</p></div>
+        <span class="titleBar__line"></span>
+      </section>
+      <section class="metadata">
+        <div class="metaCard">
+          <div class="metaRow"><span class="metaLabel">رقم الفاتورة</span><strong>${escapeHtml(data.invoiceNumber)}</strong><span dir="ltr">Invoice No</span></div>
+          <div class="metaRow"><span class="metaLabel">مخزن</span><strong>${escapeHtml(data.warehouseName || data.branchName || "—")}</strong><span dir="ltr">Warehouse</span></div>
+          <div class="metaRow"><span class="metaLabel">بائع</span><strong>${escapeHtml(data.salesperson || "—")}</strong><span dir="ltr">Sales man</span></div>
+        </div>
+        <div class="metaCard">
+          <div class="metaRow"><span class="metaLabel">تاريخ التحرير</span><strong>${formatPrintDate(data.invoiceDate)}</strong><span dir="ltr">Issue Date</span></div>
+          <div class="metaRow"><span class="metaLabel">تاريخ التوريد</span><strong>${formatPrintDate(data.deliveryDate || data.invoiceDate)}</strong><span dir="ltr">Delivery Date</span></div>
+          <div class="metaRow"><span class="metaLabel">نوع السند</span><strong>${paymentText}</strong><span dir="ltr">Type</span></div>
+        </div>
+      </section>
+      <section class="parties">
+        ${salesPartyCard("العميل", "Customer", customerRows)}
+        ${salesPartyCard("المورد", "Seller", sellerRows)}
+      </section>
+      <section class="itemsSection">
+        <table class="itemsTable">
+          <thead><tr>
+            <th><span>م</span><small>No</small></th>
+            <th><span>رقم الصنف</span><small>Item Code</small></th>
+            <th class="itemNameHead"><span>تفاصيل السلع/خدمات</span><small>Item Name</small></th>
+            <th><span>كمية</span><small>Quantity</small></th>
+            <th><span>سعر الوحدة</span><small>Unit Price</small></th>
+            <th><span>خصومات</span><small>Discount</small></th>
+            <th><span>المبلغ الخاضع للضريبة</span><small>Taxable Amount</small></th>
+            <th><span>نسبة الضريبة</span><small>Tax Rate</small></th>
+            <th><span>مبلغ الضريبة</span><small>Tax Amount</small></th>
+            <th><span>المجموع شامل الضريبة</span><small>SubTotal Incl VAT</small></th>
+          </tr></thead>
+          <tbody>${lineRows}</tbody>
+        </table>
+      </section>
+      <section class="lowerArea">
+        <div class="totalsBox">
+          <div class="totalRow"><span>الإجمالي غير شامل ضريبة القيمة المضافة</span><span dir="ltr">Total (Excluding VAT)</span><strong>${escapeHtml(formatPrintNumber(data.subtotal))}</strong></div>
+          <div class="totalRow"><span>خصومات تخفيض</span><span dir="ltr">Discount</span><strong>${escapeHtml(formatPrintNumber(data.discountTotal))}</strong></div>
+          <div class="totalRow"><span>الصافي غير شامل ضريبة القيمة المضافة</span><span dir="ltr">Net (Excluding VAT)</span><strong>${escapeHtml(formatPrintNumber(net))}</strong></div>
+          <div class="totalRow"><span>مجموعة ضريبة القيمة المضافة</span><span dir="ltr">VAT Total</span><strong>${escapeHtml(formatPrintNumber(data.taxTotal))}</strong></div>
+          <div class="totalRow totalRow--grand"><span>إجمالي المبلغ المستحق</span><span dir="ltr">Total Amount due</span><strong>${escapeHtml(formatPrintNumber(data.grandTotal))}</strong></div>
+        </div>
+        <div class="noteBox"><h3>ملاحظة</h3><p>${escapeHtml(note)}</p></div>
+        <div class="qrBox">${qr}</div>
+      </section>
+      <footer class="amountWords">${escapeHtml(toArabicWords(data.grandTotal, data.currency || "ريال سعودي"))}</footer>
+    </article>
+  </div>
+</body>
+</html>`;
 }
 
 /* ══════════════ Arabic words ══════════════ */
@@ -438,10 +927,19 @@ function buildPositionedHtml(
 
       case "qr":
         if (!qrDataUrl) return `<div style="${elStyle(el)}"></div>`;
-        return `<div style="${elStyle(el)};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.5mm">
-          <img src="${qrDataUrl}" style="max-width:${el.w-2}mm;max-height:${el.h-4}mm;object-fit:contain"/>
+        {
+          const qrMm = Math.max(1, Math.min(el.w - 2, el.h - 4));
+          const qrPx = Math.max(1, Math.round(qrMm * 3.7795));
+          return `<div style="${elStyle(el)};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.5mm">
+          <img
+            src="${qrDataUrl}"
+            width="${qrPx}"
+            height="${qrPx}"
+            style="width:${qrMm}mm;height:${qrMm}mm;object-fit:contain;image-rendering:pixelated;display:block"
+          />
           <span style="font-size:6pt;color:#888">${qrLabel}</span>
         </div>`;
+        }
 
       case "image":
         return `<div style="${elStyle(el)};display:flex;align-items:center;justify-content:center;opacity:0.3;font-size:${fs}pt;color:#999">شعار</div>`;
@@ -553,6 +1051,10 @@ export function buildInvoiceHtml(
   qrSize   = 100,
   docType  = "sales_invoice",
 ): string {
+  if (cfg?.renderer === "sales_invoice_reference_v1") {
+    return buildSalesInvoiceHtml(data, qrDataUrl);
+  }
+
   const C = cfg ?? DEFAULT_CFG;
 
   /* ── Use positioned mode when elements are defined ── */
@@ -680,7 +1182,7 @@ export function buildInvoiceHtml(
 
   const qrHtml = qrDataUrl
     ? `<div style="display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px;border:1px solid #ddd;border-radius:3px;margin-left:8px">
-         <img src="${qrDataUrl}" width="${qrSize}" height="${qrSize}" style="display:block"/>
+         <img src="${qrDataUrl}" width="${qrSize}" height="${qrSize}" style="display:block;width:40mm;height:40mm;object-fit:contain;image-rendering:pixelated"/>
          <span style="font-size:7px;color:#888">${qrLabel}</span>
        </div>`
     : "";

@@ -25,13 +25,17 @@
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', async () => {
+          const isDev = "%MODE%" === "development";
           try {
             const regs = await navigator.serviceWorker.getRegistrations();
-            await Promise.all(regs.map(r => r.unregister()));
-            const keys = await caches.keys();
-            await Promise.all(keys.map(k => caches.delete(k)));
+            if (isDev) {
+              await Promise.all(regs.map(r => r.unregister()));
+              const keys = await caches.keys();
+              await Promise.all(keys.map(k => caches.delete(k)));
+            } else if (regs.length === 0) {
+              await navigator.serviceWorker.register('/sw.js');
+            }
           } catch (_) {}
-          navigator.serviceWorker.register('/sw.js').catch(() => {});
         });
       }
     </script>

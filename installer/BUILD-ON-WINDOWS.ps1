@@ -57,10 +57,11 @@ $Script:StartTime      = Get-Date
 # ---------------------------------------------------------------------------
 function Write-Banner {
     $line = '=' * 62
+    $version = (Get-Content "$PSScriptRoot\..\version.json" -Raw | ConvertFrom-Json).version
     Write-Host ''
     Write-Host $line                                                  -ForegroundColor Blue
     Write-Host '       OneSoft ERP  -  Professional Installer Build  ' -ForegroundColor Blue
-    Write-Host '                      Version 1.0.0                  ' -ForegroundColor Blue
+    Write-Host "                      Version $version                 " -ForegroundColor Blue
     Write-Host $line                                                  -ForegroundColor Blue
     Write-Host ''
 }
@@ -140,6 +141,16 @@ function Invoke-Pnpm {
         [string]   $Fix     = 'Run the command manually in that folder to see the full output.'
     )
     Invoke-Cmd -Exe 'pnpm' -ArgList $ArgList -WorkDir $WorkDir -OnFail $OnFail -Fix $Fix
+}
+
+function Invoke-Node {
+    param(
+        [string[]] $ArgList,
+        [string]   $WorkDir = '',
+        [string]   $OnFail  = '',
+        [string]   $Fix     = 'Run the Node command manually to see the full output.'
+    )
+    Invoke-Cmd -Exe 'node' -ArgList $ArgList -WorkDir $WorkDir -OnFail $OnFail -Fix $Fix
 }
 
 # ---------------------------------------------------------------------------
@@ -507,6 +518,11 @@ foreach ($item in @('dist','package.json','drizzle')) {
         Write-Info "  + $item"
     }
 }
+$FoundationSource = "$ProjectRoot\server-app\src\foundation-data.json"
+$FoundationDestination = "$AppRes\server-app\src\foundation-data.json"
+New-Item -ItemType Directory -Force -Path (Split-Path $FoundationDestination) | Out-Null
+Copy-Item $FoundationSource $FoundationDestination -Force
+Write-Ok 'foundation-data.json included'
 
 Write-Info 'Installing server-app production node_modules...'
 Invoke-Pnpm -ArgList @('install','--prod','--no-frozen-lockfile','--ignore-scripts') `
@@ -596,6 +612,33 @@ if (-not (Test-Path "$InstallerDir\dist-ui\index.html")) {
 Write-Ok 'React UI -> dist-ui'
 
 # ---------------------------------------------------------------------------
+# STEP 7.5 - Generate the atomic unified build manifest
+# ---------------------------------------------------------------------------
+Write-Info 'Generating unified build manifest...'
+Invoke-Node -ArgList @("$ProjectRoot\scripts\generate-unified-manifest.mjs") `
+            -WorkDir $ProjectRoot `
+            -OnFail  'Unified build manifest generation failed.' `
+            -Fix     "Check version.json, package versions, electron-builder.yml, and build outputs."
+Write-Ok 'Unified build manifest generated and copied to all outputs'
+
+$CriticalBundleFiles = @(
+    "$AppRes\server-app\dist\index.mjs",
+    "$AppRes\server-app\dist\build-manifest.json",
+    "$AppRes\server-app\src\foundation-data.json",
+    "$AppRes\server-app\drizzle\0092_repair_legacy_migration_drift.sql",
+    "$InstallerDir\dist-ui\build-manifest.json",
+    "$ProjectRoot\client-app\dist\build-manifest.json"
+)
+foreach ($CriticalFile in $CriticalBundleFiles) {
+    if (-not (Test-Path $CriticalFile)) {
+        Write-Fail -Stage $Script:StageLabel -Command 'package-content-check' `
+            -Reason "Critical package file missing: $CriticalFile" `
+            -Fix 'Rebuild server-app/client-app and assemble the application bundle again.'
+    }
+}
+Write-Ok "Critical package content verified ($($CriticalBundleFiles.Count) files)"
+
+# ---------------------------------------------------------------------------
 # STEP 8 - electron-builder -> Setup.exe
 # ---------------------------------------------------------------------------
 Write-Stage 8 'Packaging with electron-builder -> OneSoftSetup-<ver>.exe'
@@ -605,7 +648,7 @@ Write-Info 'Subsequent runs use the local cache and are much faster.'
 $env:GH_TOKEN   = ''
 $env:ELECTRON_MIRROR = 'https://npmmirror.com/mirrors/electron/'   # fallback mirror
 
-Invoke-Pnpm -ArgList @('exec','electron-builder','--win','--x64','--config','electron-builder.yml') `
+Invoke-Pnpm -ArgList @('exec','electron-builder','--win','--x64','--ia32','--config','electron-builder.yml') `
             -WorkDir $InstallerDir `
             -OnFail  'electron-builder failed to produce the installer.' `
             -Fix     @"

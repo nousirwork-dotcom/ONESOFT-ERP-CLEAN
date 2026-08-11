@@ -25,7 +25,7 @@ import {
   MessageSquare, Send, Bot, Mail, Eye, RefreshCw, Search, Check, X,
 } from "lucide-react";
 import QRCodeDisplay from "@/shared/components/QRCodeDisplay";
-import { generateQrContent, QR_SYSTEMS, CUSTOM_TEMPLATE_HELP, type QrSystem } from "@/shared/lib/qrUtils";
+import { decodeQrContent, generateQrContent, QR_SYSTEMS, CUSTOM_TEMPLATE_HELP, validateQrCompanyData, type QrSystem } from "@/shared/lib/qrUtils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/core/ui/card";
 import { Checkbox } from "@/core/ui/checkbox";
 import { Button } from "@/core/ui/button";
@@ -52,11 +52,20 @@ export const menuSections = [
       { id: "company-info",    label: "معلومات الشركة",         status: "done",    path: "/cfg/company" },
       { id: "currencies",      label: "العملات",               status: "done",    path: "/cfg/currencies" },
       { id: "taxes",           label: "الضرائب",               status: "done",    path: "/cfg/taxes" },
-      { id: "qr-settings",     label: "إعدادات QR Code",       status: "done",    path: "/cfg/qr-settings" },
       { id: "fiscal-periods",  label: "الفترات المحاسبية",     status: "done",    path: "/cfg/fiscal" },
       { id: "field-dictionary",label: "تعريف الحقول (Field Dictionary)", status: "done", path: "/cfg/field-dictionary" },
       { id: "payment-methods",  label: "وسائل الدفع",                      status: "done", path: "/cfg/payment-methods"  },
       { id: "system-branding",  label: "هوية النظام والألوان",             status: "done", path: "/cfg/branding"          },
+    ],
+  },
+  {
+    id: "electronic-invoicing-center",
+    label: "مركز الفوترة الإلكترونية",
+    color: "#D19C05",
+    emoji: "🏛️",
+    children: [
+      { id: "electronic-invoicing-qr", label: "إعداد QR Code", status: "done", path: "/cfg/e-invoicing-center/qr" },
+      { id: "electronic-invoicing-zatca", label: "إعدادات الربط مع هيئة الزكاة والضريبة والجمارك – السعودية", status: "done", path: "/cfg/e-invoicing-center/zatca" },
     ],
   },
   {
@@ -158,40 +167,6 @@ export const menuSections = [
     ],
   },
   {
-    id: "zatca-integration-center",
-    label: "مركز التكامل مع هيئة الزكاة والضريبة والجمارك",
-    color: "#D19C05",
-    emoji: "🏛️",
-    children: [
-      { id: "zatca-center-dashboard", label: "لوحة التحكم",                  status: "done",    path: "/cfg/zatca-center" },
-      { id: "zatca-center-env",       label: "إعدادات البيئة",               status: "done",    path: "/cfg/zatca-center" },
-      { id: "zatca-center-devices",   label: "إدارة الأجهزة (EGS)",           status: "missing", path: "/cfg/zatca-center" },
-      { id: "zatca-center-certs",     label: "إدارة الشهادات",               status: "partial", path: "/cfg/zatca-center" },
-      { id: "zatca-center-keys",      label: "مفاتيح التشفير",               status: "missing", path: "/cfg/zatca-center" },
-      { id: "zatca-center-xml",       label: "التحقق من XML",                status: "done",    path: "/cfg/zatca-center" },
-      { id: "zatca-center-csr",       label: "إنشاء CSR",                   status: "missing", path: "/cfg/zatca-center" },
-      { id: "zatca-center-register",  label: "تسجيل الجهاز",                 status: "missing", path: "/cfg/zatca-center" },
-      { id: "zatca-center-csid",      label: "إدارة CSID",                  status: "partial", path: "/cfg/zatca-center" },
-      { id: "zatca-center-test",      label: "اختبار الاتصال",               status: "done",    path: "/cfg/zatca-center" },
-      { id: "zatca-center-send",      label: "إرسال الفواتير",               status: "done",    path: "/cfg/zatca-center" },
-      { id: "zatca-center-oplogs",    label: "سجل الإرسال والاستقبال",        status: "done",    path: "/cfg/zatca-center" },
-      { id: "zatca-center-errlogs",   label: "سجل الأخطاء",                 status: "done",    path: "/cfg/zatca-center" },
-      { id: "zatca-center-diag",      label: "أدوات التشخيص",               status: "done",    path: "/cfg/zatca-center" },
-      { id: "zatca-center-reports",   label: "التقارير والإحصائيات",          status: "done",    path: "/cfg/zatca-center" },
-    ],
-  },
-  {
-    id: "gov-integrations",
-    label: "تكاملات حكومية أخرى",
-    color: "#16a34a",
-    emoji: "🏢",
-    children: [
-      { id: "zatca-config",   label: "إعدادات ZATCA (كلاسيك)",              status: "partial", path: "/cfg/zatca"      },
-      { id: "gosi-config",    label: "التأمينات الاجتماعية (GOSI)",          status: "missing", path: "/cfg/gosi"       },
-      { id: "gazt-config",    label: "الزكاة والدخل (GAZT)",                 status: "missing", path: "/cfg/gazt"       },
-    ],
-  },
-  {
     id: "hr-settings",
     label: "إعدادات أخرى",
     color: "#a855f7",
@@ -218,29 +193,48 @@ function StatusIcon({ status }: { status: string }) {
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 
 function SettingsMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id: MenuId) => void }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const activeItemRef = useRef<HTMLButtonElement>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({
     general: true,
+    "electronic-invoicing-center": true,
     loyalty: false,
     "user-management": false,
     approvals: false,
     notifications: false,
     system: false,
     messaging: false,
-    "gov-integrations": false,
     "hr-settings": false,
   });
   const toggle = (id: string) => setExpanded(p => ({ ...p, [id]: !p[id] }));
 
+  useEffect(() => {
+    activeItemRef.current?.scrollIntoView({ block: "nearest" });
+  }, [activeId]);
+
   return (
-    <nav className="w-64 shrink-0 border-l border-border bg-[#1a1a2e] overflow-y-auto flex flex-col">
-      <div className="px-4 py-3 border-b border-border/30">
-        <button onClick={() => onSelect("overview")}
-          className="w-full flex items-center justify-end gap-2 text-sm font-bold text-[#a855f7] hover:opacity-80 transition-opacity">
-          الإعدادات
-          <Settings className="w-4 h-4" />
-        </button>
+    <nav className={`${collapsed ? "w-12" : "w-56"} h-full min-h-0 shrink-0 border-l border-[#D8D3C8] bg-[#F2F0EC] overflow-hidden flex flex-col transition-[width] duration-200`}>
+      <div className={`${collapsed ? "px-1" : "px-3"} py-3 border-b border-[#D8D3C8]`}>
+        <div className={`flex items-center ${collapsed ? "justify-center" : "justify-between"} gap-2`}>
+          {!collapsed && (
+            <button onClick={() => onSelect("overview")}
+              className="flex-1 flex items-center justify-end gap-2 text-sm font-bold text-[#a855f7] hover:opacity-80 transition-opacity">
+              الإعدادات
+              <Settings className="w-4 h-4" />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setCollapsed(value => !value)}
+            title={collapsed ? "توسيع قائمة الإعدادات" : "طي قائمة الإعدادات"}
+            aria-label={collapsed ? "توسيع قائمة الإعدادات" : "طي قائمة الإعدادات"}
+            className="p-1 rounded text-[#64748B] hover:text-[#334155] hover:bg-black/5"
+          >
+            {collapsed ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+          </button>
+        </div>
       </div>
-      <div className="py-1 flex-1">
+      {!collapsed && <div className="min-h-0 flex-1 overflow-y-auto py-1">
         {menuSections.map(section => (
           <div key={section.id}>
             <button onClick={() => toggle(section.id)}
@@ -248,17 +242,17 @@ function SettingsMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id:
               <span className="text-base">{section.emoji}</span>
               <span className="flex-1 text-right text-xs font-semibold" style={{ color: section.color }}>{section.label}</span>
               {expanded[section.id]
-                ? <ChevronDown className="w-3 h-3 text-muted-foreground" />
-                : <ChevronRight className="w-3 h-3 text-muted-foreground" />}
+                ? <ChevronDown className="w-3 h-3 text-[#64748B]" />
+                : <ChevronRight className="w-3 h-3 text-[#64748B]" />}
             </button>
             {expanded[section.id] && (
               <div className="mb-1">
                 {section.children.map(child => (
-                  <button key={child.id} onClick={(e) => { e.stopPropagation(); onSelect(child.id); }}
+                  <button key={child.id} ref={activeId === child.id ? activeItemRef : undefined} onClick={(e) => { e.stopPropagation(); onSelect(child.id); }}
                     className={`w-full flex items-center gap-2 px-4 py-1.5 text-xs transition-colors ${
                       activeId === child.id
-                        ? "bg-[#a855f7]/15 text-white font-semibold"
-                        : "text-gray-300 hover:text-white hover:bg-white/5"
+                        ? "bg-[#D8AE55]/25 text-[#334155] font-semibold border-r-2 border-[#B8892E]"
+                        : "text-[#475569] hover:text-[#1E293B] hover:bg-black/5"
                     }`}>
                     <StatusIcon status={child.status} />
                     <span className="flex-1 text-right leading-tight">{child.label}</span>
@@ -268,7 +262,7 @@ function SettingsMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id:
             )}
           </div>
         ))}
-      </div>
+      </div>}
     </nav>
   );
 }
@@ -310,52 +304,140 @@ function SettingsOverview({ onSelect }: { onSelect: (id: MenuId) => void }) {
 
 // ─── Company Info ──────────────────────────────────────────────────────────────
 
+type CompanyForm = {
+  legalName: string;
+  englishName: string;
+  vatNumber: string;
+  commercialReg: string;
+  activity: string;
+  country: string;
+  city: string;
+  district: string;
+  street: string;
+  buildingNumber: string;
+  postalCode: string;
+  additionalNumber: string;
+  address: string;
+  phone: string;
+  email: string;
+};
+
+const EMPTY_COMPANY_FORM: CompanyForm = {
+  legalName: "",
+  englishName: "",
+  vatNumber: "",
+  commercialReg: "",
+  activity: "",
+  country: "",
+  city: "",
+  district: "",
+  street: "",
+  buildingNumber: "",
+  postalCode: "",
+  additionalNumber: "",
+  address: "",
+  phone: "",
+  email: "",
+};
+
+const COMPANY_FIELD_LABELS: Array<[keyof CompanyForm, string]> = [
+  ["legalName", "الاسم القانوني"],
+  ["englishName", "اسم الشركة (إنجليزي)"],
+  ["vatNumber", "الرقم الضريبي"],
+  ["commercialReg", "السجل التجاري"],
+  ["activity", "النشاط"],
+  ["country", "الدولة"],
+  ["city", "المدينة"],
+  ["district", "الحي"],
+  ["street", "الشارع"],
+  ["buildingNumber", "رقم المبنى"],
+  ["postalCode", "الرمز البريدي"],
+  ["additionalNumber", "الرقم الإضافي"],
+  ["address", "العنوان التفصيلي"],
+  ["phone", "الهاتف"],
+  ["email", "البريد الإلكتروني"],
+];
+
+function companySaveErrorMessage(error: unknown): string {
+  const fieldErrors = (error as { data?: { zodError?: { fieldErrors?: Record<string, unknown> } } })
+    ?.data?.zodError?.fieldErrors;
+  if (fieldErrors?.commercialReg) return "تعذر الحفظ: حقل السجل التجاري غير مُرسل بشكل صحيح";
+  if (fieldErrors) return "تعذر الحفظ: راجع بيانات معلومات الشركة ثم أعد المحاولة";
+  return "تعذر حفظ معلومات الشركة. حاول مرة أخرى";
+}
+
 function CompanyInfoPage() {
-  const [form, setForm] = useState({
-    name: "ONESOFT ERP", nameEn: "ONESOFT ERP",
-    address: "الرياض، المملكة العربية السعودية", phone: "+966 11 000 0000",
-    email: "info@onesoft.sa", website: "www.onesoft.sa",
-    taxNumber: "300000000000003", crNumber: "1010000000",
-    currency: "SAR", language: "ar",
+  const meQ = trpc.auth.me.useQuery();
+  const orgQ = trpc.orgs.currentOrg.useQuery();
+  const utils = trpc.useUtils();
+  const saveM = trpc.orgs.updateCurrent.useMutation({
+    onSuccess: () => {
+      toast.success("تم حفظ معلومات الشركة في قاعدة البيانات");
+      void Promise.all([
+        utils.orgs.currentOrg.invalidate(),
+        utils.zatca.getReadiness.invalidate(),
+      ]);
+    },
+    onError: error => toast.error(companySaveErrorMessage(error)),
   });
-  const update = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
+  const [form, setForm] = useState<CompanyForm>(EMPTY_COMPANY_FORM);
+  const canEdit = meQ.data?.role === "admin" || meQ.data?.role === "superadmin";
+  useEffect(() => {
+    if (!orgQ.data) return;
+    const cfg = (orgQ.data.zatcaConfig ?? {}) as Record<string, unknown>;
+    setForm({
+      legalName: String(orgQ.data.legalName ?? orgQ.data.name ?? cfg.legalName ?? ""),
+      englishName: String(orgQ.data.englishName ?? orgQ.data.nameEn ?? cfg.englishName ?? ""),
+      vatNumber: String(orgQ.data.vatNumber ?? orgQ.data.taxNumber ?? cfg.vatNumber ?? ""),
+      commercialReg: String(orgQ.data.commercialReg ?? cfg.commercialReg ?? ""),
+      activity: String(orgQ.data.activity ?? cfg.activity ?? ""),
+      country: String(orgQ.data.country ?? cfg.country ?? ""),
+      city: String(cfg.city ?? ""),
+      district: String(cfg.district ?? ""),
+      street: String(cfg.street ?? ""),
+      buildingNumber: String(cfg.buildingNumber ?? ""),
+      postalCode: String(cfg.postalCode ?? ""),
+      additionalNumber: String(cfg.additionalNumber ?? ""),
+      address: orgQ.data.address ?? "",
+      phone: String(orgQ.data.phone ?? cfg.phone ?? ""),
+      email: String(orgQ.data.email ?? cfg.email ?? ""),
+    });
+  }, [orgQ.data]);
+  const update = (key: keyof CompanyForm, value: string) => setForm(p => ({ ...p, [key]: value }));
+  const required: Array<[keyof CompanyForm, string]> = [
+    ["legalName", "الاسم القانوني"], ["vatNumber", "الرقم الضريبي"], ["commercialReg", "السجل التجاري"],
+    ["activity", "النشاط"], ["country", "الدولة"], ["city", "المدينة"], ["district", "الحي"],
+    ["street", "الشارع"], ["buildingNumber", "رقم المبنى"], ["postalCode", "الرمز البريدي"],
+    ["additionalNumber", "الرقم الإضافي"],
+  ];
+  const missing = required.filter(([key]) => !form[key]?.trim()).map(([, label]) => label);
+  if (orgQ.isLoading) return <div className="p-5 text-sm text-muted-foreground">جارٍ تحميل معلومات الشركة من قاعدة البيانات...</div>;
   return (
     <div className="space-y-4 max-w-2xl">
       <h3 className="font-semibold text-sm">معلومات الشركة</h3>
+      <div className={`rounded-lg border px-4 py-3 text-xs ${missing.length ? "border-orange-200 bg-orange-50 text-orange-900" : "border-green-200 bg-green-50 text-green-900"}`}>
+        <strong>{missing.length ? "بيانات المنشأة غير مكتملة" : "بيانات المنشأة مكتملة"}</strong>
+        {missing.length > 0 && <div className="mt-1">الحقول الناقصة: {missing.join("، ")}</div>}
+        <div className="mt-1 text-[11px] opacity-80">المصدر: قاعدة بيانات النظام، وليس Local Storage.</div>
+      </div>
+      {!canEdit && meQ.data && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-900">
+          هذا الحساب للعرض فقط؛ لا تملك صلاحية تعديل معلومات الشركة.
+        </div>
+      )}
       <Card className="border-border/50">
         <CardContent className="p-5 space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            {[["name","اسم الشركة (عربي)"],["nameEn","اسم الشركة (إنجليزي)"],["address","العنوان"],["phone","الهاتف"],["email","البريد الإلكتروني"],["website","الموقع الإلكتروني"],["taxNumber","الرقم الضريبي"],["crNumber","السجل التجاري"]].map(([k,l]) => (
+            {COMPANY_FIELD_LABELS.map(([k, l]) => (
               <div key={k}>
                 <Label className="text-xs text-muted-foreground">{l}</Label>
-                <Input value={(form as any)[k]} onChange={e => update(k, e.target.value)} className="h-8 text-sm mt-1" />
+                <Input value={form[k] ?? ""} onChange={e => update(k, e.target.value)} className="h-8 text-sm mt-1" />
               </div>
             ))}
-            <div>
-              <Label className="text-xs text-muted-foreground">العملة الأساسية</Label>
-              <Select value={form.currency} onValueChange={v => update("currency", v)}>
-                <SelectTrigger className="h-8 text-sm mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="SAR">ريال سعودي (SAR)</SelectItem>
-                  <SelectItem value="USD">دولار أمريكي (USD)</SelectItem>
-                  <SelectItem value="EUR">يورو (EUR)</SelectItem>
-                  <SelectItem value="AED">درهم إماراتي (AED)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground">لغة النظام</Label>
-              <Select value={form.language} onValueChange={v => update("language", v)}>
-                <SelectTrigger className="h-8 text-sm mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ar">العربية</SelectItem>
-                  <SelectItem value="en">English</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
           </div>
-          <Button className="w-full h-9" onClick={() => toast.success("تم حفظ معلومات الشركة")}>
-            <Save className="w-4 h-4 ml-2" /> حفظ التغييرات
+          <Button className="w-full h-9" onClick={() => saveM.mutate({ ...form })} disabled={saveM.isPending || !orgQ.data || !canEdit}>
+            {saveM.isPending ? "جارٍ الحفظ..." : "حفظ معلومات الشركة"}
+            <Save className="w-4 h-4 ml-2" />
           </Button>
         </CardContent>
       </Card>
@@ -651,16 +733,73 @@ function CurrenciesPage() {
 // ─── Taxes ─────────────────────────────────────────────────────────────────────
 
 function TaxesPage() {
-  const taxes = [
-    { id: 1, name: "ضريبة القيمة المضافة", code: "VAT", rate: 15, type: "نسبة مئوية", active: true },
-    { id: 2, name: "ضريبة الاستقطاع",      code: "WHT", rate: 5,  type: "نسبة مئوية", active: true },
-    { id: 3, name: "رسوم جمركية",           code: "CUS", rate: 5,  type: "نسبة مئوية", active: false },
-  ];
+  type TaxRow = {
+    id: number;
+    name: string;
+    code: string;
+    category: string;
+    applicationScope: string;
+    valueType: string;
+    value: string;
+    isActive: boolean;
+    isSystem: boolean;
+    notes: string | null;
+    effectiveFrom: Date | null;
+    usage: { products: number; salesInvoices: number; purchaseInvoices: number };
+  };
+  const utils = trpc.useUtils();
+  const { data: taxes = [], isLoading } = trpc.taxDefinitions.list.useQuery({});
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<TaxRow | null>(null);
+  const [form, setForm] = useState({
+    name: "", code: "", category: "tax" as "tax" | "withholding" | "fee",
+    applicationScope: "products_sales" as "products_sales" | "other",
+    valueType: "percentage" as const, value: "0",
+    isActive: true, notes: "", effectiveFrom: "",
+  });
+  const resetForm = () => setForm({
+    name: "", code: "", category: "tax", applicationScope: "products_sales", valueType: "percentage", value: "0",
+    isActive: true, notes: "", effectiveFrom: "",
+  });
+  const openCreate = () => { setEditing(null); resetForm(); setDialogOpen(true); };
+  const openEdit = (tax: TaxRow) => {
+    setEditing(tax);
+    setForm({
+      name: tax.name, code: tax.code, category: tax.category as "tax" | "withholding" | "fee",
+      applicationScope: tax.applicationScope as "products_sales" | "other",
+      valueType: "percentage", value: String(tax.value ?? "0"),
+      isActive: tax.isActive, notes: tax.notes ?? "",
+      effectiveFrom: tax.effectiveFrom ? new Date(tax.effectiveFrom).toISOString().slice(0, 10) : "",
+    });
+    setDialogOpen(true);
+  };
+  const saveTax = trpc.taxDefinitions.create.useMutation({
+    onSuccess: () => { utils.taxDefinitions.list.invalidate(); setDialogOpen(false); toast.success("تم إضافة الضريبة أو الرسم"); },
+    onError: e => toast.error(e.message),
+  });
+  const updateTax = trpc.taxDefinitions.update.useMutation({
+    onSuccess: () => { utils.taxDefinitions.list.invalidate(); setDialogOpen(false); toast.success("تم تحديث الضريبة أو الرسم"); },
+    onError: e => toast.error(e.message),
+  });
+  const toggleTax = trpc.taxDefinitions.setActive.useMutation({
+    onSuccess: () => { utils.taxDefinitions.list.invalidate(); toast.success("تم تحديث حالة الضريبة"); },
+    onError: e => toast.error(e.message),
+  });
+  const deleteTax = trpc.taxDefinitions.delete.useMutation({
+    onSuccess: () => { utils.taxDefinitions.list.invalidate(); toast.success("تم حذف الضريبة أو الرسم"); },
+    onError: e => toast.error(e.message),
+  });
+  const submit = (event: React.FormEvent) => {
+    event.preventDefault();
+    const payload = { ...form, code: form.code.trim().toUpperCase(), value: form.value.trim() };
+    if (editing) updateTax.mutate({ id: editing.id, ...payload });
+    else saveTax.mutate(payload);
+  };
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h3 className="font-semibold text-sm">إدارة الضرائب والرسوم</h3>
-        <Button className="h-8 text-sm" onClick={() => toast.info("إضافة ضريبة")}><Plus className="w-3.5 h-3.5 ml-1" />إضافة ضريبة</Button>
+        <Button className="h-8 text-sm" onClick={openCreate}><Plus className="w-3.5 h-3.5 ml-1" />إضافة ضريبة</Button>
       </div>
       <Card className="border-border/50">
         <Table>
@@ -670,24 +809,35 @@ function TaxesPage() {
               <TableHead className="text-xs">الكود</TableHead>
               <TableHead className="text-xs text-center">النسبة %</TableHead>
               <TableHead className="text-xs">النوع</TableHead>
+              <TableHead className="text-xs">مجال التطبيق</TableHead>
+              <TableHead className="text-xs text-center">الاستخدام</TableHead>
               <TableHead className="text-xs text-center">الحالة</TableHead>
               <TableHead className="text-xs">الإجراءات</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
+            {isLoading && <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground">جارٍ التحميل...</TableCell></TableRow>}
+            {!isLoading && taxes.length === 0 && <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground">لا توجد ضرائب أو رسوم</TableCell></TableRow>}
             {taxes.map(t => (
               <TableRow key={t.id}>
-                <TableCell className="text-xs font-medium">{t.name}</TableCell>
+                <TableCell className="text-xs font-medium">{t.name}{t.isSystem && <Badge variant="outline" className="mr-2 text-[10px]">نظامية</Badge>}</TableCell>
                 <TableCell className="text-xs font-mono">{t.code}</TableCell>
-                <TableCell className="text-xs text-center">{t.rate}%</TableCell>
-                <TableCell className="text-xs">{t.type}</TableCell>
+                <TableCell className="text-xs text-center">{t.valueType === "percentage" ? `${t.value}%` : t.value}</TableCell>
+                <TableCell className="text-xs">{t.category === "withholding" ? "استقطاع" : t.category === "fee" ? "رسم" : "ضريبة"}</TableCell>
+                <TableCell className="text-xs">{t.applicationScope === "products_sales" ? "الأصناف والمبيعات" : "غير مخصصة تلقائيًا"}</TableCell>
+                <TableCell className="text-xs text-center">{(t.usage.products + t.usage.salesInvoices + t.usage.purchaseInvoices) || "—"}</TableCell>
                 <TableCell className="text-center">
-                  <Badge variant={t.active ? "default" : "secondary"} className="text-xs">{t.active ? "فعّال" : "موقوف"}</Badge>
+                  <div className="flex items-center justify-center gap-2">
+                    <Badge variant={t.isActive ? "default" : "secondary"} className="text-xs">{t.isActive ? "فعّال" : "موقوف"}</Badge>
+                    <Switch checked={t.isActive} onCheckedChange={checked => toggleTax.mutate({ id: t.id, isActive: checked })} />
+                  </div>
                 </TableCell>
                 <TableCell>
                   <div className="flex gap-2">
-                    <button className="text-primary text-xs hover:underline" onClick={() => toast.info("تعديل")}>تعديل</button>
-                    <button className="text-destructive text-xs hover:underline" onClick={() => toast.error("حذف")}>حذف</button>
+                    <button className="text-primary text-xs hover:underline" onClick={() => openEdit(t)}>تعديل</button>
+                    <button className="text-destructive text-xs hover:underline" onClick={() => {
+                      if (window.confirm("هل تريد حذف هذه الضريبة أو الرسم؟ لا يمكن حذف السجل المستخدم؛ استخدم الإيقاف بدلًا من ذلك.")) deleteTax.mutate({ id: t.id });
+                    }}>حذف</button>
                   </div>
                 </TableCell>
               </TableRow>
@@ -695,6 +845,144 @@ function TaxesPage() {
           </TableBody>
         </Table>
       </Card>
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent
+          dir="rtl"
+          showCloseButton={false}
+          className="w-[620px] max-w-[calc(100vw-32px)] overflow-hidden rounded-2xl border-border bg-card p-0 shadow-2xl"
+        >
+          <div className="flex max-h-[calc(100vh-32px)] flex-col">
+            <DialogHeader className="shrink-0 border-b px-6 py-4 text-right">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                    <Tag className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <DialogTitle className="text-xl">
+                      {editing ? "تعديل ضريبة أو رسم" : "إضافة ضريبة أو رسم"}
+                    </DialogTitle>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      تعريف النسبة أو القيمة وربطها بالمستندات والأصناف.
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setDialogOpen(false)}
+                  aria-label="إغلاق"
+                  className="shrink-0 text-muted-foreground hover:text-foreground"
+                >
+                  <span className="text-lg leading-none">×</span>
+                </Button>
+              </div>
+            </DialogHeader>
+
+            <form onSubmit={submit} className="min-h-0 overflow-y-auto px-6 py-5">
+              <div className="space-y-4">
+                <section className="rounded-2xl border bg-muted/20 p-4">
+                  <div className="mb-3">
+                    <h3 className="text-sm font-semibold">هوية الضريبة أو الرسم</h3>
+                    <p className="mt-1 text-xs text-muted-foreground">البيانات الأساسية المطلوبة للتعريف.</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="tax-name">الاسم <span className="text-destructive">*</span></Label>
+                      <Input id="tax-name" required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="اسم الضريبة أو الرسم" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="tax-code">الكود <span className="text-destructive">*</span></Label>
+                      <Input id="tax-code" required dir="ltr" className="text-left" value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value }))} placeholder="VAT" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>التصنيف</Label>
+                      <Select
+                        value={form.category}
+                        onValueChange={v => setForm(f => ({
+                          ...f,
+                          category: v as typeof f.category,
+                          applicationScope: v === "tax" ? "products_sales" : "other",
+                        }))}
+                      >
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="tax">ضريبة</SelectItem>
+                          <SelectItem value="withholding">استقطاع</SelectItem>
+                          <SelectItem value="fee">رسم</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>مجال التطبيق</Label>
+                      <Select
+                        value={form.applicationScope}
+                        onValueChange={v => setForm(f => ({ ...f, applicationScope: v as typeof f.applicationScope }))}
+                      >
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="products_sales" disabled={form.category !== "tax"}>الأصناف والمبيعات</SelectItem>
+                          <SelectItem value="other">غير مخصصة تلقائيًا</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>نوع القيمة</Label>
+                          <div className="flex h-10 items-center rounded-md border bg-muted/30 px-3 text-sm">
+                            نسبة مئوية
+                          </div>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="rounded-2xl border bg-muted/20 p-4">
+                  <div className="mb-3">
+                    <h3 className="text-sm font-semibold">القيمة والسريان</h3>
+                    <p className="mt-1 text-xs text-muted-foreground">الحساب الحالي يدعم النسب المئوية فقط.</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="tax-value">النسبة <span className="text-destructive">*</span></Label>
+                      <Input id="tax-value" required type="number" min="0" step="0.0001" dir="ltr" className="text-left" value={form.value} onChange={e => setForm(f => ({ ...f, value: e.target.value }))} placeholder="15" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="tax-effective-from">تاريخ السريان</Label>
+                      <DateSegmentInput
+                        value={form.effectiveFrom}
+                        onChange={effectiveFrom => setForm(f => ({ ...f, effectiveFrom }))}
+                        standalone
+                        className="h-10 w-full"
+                      />
+                    </div>
+                  </div>
+                </section>
+
+                <section className="rounded-2xl border bg-muted/20 p-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="tax-notes">ملاحظات</Label>
+                    <Textarea id="tax-notes" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="أضف أي ملاحظات إضافية..." className="min-h-20 resize-y" />
+                  </div>
+                  <div className="mt-4 flex items-center justify-between rounded-xl border bg-background p-4">
+                    <div>
+                      <Label htmlFor="tax-active" className="cursor-pointer">تفعيل الضريبة</Label>
+                      <p className="mt-1 text-xs text-muted-foreground">الضريبة الموقوفة لا تظهر في الاختيارات الجديدة.</p>
+                    </div>
+                    <Switch id="tax-active" checked={form.isActive} onCheckedChange={isActive => setForm(f => ({ ...f, isActive }))} />
+                  </div>
+                </section>
+              </div>
+
+              <div className="mt-5 flex items-center justify-start gap-2 border-t pt-4">
+                <Button type="submit" disabled={saveTax.isPending || updateTax.isPending}>
+                  {saveTax.isPending || updateTax.isPending ? "جاري الحفظ..." : "حفظ"}
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>إلغاء</Button>
+              </div>
+            </form>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -3185,6 +3473,8 @@ function ComingSoon({ title }: { title: string }) {
 
 function QRSettingsPage() {
   const qrQuery = trpc.qrSettings.get.useQuery();
+  const orgQuery = trpc.orgs.currentOrg.useQuery();
+  const tabManager = useTabManager();
   const upsertMutation = trpc.qrSettings.upsert.useMutation({
     onSuccess: () => {
       toast.success("✓ تم حفظ إعدادات QR Code");
@@ -3197,278 +3487,358 @@ function QRSettingsPage() {
 
   const [isEnabled, setIsEnabled] = useState(true);
   const [system, setSystem] = useState<QrSystem>("zatca");
-  const [sellerName, setSellerName] = useState("");
-  const [taxNumber, setTaxNumber] = useState("");
   const [customFormat, setCustomFormat] = useState("{{sellerName}}\n{{taxNumber}}\n{{invoiceDateTime}}\n{{totalAmount}}\n{{vatAmount}}");
   const [showOnSales, setShowOnSales] = useState(true);
-  const [showOnPurchase, setShowOnPurchase] = useState(false);
-  const [showOnReceipt, setShowOnReceipt] = useState(false);
-  const [qrSize, setQrSize] = useState(100);
-  const [qrPosition, setQrPosition] = useState("top-right");
   const [showHelp, setShowHelp] = useState(false);
+  const [previewGenerated, setPreviewGenerated] = useState(false);
+  const [previewChecked, setPreviewChecked] = useState(false);
+  const [decodedPreview, setDecodedPreview] = useState<ReturnType<typeof decodeQrContent> | null>(null);
+  const [previewError, setPreviewError] = useState("");
 
   useEffect(() => {
     if (!s) return;
     setIsEnabled(s.isEnabled);
     setSystem((s.countrySystem as QrSystem) ?? "zatca");
-    setSellerName(s.sellerName ?? "");
-    setTaxNumber(s.taxNumber ?? "");
     setCustomFormat(s.customFormat ?? "{{sellerName}}\n{{taxNumber}}\n{{invoiceDateTime}}\n{{totalAmount}}\n{{vatAmount}}");
     setShowOnSales(s.showOnSalesInvoice);
-    setShowOnPurchase(s.showOnPurchaseInvoice);
-    setShowOnReceipt(s.showOnReceiptVoucher);
-    setQrSize(s.qrSize ?? 100);
-    setQrPosition(s.qrPosition ?? "top-right");
+    setPreviewGenerated(false);
+    setPreviewChecked(false);
+    setDecodedPreview(null);
+    setPreviewError("");
   }, [s]);
 
-  // معاينة QR
-  const previewContent = (() => {
-    const sampleData = {
-      sellerName: sellerName || "OneSoft Company",
-      taxNumber: taxNumber || "300000000000003",
-      invoiceDateTime: new Date().toISOString(),
-      totalAmount: 1150.00,
-      vatAmount: 150.00,
-      invoiceNumber: "INV-2026-000001",
-    };
+  const sellerName = String(orgQuery.data?.legalName ?? orgQuery.data?.name ?? "").trim();
+  const taxNumber = String(orgQuery.data?.vatNumber ?? orgQuery.data?.taxNumber ?? "").trim();
+  const companyValidationError = validateQrCompanyData(system, sellerName, taxNumber);
+  const sampleData = useMemo(() => ({
+    sellerName,
+    taxNumber,
+    invoiceDateTime: "2026-08-02T10:30:00+03:00",
+    totalAmount: 1150.00,
+    vatAmount: 150.00,
+    invoiceNumber: "INV-2026-000001",
+  }), [sellerName, taxNumber]);
+
+  const previewContent = useMemo(() => {
     try {
       return generateQrContent(system, sampleData, customFormat);
     } catch {
       return "";
     }
-  })();
+  }, [customFormat, sampleData, system]);
+
+  const embeddedRows = system === "zatca"
+    ? [
+        ["اسم البائع أو المنشأة", sampleData.sellerName],
+        ["الرقم الضريبي", sampleData.taxNumber],
+        ["تاريخ ووقت إصدار الفاتورة", sampleData.invoiceDateTime],
+        ["إجمالي الفاتورة شامل الضريبة", sampleData.totalAmount.toFixed(2)],
+        ["إجمالي مبلغ الضريبة", sampleData.vatAmount.toFixed(2)],
+      ]
+    : system === "eta"
+      ? [
+          ["اسم البائع أو المنشأة", sampleData.sellerName],
+          ["الرقم الضريبي", sampleData.taxNumber],
+          ["رقم الفاتورة", sampleData.invoiceNumber],
+          ["الإجمالي شامل الضريبة", sampleData.totalAmount.toFixed(2)],
+          ["مبلغ الضريبة", sampleData.vatAmount.toFixed(2)],
+        ]
+      : [
+          ["اسم المنشأة", sampleData.sellerName],
+          ["الرقم الضريبي", sampleData.taxNumber],
+          ["التاريخ والمبالغ", "حسب القالب المخصص"],
+        ];
 
   const handleSave = () => {
     upsertMutation.mutate({
       isEnabled, countrySystem: system,
-      sellerName: sellerName || null,
-      taxNumber: taxNumber || null,
       customFormat: system === "custom" ? customFormat : null,
       showOnSalesInvoice: showOnSales,
-      showOnPurchaseInvoice: showOnPurchase,
-      showOnReceiptVoucher: showOnReceipt,
-      qrSize, qrPosition,
     });
   };
 
-  if (qrQuery.isLoading) return <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">جاري التحميل...</div>;
+  if (qrQuery.isLoading || orgQuery.isLoading) return <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">جاري التحميل...</div>;
+
+  const selectedSystem = QR_SYSTEMS.find(item => item.id === system);
 
   return (
-    <div className="space-y-5 max-w-3xl" dir="rtl">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="font-bold text-base flex items-center gap-2">
-            <QrCode className="w-5 h-5 text-[#406B93]" />
-            إعدادات QR Code
-          </h3>
-          <p className="text-muted-foreground text-xs mt-0.5">تهيئة نظام QR Code للفواتير ونماذج الطباعة</p>
-        </div>
-        <Button onClick={handleSave} disabled={upsertMutation.isPending} className="h-8 text-sm bg-[#406B93] hover:bg-[#315578]">
-          <Save className="w-3.5 h-3.5 ml-1" />
-          {upsertMutation.isPending ? "جاري الحفظ..." : "حفظ الإعدادات"}
-        </Button>
-      </div>
-
-      {/* تفعيل QR */}
-      <Card className="border-border/50">
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-semibold">تفعيل نظام QR Code</p>
-              <p className="text-xs text-muted-foreground mt-0.5">عند التفعيل يظهر QR تلقائياً في نماذج الطباعة المحددة</p>
-            </div>
-            <Switch checked={isEnabled} onCheckedChange={setIsEnabled} />
+    <div className="min-h-full bg-[#f4efe7] p-4 sm:p-5" dir="rtl">
+      <div className="mx-auto max-w-6xl space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#d8c7b1] bg-[#fffdf9] px-4 py-3 shadow-sm">
+          <div>
+            <h3 className="flex items-center gap-2 text-base font-bold text-[#4e321f]">
+              <QrCode className="h-5 w-5 text-[#8a5a2b]" />
+              إعدادات كود QR
+            </h3>
+            <p className="mt-1 text-xs text-[#765f4b]">إعداد وتشغيل QR للمستندات الضريبية ومعاينة البيانات المضمنة</p>
           </div>
-        </CardContent>
-      </Card>
+          <Button onClick={handleSave} disabled={upsertMutation.isPending} className="h-9 bg-[#8a5a2b] text-sm hover:bg-[#70471f]">
+            <Save className="ml-1 h-3.5 w-3.5" />
+            {upsertMutation.isPending ? "جاري الحفظ..." : "حفظ الإعدادات"}
+          </Button>
+        </div>
 
-      {isEnabled && (<>
-        {/* اختيار النظام */}
-        <Card className="border-border/50">
-          <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="text-sm font-bold">نظام QR Code</CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-4 space-y-3">
-            {QR_SYSTEMS.map(sys => (
-              <div key={sys.id}
-                onClick={() => setSystem(sys.id)}
-                className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
-                  system === sys.id
-                    ? "border-[#406B93] bg-[#406B93]/5"
-                    : "border-border hover:border-[#406B93]/40 hover:bg-accent/10"
-                }`}
-              >
-                <div className={`w-4 h-4 rounded-full border-2 mt-0.5 flex-shrink-0 transition-all ${
-                  system === sys.id ? "border-[#406B93] bg-[#406B93]" : "border-gray-300"
-                }`}>
-                  {system === sys.id && <div className="w-2 h-2 rounded-full bg-white m-auto mt-0.5" />}
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold">{sys.label}</span>
-                    <Badge variant="outline" className="text-[10px] py-0 px-1.5">{sys.country}</Badge>
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_330px]">
+          <div className="space-y-4">
+            <Card className="border-[#d8c7b1] shadow-sm">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-bold text-[#4e321f]">تفعيل كود QR</p>
+                    <p className="mt-1 text-xs text-muted-foreground">عند التفعيل يظهر QR على مستندات المبيعات المحددة</p>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">{sys.description}</p>
+                  <Switch checked={isEnabled} onCheckedChange={setIsEnabled} />
                 </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
 
-        {/* بيانات المنشأة */}
-        <Card className="border-border/50">
-          <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="text-sm font-bold">بيانات المنشأة في QR</CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-4 space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs text-muted-foreground">اسم المنشأة</Label>
-                <Input value={sellerName} onChange={e => setSellerName(e.target.value)}
-                  placeholder="اسم الشركة أو المنشأة..." className="h-8 text-sm mt-1" />
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground">الرقم الضريبي</Label>
-                <Input value={taxNumber} onChange={e => setTaxNumber(e.target.value)}
-                  placeholder="300000000000003" className="h-8 text-sm mt-1 font-mono" />
-              </div>
-            </div>
-            <p className="text-[11px] text-muted-foreground bg-blue-50 border border-blue-100 rounded px-2 py-1.5">
-              ℹ️ إذا تُركت فارغة، يُستخدم الرقم الضريبي واسم المنشأة من بيانات الفاتورة تلقائياً
-            </p>
-          </CardContent>
-        </Card>
+            {isEnabled && (
+              <>
+                <Card className="border-[#d8c7b1] shadow-sm">
+                  <CardHeader className="border-b border-[#eadfd1] px-4 py-3">
+                    <CardTitle className="text-sm font-bold text-[#4e321f]">نظام QR Code</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2 p-4">
+                    {QR_SYSTEMS.map(sys => (
+                      <button
+                        type="button"
+                        key={sys.id}
+                        onClick={() => { setSystem(sys.id); setPreviewGenerated(false); setPreviewChecked(false); setDecodedPreview(null); setPreviewError(""); }}
+                        className={`flex w-full items-start gap-3 rounded-lg border p-3 text-right transition-all ${
+                          system === sys.id
+                            ? "border-[#8a5a2b] bg-[#fbf3e8] shadow-sm"
+                            : "border-[#e2d7c9] bg-white hover:border-[#b89b7d]"
+                        }`}
+                      >
+                        <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${
+                          system === sys.id ? "border-[#8a5a2b] bg-[#8a5a2b]" : "border-[#c7b9a8]"
+                        }`}>
+                          {system === sys.id && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="flex flex-wrap items-center gap-2 text-sm font-semibold text-[#4e321f]">
+                            {sys.label}
+                            <Badge variant="outline" className="border-[#d8c7b1] text-[10px]">{sys.country}</Badge>
+                          </span>
+                          <span className="mt-1 block text-xs text-muted-foreground">{sys.description}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </CardContent>
+                </Card>
 
-        {/* قالب مخصص */}
-        {system === "custom" && (
-          <Card className="border-border/50">
-            <CardHeader className="pb-2 pt-4 px-4">
-              <div className="flex justify-between items-center">
-                <CardTitle className="text-sm font-bold">قالب QR المخصص</CardTitle>
-                <button onClick={() => setShowHelp(h => !h)} className="text-xs text-[#406B93] hover:underline">
-                  {showHelp ? "إخفاء المساعدة" : "عرض المتغيرات المتاحة"}
-                </button>
-              </div>
-            </CardHeader>
-            <CardContent className="px-4 pb-4 space-y-2">
-              {showHelp && (
-                <pre className="text-[10px] bg-gray-50 border border-gray-200 rounded p-2 text-gray-600 leading-5 whitespace-pre-wrap font-mono">
-                  {CUSTOM_TEMPLATE_HELP}
-                </pre>
-              )}
-              <Textarea
-                value={customFormat}
-                onChange={e => setCustomFormat(e.target.value)}
-                rows={5}
-                className="font-mono text-xs"
-                placeholder="اكتب قالب QR المخصص هنا..."
-              />
-            </CardContent>
-          </Card>
-        )}
+                <Card className="border-[#d8c7b1] shadow-sm">
+                  <CardHeader className="border-b border-[#eadfd1] px-4 py-3">
+                    <CardTitle className="text-sm font-bold text-[#4e321f]">بيانات المنشأة</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3 p-4">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label>
+                        <Label className="text-xs text-muted-foreground">اسم المنشأة القانوني</Label>
+                        <Input value={sellerName || "غير مكتمل"} readOnly className="mt-1 h-9 bg-[#f7f1e9] text-sm" />
+                      </label>
+                      <label>
+                        <Label className="text-xs text-muted-foreground">الرقم الضريبي أو المعرف الضريبي</Label>
+                        <Input value={taxNumber || "غير مكتمل"} readOnly className="mt-1 h-9 bg-[#f7f1e9] font-mono text-sm" />
+                      </label>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[#e5d4bc] bg-[#fff8ed] px-3 py-2 text-[11px] text-[#765f4b]">
+                      <span>يتم جلب بيانات المنشأة تلقائيًا من شاشة معلومات المؤسسة.</span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-7 border-[#b89b7d] px-2 text-[11px] text-[#70471f]"
+                        onClick={() => tabManager.openTab("/cfg/company", "معلومات الشركة", Building2)}
+                      >
+                        <Building2 className="ml-1 h-3.5 w-3.5" />فتح معلومات المؤسسة
+                      </Button>
+                    </div>
+                    {companyValidationError && (
+                      <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-5 text-amber-900">
+                        {companyValidationError}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
 
-        {/* نماذج الطباعة */}
-        <Card className="border-border/50">
-          <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="text-sm font-bold">نماذج الطباعة التي تعرض QR</CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-4 space-y-3">
-            {[
-              { id: "sales", label: "فاتورة المبيعات", val: showOnSales, set: setShowOnSales },
-              { id: "purchase", label: "فاتورة المشتريات", val: showOnPurchase, set: setShowOnPurchase },
-              { id: "receipt", label: "سند القبض", val: showOnReceipt, set: setShowOnReceipt },
-            ].map(item => (
-              <div key={item.id} className="flex items-center justify-between py-1">
-                <div className="flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-muted-foreground" />
-                  <span className="text-sm">{item.label}</span>
-                </div>
-                <Switch checked={item.val} onCheckedChange={item.set} />
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+                <Card className="border-[#d8c7b1] shadow-sm">
+                  <CardHeader className="border-b border-[#eadfd1] px-4 py-3">
+                    <CardTitle className="text-sm font-bold text-[#4e321f]">المستندات المطبق عليها QR</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2 p-4">
+                    <div className="flex items-center justify-between rounded-md bg-[#fbf3e8] px-3 py-2">
+                      <div>
+                        <p className="text-xs font-semibold text-[#4e321f]">تفعيل QR على مستندات المبيعات</p>
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">إعداد واحد يطبق على جميع المستندات التالية</p>
+                      </div>
+                      <Switch checked={showOnSales} onCheckedChange={setShowOnSales} />
+                    </div>
+                    {[
+                      "فاتورة المبيعات",
+                      "فاتورة نقاط البيع POS",
+                      "مرتجع المبيعات",
+                      "الإشعار الدائن",
+                      "الإشعار المدين",
+                    ].map(label => (
+                      <div key={label} className="flex items-center justify-between border-b border-[#eee6dc] py-2 last:border-0">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-[#8a5a2b]" />
+                          <span className="text-sm text-[#4e321f]">{label}</span>
+                        </div>
+                        <Badge variant={showOnSales ? "default" : "secondary"} className="text-[10px]">
+                          {showOnSales ? "مطبق" : "متوقف"}
+                        </Badge>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
 
-        {/* مظهر QR */}
-        <Card className="border-border/50">
-          <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="text-sm font-bold">مظهر QR Code</CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label className="text-xs text-muted-foreground">حجم QR (بكسل)</Label>
-                <div className="flex items-center gap-2 mt-1">
-                  <Input
-                    type="number" min={50} max={300} value={qrSize}
-                    onChange={e => setQrSize(Number(e.target.value))}
-                    className="h-8 text-sm w-24"
-                  />
-                  <span className="text-xs text-muted-foreground">{qrSize}×{qrSize} px</span>
-                </div>
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground">موضع QR في الفاتورة</Label>
-                <Select value={qrPosition} onValueChange={setQrPosition}>
-                  <SelectTrigger className="h-8 text-sm mt-1">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="top-right">أعلى اليمين</SelectItem>
-                    <SelectItem value="top-left">أعلى اليسار</SelectItem>
-                    <SelectItem value="bottom-right">أسفل اليمين</SelectItem>
-                    <SelectItem value="bottom-left">أسفل اليسار</SelectItem>
-                    <SelectItem value="bottom-center">أسفل الوسط</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+                {system === "custom" && (
+                  <Card className="border-[#d8c7b1] shadow-sm">
+                    <CardHeader className="border-b border-[#eadfd1] px-4 py-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <CardTitle className="text-sm font-bold text-[#4e321f]">قالب QR المخصص</CardTitle>
+                        <button type="button" onClick={() => setShowHelp(h => !h)} className="text-xs text-[#8a5a2b] hover:underline">
+                          {showHelp ? "إخفاء المساعدة" : "عرض المتغيرات"}
+                        </button>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-2 p-4">
+                      {showHelp && <pre className="whitespace-pre-wrap rounded border border-[#e5d4bc] bg-[#fff8ed] p-2 font-mono text-[10px] leading-5 text-[#765f4b]">{CUSTOM_TEMPLATE_HELP}</pre>}
+                      <Textarea value={customFormat} onChange={e => { setCustomFormat(e.target.value); setPreviewGenerated(false); setPreviewChecked(false); setDecodedPreview(null); setPreviewError(""); }}
+                        rows={4} className="font-mono text-xs" placeholder="اكتب قالب QR المخصص هنا..." />
+                    </CardContent>
+                  </Card>
+                )}
 
-        {/* معاينة QR */}
-        <Card className="border-border/50">
-          <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="text-sm font-bold">معاينة QR Code</CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-4">
-            <div className="flex items-center gap-6">
-              {previewContent ? (
-                <div className="flex flex-col items-center gap-2">
-                  <QRCodeDisplay content={previewContent} size={Math.min(qrSize, 160)} />
-                  <span className="text-[10px] text-muted-foreground">
-                    معاينة ({QR_SYSTEMS.find(s => s.id === system)?.country})
-                  </span>
+                <Card className="border-[#d8c7b1] shadow-sm">
+                  <CardHeader className="border-b border-[#eadfd1] px-4 py-3">
+                    <CardTitle className="text-sm font-bold text-[#4e321f]">البيانات المضمنة داخل QR</CardTitle>
+                  </CardHeader>
+                  <CardContent className="grid gap-x-5 gap-y-2 p-4 sm:grid-cols-2">
+                    {embeddedRows.map(([label, value]) => (
+                      <div key={label} className="rounded-md border border-[#eee6dc] bg-[#fffdf9] px-3 py-2">
+                        <p className="text-[11px] text-muted-foreground">{label}</p>
+                        <p className="mt-0.5 truncate text-xs font-semibold text-[#4e321f]" title={value}>{value}</p>
+                      </div>
+                    ))}
+                    <div className="rounded-md border border-[#eee6dc] bg-[#fffdf9] px-3 py-2 sm:col-span-2">
+                      <p className="text-[11px] text-muted-foreground">ملاحظة</p>
+                      <p className="mt-0.5 text-xs text-[#765f4b]">التاريخ والمبالغ تُقرأ من الفاتورة الفعلية عند الإنشاء، وليست إعدادات ثابتة.</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+          </div>
+
+          <aside className="space-y-4 lg:sticky lg:top-4">
+            <Card className="border-[#d8c7b1] shadow-sm">
+              <CardHeader className="border-b border-[#eadfd1] px-4 py-3">
+                <CardTitle className="flex items-center gap-2 text-sm font-bold text-[#4e321f]">
+                  <Eye className="h-4 w-4 text-[#8a5a2b]" />
+                  معاينة وفحص كود QR
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 p-4">
+                <div className="rounded-lg border border-dashed border-[#cdb99f] bg-[#fffdf9] p-4 text-center">
+                  {previewGenerated && isEnabled && previewContent ? (
+                    <QRCodeDisplay content={previewContent} size={190} className="mx-auto rounded bg-white p-2" />
+                  ) : (
+                    <div className="flex h-[190px] items-center justify-center text-xs text-muted-foreground">
+                      اضغط «إنشاء معاينة» لعرض كود QR
+                    </div>
+                  )}
                 </div>
-              ) : (
-                <div className="w-32 h-32 bg-gray-100 border border-dashed border-gray-300 rounded flex items-center justify-center text-gray-400 text-xs">
-                  لا توجد معاينة
+                <div className="rounded-md bg-[#fbf3e8] px-3 py-2">
+                  <p className="text-[11px] text-muted-foreground">النظام المستخدم</p>
+                  <p className="mt-0.5 text-xs font-semibold text-[#4e321f]">{selectedSystem?.label}</p>
                 </div>
-              )}
-              <div className="flex-1 space-y-2">
-                <div>
-                  <p className="text-xs font-semibold text-muted-foreground mb-0.5">النظام المختار</p>
-                  <Badge className="text-[11px]">{QR_SYSTEMS.find(s => s.id === system)?.label}</Badge>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      const error = validateQrCompanyData(system, sellerName, taxNumber);
+                      if (error) {
+                        setPreviewGenerated(false);
+                        setPreviewChecked(false);
+                        setPreviewError(error);
+                        return;
+                      }
+                      setPreviewGenerated(true);
+                      setPreviewChecked(false);
+                      setPreviewError("");
+                    }}
+                    disabled={!isEnabled}
+                    className="h-9 flex-1 bg-[#8a5a2b] text-xs hover:bg-[#70471f]">
+                    <RefreshCw className="ml-1 h-3.5 w-3.5" />إنشاء معاينة
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => {
+                    try {
+                      setDecodedPreview(decodeQrContent(system, previewContent));
+                      setPreviewChecked(true);
+                      setPreviewError("");
+                    } catch (error) {
+                      setDecodedPreview(null);
+                      setPreviewChecked(false);
+                      setPreviewError(error instanceof Error ? error.message : "تعذر فحص كود QR");
+                    }
+                  }} disabled={!previewGenerated || !previewContent}
+                    className="h-9 flex-1 border-[#b89b7d] text-xs text-[#70471f]">
+                    <CheckCircle className="ml-1 h-3.5 w-3.5" />فحص كود QR
+                  </Button>
                 </div>
-                <div>
-                  <p className="text-xs font-semibold text-muted-foreground mb-0.5">بيانات المعاينة (عيّنة)</p>
-                  <p className="text-xs text-gray-500">إجمالي: 1,150.000 — ضريبة: 150.000</p>
-                </div>
-                {system === "zatca" && (
-                  <div className="bg-amber-50 border border-amber-200 rounded p-2 text-[11px] text-amber-700">
-                    ✓ متوافق مع معيار ZATCA e-invoice Phase 2 (TLV → Base64)
+                <p className="text-[11px] leading-5 text-muted-foreground">
+                  المعاينة تستخدم تاريخًا ومبالغ تجريبية. عند إصدار المستند، يُنشأ QR من بيانات الفاتورة الفعلية.
+                </p>
+                {previewChecked && (
+                  <div className="space-y-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                    <div className="flex items-center gap-2 text-xs font-bold text-emerald-700">
+                      <CheckCircle className="h-4 w-4" /> كود QR صالح وتمت قراءة البيانات
+                    </div>
+                    {[
+                      ["اسم البائع أو المنشأة", decodedPreview?.sellerName ?? "—"],
+                      ["الرقم الضريبي", decodedPreview?.taxNumber ?? "—"],
+                      ["تاريخ ووقت الفاتورة", decodedPreview?.invoiceDateTime ?? "—"],
+                      ["الإجمالي شامل الضريبة", decodedPreview?.totalAmount?.toFixed(2) ?? "—"],
+                      ["مبلغ الضريبة", decodedPreview?.vatAmount?.toFixed(2) ?? "—"],
+                    ].map(([label, value]) => (
+                      <div key={label} className="flex items-start justify-between gap-3 border-b border-emerald-100 pb-1 text-[11px] last:border-0 last:pb-0">
+                        <span className="text-emerald-700">{label}</span>
+                        <span className="max-w-[150px] truncate text-left font-semibold text-emerald-900" title={value}>{value}</span>
+                      </div>
+                    ))}
                   </div>
                 )}
-                {system === "eta" && (
-                  <div className="bg-blue-50 border border-blue-200 rounded p-2 text-[11px] text-blue-700">
-                    ✓ متوافق مع معيار ETA (النظام الضريبي المصري) — JSON
+                {previewError && (
+                  <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+                    <div>
+                      <span className="font-bold">يوجد خطأ في كود QR:</span> {previewError}
+                    </div>
+                    {companyValidationError && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="mt-2 h-7 border-red-300 px-2 text-[11px] text-red-800"
+                        onClick={() => tabManager.openTab("/cfg/company", "معلومات الشركة", Building2)}
+                      >
+                        <Building2 className="ml-1 h-3.5 w-3.5" />فتح معلومات المؤسسة
+                      </Button>
+                    )}
                   </div>
                 )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </>)}
+                {isEnabled && (
+                  <div className="rounded-md border border-[#e5d4bc] bg-[#fff8ed] p-3 text-[11px] leading-5 text-[#765f4b]">
+                    <p className="mb-1 font-bold text-[#70471f]">حالة QR</p>
+                    <p>{previewGenerated ? "تم إنشاء المحتوى التجريبي." : "لم يتم إنشاء معاينة بعد."}</p>
+                    <p>الحجم والموضع يحددهما قالب الطباعة، وليس إعدادًا عامًا هنا.</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </aside>
+        </div>
+      </div>
     </div>
   );
 }
@@ -5189,7 +5559,7 @@ function FieldDictionaryPage() {
     setDlgOpen(true);
   }
 
-  const rows = (listQ.data ?? []) as FDRow[];
+  const rows = (listQ.data ?? []) as unknown as FDRow[];
   const sq = search.toLowerCase();
   const filtered = rows.filter(r =>
     (!sq || r.code.toLowerCase().includes(sq) || r.nameAr.includes(sq) || r.nameEn.toLowerCase().includes(sq)) &&
@@ -5668,6 +6038,74 @@ function PaymentMethodsPage() {
 
 // ─── Content Router ────────────────────────────────────────────────────────────
 
+type ElectronicInvoicingTab = "qr" | "zatca";
+
+/**
+ * المركز الموحد لا يملك إعدادات جديدة؛ يستدعي الصفحتين الحاليتين مباشرةً.
+ * لذلك تبقى كل واجهات API والجداول وحالات الحفظ كما هي.
+ */
+function ElectronicInvoicingCenter({ initialTab = "qr" }: { initialTab?: ElectronicInvoicingTab }) {
+  const [activeTab, setActiveTab] = useState<ElectronicInvoicingTab>(initialTab);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    panelRef.current?.scrollTo({ top: 0, behavior: "auto" });
+  }, [activeTab]);
+
+  return (
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background" dir="rtl">
+      <div className="border-b border-border bg-card px-5 pt-4">
+        <div className="mb-3">
+          <h2 className="text-lg font-bold text-foreground">مركز الفوترة الإلكترونية</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            إعداد الفوترة وQR والربط السعودي مع هيئة الزكاة والضريبة والجمارك
+          </p>
+        </div>
+        <div className="flex gap-1" role="tablist" aria-label="مركز الفوترة الإلكترونية">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "qr"}
+            onClick={() => setActiveTab("qr")}
+            className={`border-b-2 px-4 py-2 text-sm font-semibold transition-colors ${
+              activeTab === "qr"
+                ? "border-[#406B93] text-[#406B93]"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            إعدادات QR Code
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "zatca"}
+            onClick={() => setActiveTab("zatca")}
+            className={`border-b-2 px-4 py-2 text-sm font-semibold transition-colors ${
+              activeTab === "zatca"
+                ? "border-[#D19C05] text-[#D19C05]"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            إعدادات الربط مع هيئة الزكاة والضريبة والجمارك – السعودية
+          </button>
+        </div>
+      </div>
+      <div ref={panelRef} className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden" role="tabpanel" aria-label={activeTab === "qr" ? "الفوترة وQR" : "الربط مع ZATCA"}>
+        {activeTab === "qr"
+          ? <div className="p-5"><QRSettingsPage /></div>
+          : <div className="h-full min-h-[620px]"><ZatcaCenterPage initialSection="activation" /></div>}
+      </div>
+    </div>
+  );
+}
+
+/** شاشة مستقلة لكل خيار من خيارات مركز الفوترة الإلكترونية. */
+function ElectronicInvoicingStandalone({ tab }: { tab: ElectronicInvoicingTab }) {
+  return tab === "qr"
+    ? <div className="h-full min-h-0 overflow-y-auto overflow-x-hidden bg-background p-5" dir="rtl"><QRSettingsPage /></div>
+    : <div className="h-full min-h-[620px]"><ZatcaCenterPage initialSection="activation" /></div>;
+}
+
 function SettingsContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (id: MenuId) => void }) {
   switch (activeId) {
     // الإعدادات العامة
@@ -5703,7 +6141,10 @@ function SettingsContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (
     case "document-journals":    return <DocumentJournalsPage />;
 
     case "document-templates":   return <TemplatesManagerPage />;
-    case "qr-settings":          return <QRSettingsPage />;
+    case "electronic-invoicing-center": return <ElectronicInvoicingCenter />;
+    case "electronic-invoicing-qr": return <ElectronicInvoicingStandalone tab="qr" />;
+    case "electronic-invoicing-zatca": return <ElectronicInvoicingStandalone tab="zatca" />;
+    case "qr-settings":          return <ElectronicInvoicingStandalone tab="qr" />;
     case "field-design":         return <FieldDesignPage />;
     case "backup":               return <BackupPage />;
     case "audit-log":            return <AuditLogPage />;
@@ -5742,13 +6183,12 @@ function SettingsContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (
     case "zatca-center-oplogs":
     case "zatca-center-errlogs":
     case "zatca-center-diag":
-    case "zatca-center-reports":   return <ZatcaCenterPage />;
+    case "zatca-center-reports":   return <ElectronicInvoicingCenter initialTab="zatca" />;
     // التكاملات الحكومية (كلاسيك)
     case "zatca-config":         return <ZatcaIntegrationPage initialTab="settings" />;
     case "zatca-monitor":        return <ZatcaIntegrationPage initialTab="monitor" />;
     case "zatca-invoices":       return <ZatcaIntegrationPage initialTab="invoices" />;
     case "zatca-logs":           return <ZatcaIntegrationPage initialTab="logs" />;
-    case "gosi-config":          return <ComingSoon title="التأمينات الاجتماعية (GOSI)" />;
     case "gazt-config":          return <ComingSoon title="الزكاة والدخل (GAZT)" />;
     // مركز الرسائل والتكاملات
     case "messaging-whatsapp":   return <MessagingWhatsAppPage />;
@@ -5771,10 +6211,16 @@ function SettingsContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (
 
 export default function SettingsModule() {
   const [activeId, setActiveId] = useState<MenuId>("overview");
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    contentRef.current?.scrollTo({ top: 0, behavior: "auto" });
+  }, [activeId]);
+
   return (
-    <div className="flex h-full" dir="rtl">
+    <div className="flex h-full min-h-0 overflow-hidden" dir="rtl">
       <SettingsMenu activeId={activeId} onSelect={setActiveId} />
-      <div className="flex-1 overflow-auto p-5 bg-background">
+      <div ref={contentRef} className="min-w-0 min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-5 bg-background">
         <SettingsContent activeId={activeId} onSelect={setActiveId} />
       </div>
     </div>
@@ -5815,7 +6261,7 @@ export function CfgDocumentTemplatesTab() { return <CfgSubPage activeId="documen
 export function CfgFieldDesignTab()      { return <CfgSubPage activeId="field-design" />; }
 export function CfgBackupTab()           { return <CfgSubPage activeId="backup" />; }
 export function CfgAuditLogTab()         { return <CfgSubPage activeId="audit-log" />; }
-export function CfgQrSettingsTab()       { return <CfgSubPage activeId="qr-settings" />; }
+export function CfgQrSettingsTab()       { return <ElectronicInvoicingCenter initialTab="qr" />; }
 export function CfgMissingDocsTab()      { return <CfgSubPage activeId="missing-doc-numbers" />; }
 export function CfgPayrollPeriodsTab()   { return <CfgSubPage activeId="payroll-periods" />; }
 export function CfgOrgChartTab()         { return <CfgSubPage activeId="org-chart" />; }
@@ -5835,7 +6281,10 @@ export function CfgMessagingEmailTab()     { return <CfgSubPage activeId="messag
 export function CfgMessagingTemplatesTab() { return <CfgSubPage activeId="messaging-templates" />; }
 export function CfgMessagingLogTab()       { return <CfgSubPage activeId="messaging-log" />; }
 export function CfgAiAssistantTab()        { return <CfgSubPage activeId="ai-assistant" />; }
-export function CfgZatcaCenterTab()        { return <CfgSubPage activeId="zatca-center-dashboard" />; }
+export function CfgZatcaCenterTab()        { return <ElectronicInvoicingStandalone tab="zatca" />; }
+export function CfgElectronicInvoicingCenterTab() { return <ElectronicInvoicingCenter />; }
+export function CfgElectronicInvoicingQrTab() { return <ElectronicInvoicingStandalone tab="qr" />; }
+export function CfgElectronicInvoicingZatcaTab() { return <ElectronicInvoicingStandalone tab="zatca" />; }
 export function CfgPrintSettingsTab()      { return <CfgSubPage activeId="print-settings" />; }
 export function CfgLogoStampTab()          { return <CfgSubPage activeId="logo-stamp" />; }
 export function CfgSignaturesTab()         { return <CfgSubPage activeId="signatures" />; }
@@ -5846,7 +6295,6 @@ export function CfgZatcaTab()            { return <CfgSubPage activeId="zatca-co
 export function CfgZatcaMonitorTab()     { return <CfgSubPage activeId="zatca-monitor" />; }
 export function CfgZatcaInvoicesTab()    { return <CfgSubPage activeId="zatca-invoices" />; }
 export function CfgZatcaLogsTab()        { return <CfgSubPage activeId="zatca-logs" />; }
-export function CfgGosiTab()             { return <CfgSubPage activeId="gosi-config" />; }
 export function CfgGaztTab()             { return <CfgSubPage activeId="gazt-config" />; }
 export function CfgSystemInfoTab()         { return <CfgSubPage activeId="system-info" />; }
 export function CfgServiceManagementTab() { return <CfgSubPage activeId="service-management" />; }

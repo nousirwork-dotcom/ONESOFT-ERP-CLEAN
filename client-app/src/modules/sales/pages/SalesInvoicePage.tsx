@@ -21,17 +21,23 @@ import { useDocumentToolsMenu } from "@/components/unified-toolbar/DocumentTools
 import type { CommandHandlers, ScreenState } from "@/components/unified-toolbar/useRegisterCommands";
 import { useDocumentNavigation } from "@/components/unified-toolbar/useDocumentNavigation";
 type ERPMode = "view" | "new" | "edit" | "search";
+
+function localDateValue(date = new Date()): string {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
 import PostingPreviewModal from "@/shared/components/PostingPreviewModal";
 import InvoicePrintModal from "@/shared/components/InvoicePrintModal";
 import SendDocumentPanel from "@/shared/components/SendDocumentPanel";
 import PaymentModal from "@/shared/components/PaymentModal";
-import { PrintEngine } from "@/shared/lib/print";
+import { PrintEngine, QRCodeService, QR_CODE_PRINT_PX } from "@/shared/lib/print";
+import QRCodeDisplay from "@/shared/components/QRCodeDisplay";
 import { usePrintTemplate } from "@/shared/hooks/usePrintTemplate";
 import { DateSegmentInput } from "@/shared/components/DateSegmentInput";
+import ProductLookupCell, { type ProductLookupOption } from "@/shared/components/ProductLookupCell";
 import BasedOnDocInput from "@/shared/components/BasedOnDocInput";
 import ContextSelectInput from "@/shared/components/ContextSelectInput";
 import { InvoiceTableColgroup } from "@/components/responsive-layout";
-import QRCode from "qrcode";
 import styles from "@/components/responsive-layout/ResponsiveLayout.module.css";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -48,6 +54,7 @@ interface InvoiceLine {
   taxAmt: string;
   total: string;
   productId?: number;
+  taxId?: number;
   isStockItem?: boolean;
 }
 
@@ -66,6 +73,50 @@ const EMPTY_LINE = (): InvoiceLine => ({
   taxAmt: "0",
   total: "0",
 });
+
+class PaymentDialogErrorBoundary extends React.Component<
+  { children: React.ReactNode; onClose: () => void },
+  { hasError: boolean }
+> {
+  state: { hasError: boolean } = { hasError: false };
+
+  static getDerivedStateFromError(): { hasError: boolean } {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error(
+      `[sales.payment-dialog] isolated render error: ${error.message}`,
+      info.componentStack,
+    );
+  }
+
+  render() {
+    if (!this.state.hasError) return this.props.children;
+
+    return (
+      <div
+        role="alert"
+        dir="rtl"
+        className="fixed inset-0 z-[10001] flex items-center justify-center bg-black/50"
+      >
+        <div className="w-[min(92vw,420px)] rounded-lg bg-white p-5 text-center shadow-xl">
+          <p className="font-bold text-slate-800">تعذر فتح شاشة الدفع</p>
+          <p className="mt-2 text-sm text-slate-500">
+            بقيت الفاتورة مفتوحة. أغلق هذه الرسالة ثم أعد المحاولة.
+          </p>
+          <button
+            type="button"
+            className="mt-4 rounded bg-[#406B93] px-5 py-2 text-sm font-bold text-white"
+            onClick={this.props.onClose}
+          >
+            إغلاق
+          </button>
+        </div>
+      </div>
+    );
+  }
+}
 
 const COL_FIELDS: (keyof InvoiceLine)[] = [
   "productCode", "productName", "quantity", "unit", "unitPrice",
@@ -167,8 +218,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
   };
   // ── Header state ─────────────────────────────────────────────────────────
   const [invoiceNumber, setInvoiceNumber] = useState("");
-  const [invoiceDate, setInvoiceDate] = useState(() => new Date().toISOString().split("T")[0]);
-  const [dueDate, setDueDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [invoiceDate, setInvoiceDate] = useState(() => localDateValue());
+  const [dueDate, setDueDate] = useState(() => localDateValue());
   const [customerId, setCustomerId] = useState<number | null>(null);
   const [customerName, setCustomerName] = useState("");
   const [customerCode, setCustomerCode] = useState("");
@@ -238,6 +289,10 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
   // ── Customer type & tax ───────────────────────────────────────────────────
   const [customerType, setCustomerType]         = useState<'individual' | 'organization'>('individual');
   const [customerTaxNumber, setCustomerTaxNumber] = useState("");
+  const [sellerLegalNameSnapshot, setSellerLegalNameSnapshot] = useState("");
+  const [sellerTaxNumberSnapshot, setSellerTaxNumberSnapshot] = useState("");
+  const [zatcaQrCodeSnapshot, setZatcaQrCodeSnapshot] = useState("");
+  const [zatcaPhase2, setZatcaPhase2] = useState(false);
 
   // ── Add Customer Modal ────────────────────────────────────────────────────
   const [showAddCustomer, setShowAddCustomer] = useState(false);
@@ -277,25 +332,46 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
   }, [focusAndSelectCell]);
 
   // ── Queries ───────────────────────────────────────────────────────────────
-  const customersQuery   = trpc.customers.list.useQuery({});
+  const customersQuery   = trpc.customers.list.useQuery();
   const warehousesQuery  = trpc.warehouses.list.useQuery();
-  const productsQuery    = trpc.products.list.useQuery({});
+  const productsQuery    = trpc.products.list.useQuery();
+  const activeTaxesQuery = trpc.taxDefinitions.list.useQuery({ activeOnly: true }, { staleTime: 60000 });
+  const activeTaxes = activeTaxesQuery.data ?? [];
   const journalsQuery    = trpc.documentJournals.list.useQuery({ docType: "sales_invoice" });
   const salespersonsQuery = trpc.users.listSalespersons.useQuery({ warehouseId: warehouseId ?? undefined });
   const nextNumberQuery  = trpc.salesInvoices.nextNumber.useQuery({ prefix: "INV" });
   const docTypesQuery    = trpc.documentTypes.list.useQuery({ typeId: "sales" });
-  const allInvoicesQuery = trpc.salesInvoices.list.useQuery({});
+  const allInvoicesQuery = trpc.salesInvoices.list.useQuery();
   const qrSettingsQuery       = trpc.qrSettings.get.useQuery();
   const orgQuery              = trpc.orgs.currentOrg.useQuery();
-  const { templateConfig }    = usePrintTemplate("sales_invoice");
+  const effectiveSellerLegalName = sellerLegalNameSnapshot.trim() ||
+    String(orgQuery.data?.legalName ?? orgQuery.data?.name ?? "").trim();
+  const effectiveSellerTaxNumber = sellerTaxNumberSnapshot.trim() ||
+    String(orgQuery.data?.vatNumber ?? orgQuery.data?.taxNumber ?? "").trim();
+  const issuedWithoutSellerSnapshot = !!savedInvoiceId && invoiceStatus !== "draft" &&
+    (!sellerLegalNameSnapshot.trim() || !sellerTaxNumberSnapshot.trim());
+  const canUseSellerIdentityForPrint = !issuedWithoutSellerSnapshot;
+  const sellerSnapshotWarning = "لا يمكن إعادة طباعة أو توليد QR لهذه الفاتورة: لقطة اسم المنشأة والرقم الضريبي غير محفوظة تاريخيًا.";
+  const selectedJournalForPrint = (journalsQuery.data ?? []).find((j: any) => j.id === journalId);
+  const zatcaJournalSelected = Boolean(selectedJournalForPrint?.zatcaPosUnitId);
+  const zatcaDateUsesCurrentWindowsDay = zatcaJournalSelected && !savedInvoiceId && !navInvoiceId;
+  const { templateConfig }    = usePrintTemplate(
+    "sales_invoice",
+    selectedJournalForPrint?.printTemplate || undefined,
+  );
 
   const currentInvId          = navInvoiceId ?? savedInvoiceId;
   const zatcaQuery            = trpc.zatca.getInvoiceZatca.useQuery(
     { invoiceId: currentInvId! },
-    { enabled: !!currentInvId && activeMainTab === "zatca" }
+    { enabled: !!currentInvId }
   );
   const zatcaSubmitMut        = trpc.zatca.submitInvoice.useMutation({
-    onSuccess: (r) => { toast.success(r.message ?? "تم"); zatcaQuery.refetch(); },
+    onSuccess: async (r) => {
+      toast.success(r.message ?? "تم");
+      const refreshed = await zatcaQuery.refetch();
+      const snapshot = refreshed.data?.zatcaQrCode ?? "";
+      if (snapshot) setZatcaQrCodeSnapshot(snapshot);
+    },
     onError:   (e) => toast.error(e.message),
   });
   const stockQuery       = trpc.reports.stockByWarehouse.useQuery(
@@ -456,13 +532,17 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
     const inv = navInvoiceQuery.data;
     if (!inv) return;
     setInvoiceNumber(inv.invoiceNumber);
-    setInvoiceDate(inv.invoiceDate ? new Date(inv.invoiceDate).toISOString().split("T")[0] : "");
+    setInvoiceDate(inv.invoiceDate ? localDateValue(new Date(inv.invoiceDate)) : "");
     setDueDate(inv.dueDate ? new Date(inv.dueDate).toISOString().split("T")[0] : "");
     setCustomerId(inv.customerId ?? null);
     setCustomerName(inv.customerName ?? "");
     setCustomerCode(inv.customerId ? ((customersQuery.data ?? []).find(c => c.id === inv.customerId)?.code ?? "") : "");
     setCustomerType((inv.customerType as any) ?? 'individual');
     setCustomerTaxNumber(inv.customerTaxNumber ?? "");
+    setSellerLegalNameSnapshot((inv as any).sellerLegalName ?? "");
+    setSellerTaxNumberSnapshot((inv as any).sellerTaxNumber ?? "");
+    setZatcaQrCodeSnapshot((inv as any).zatcaQrCode ?? "");
+    setZatcaPhase2(Boolean((inv as any).zatcaPhase2));
     setWarehouseId(inv.warehouseId ?? null);
     setWarehouseDisplayName(inv.warehouseName ?? "");
     setJournalId(inv.journalId ?? null);
@@ -502,6 +582,15 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
       setNavInvoiceId(data.id ?? null);
       setIsPosted(data.isPosted ?? false);
       setInvoiceNumber(data.invoiceNumber ?? invoiceNumber);
+      if ((data as any).status !== "draft") {
+        setSellerLegalNameSnapshot(effectiveSellerLegalName);
+        setSellerTaxNumberSnapshot(effectiveSellerTaxNumber);
+      } else {
+        setSellerLegalNameSnapshot("");
+        setSellerTaxNumberSnapshot("");
+      }
+      setZatcaQrCodeSnapshot((data as any).zatcaQrCode ?? "");
+      setZatcaPhase2(Boolean((data as any).zatcaPhase2));
       setErpMode("view");
       // رسالة النجاح تُعرض هنا فقط للحفظ المباشر (آجل)؛ أما عند التأكيد من شاشة الدفع فالنافذة تُعرضها.
       if (!skipSaveToast.current) {
@@ -522,6 +611,10 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
       if (data.id) {
         pendingCreatePayloadRef.current = null;
       }
+      const savedJournal = (journalsQuery.data ?? []).find((journal: any) =>
+        journal.id === ((data as any).journalId ?? journalId),
+      );
+      setZatcaPhase2(Boolean(savedJournal?.zatcaPosUnitId));
     },
     onError: (e) => {
       skipSaveToast.current = false;
@@ -627,6 +720,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
       }
       if (j.defaultCurrency) setCurrency(j.defaultCurrency);
       if (j.defaultPayMethod) setPaymentType(j.defaultPayMethod as any);
+      if (j.zatcaPosUnitId) setInvoiceDate(localDateValue());
       const custJId = (j as any).customersJournal ? parseInt((j as any).customersJournal) : null;
       setJournalCustomersJournalId(custJId && !isNaN(custJId) ? custJId : null);
     }
@@ -831,15 +925,16 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
   // ── Product auto-fill ─────────────────────────────────────────────────────
   const handleProductCodeChange = useCallback((idx: number, code: string) => {
     updateLine(idx, "productCode", code);
-    if (!code.trim()) {
-      // مسح الصنف المختار يُمسح كل بيانات السطر
-      setLines(prev => {
-        const updated = [...prev];
-        updated[idx] = { ...EMPTY_LINE(), id: updated[idx].id };
-        return updated;
-      });
-      return;
-    }
+    setLines(prev => {
+      const updated = [...prev];
+      const current = updated[idx];
+      if (!current) return prev;
+      updated[idx] = code.trim()
+        ? { ...current, productCode: code, productId: undefined, productName: "", unit: "", unitPrice: "", taxPct: "0", total: "0" }
+        : { ...EMPTY_LINE(), id: current.id };
+      return updated;
+    });
+    if (!code.trim()) return;
     const found = (productsQuery.data ?? []).find(
       (p: any) => p.code === code || p.barcode === code || String(p.id) === code
     );
@@ -851,10 +946,18 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
         l.productCode = found.code ?? found.barcode ?? code;
         l.productName = found.name;
         l.productId = found.id;
+        l.taxId = found.taxId ?? undefined;
         l.isStockItem = isStock;
         l.unit = found.unit ?? "";
         l.unitPrice = found.salePrice ? String(found.salePrice) : "";
-        l.taxPct = found.taxRate ? String(found.taxRate) : "0";
+        const tax = activeTaxes.find(t => t.id === found.taxId);
+        const isApplicableTax = tax?.valueType === "percentage"
+          && tax.category === "tax"
+          && tax.applicationScope === "products_sales";
+        if (found.taxId && !isApplicableTax) {
+          toast.warning(`الضريبة المرتبطة بالصنف "${found.name}" غير مخصصة للأصناف والمبيعات؛ حدّث كارت الصنف قبل حفظ الفاتورة`);
+        }
+        l.taxPct = isApplicableTax ? String(tax.value) : "0";
         l.total = calcLineTotal(l);
         updated[idx] = l;
         return updated;
@@ -867,7 +970,40 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
         return updated;
       });
     }
-  }, [productsQuery.data]);
+  }, [productsQuery.data, activeTaxes]);
+
+  const selectProductForLine = useCallback((idx: number, product: ProductLookupOption) => {
+    const isStock = product.itemType !== "service";
+    setLines(prev => {
+      const updated = [...prev];
+      const current = updated[idx];
+      if (!current) return prev;
+      const line = {
+        ...current,
+        productCode: product.code ?? product.barcode ?? "",
+        productName: product.name,
+        productId: product.id,
+        taxId: (product as any).taxId ?? undefined,
+        isStockItem: isStock,
+        unit: product.unit ?? "",
+        unitPrice: product.salePrice ? String(product.salePrice) : "",
+        taxPct: (() => {
+          const tax = activeTaxes.find(t => t.id === (product as any).taxId);
+          const isApplicableTax = tax?.valueType === "percentage"
+            && tax.category === "tax"
+            && tax.applicationScope === "products_sales";
+          if ((product as any).taxId && !isApplicableTax) {
+            toast.warning(`الضريبة المرتبطة بالصنف "${product.name}" غير مخصصة للأصناف والمبيعات؛ حدّث كارت الصنف قبل حفظ الفاتورة`);
+          }
+          return isApplicableTax ? String(tax.value) : "0";
+        })(),
+      };
+      line.total = calcLineTotal(line);
+      updated[idx] = line;
+      return updated;
+    });
+    requestAnimationFrame(() => cellRefs.current.get(`${idx}-2`)?.focus());
+  }, [activeTaxes]);
 
   // ── Keyboard Navigation ───────────────────────────────────────────────────
   const handleCellKeyDown = useCallback((
@@ -1129,6 +1265,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
       sourceDocumentId: basedOnQuery.data && basedOnQuery.data.sourceType !== 'transfer' ? (basedOnQuery.data as any).id ?? undefined : undefined,
       items: validLines.map((l, idx) => ({
         productId: l.productId,
+        taxId: l.taxId,
         productCode: l.productCode || undefined,
         productName: l.productName,
         unit: l.unit || undefined,
@@ -1278,6 +1415,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
         sourceDocumentId: basedOnQuery.data && basedOnQuery.data.sourceType !== 'transfer' ? (basedOnQuery.data as any).id ?? undefined : undefined,
         items: validLines.map((l, idx) => ({
           productId: l.productId,
+          taxId: l.taxId,
           productCode: l.productCode || undefined,
           productName: l.productName,
           unit: l.unit || undefined,
@@ -1310,11 +1448,15 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
     if (!hasDoc) { toast.warning("لا يوجد مستند محفوظ للنسخ — احفظ الفاتورة أولاً"); return; }
     setSavedInvoiceId(null);
     setNavInvoiceId(null);
+    setSellerLegalNameSnapshot("");
+    setSellerTaxNumberSnapshot("");
+    setZatcaQrCodeSnapshot("");
+    setZatcaPhase2(false);
     setIsPosted(false);
     setShowPostingPreview(false);
     setErpMode("new");
-    setInvoiceDate(new Date().toISOString().split("T")[0]);
-    setDueDate(new Date().toISOString().split("T")[0]);
+    setInvoiceDate(localDateValue());
+    setDueDate(localDateValue());
     setBasedOnType(''); setBasedOnNum(''); setBasedOnTrigger('');
     setPaidAmountOverride("");
     if (journalId) {
@@ -1342,6 +1484,10 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
     setShowCustDrop(false);
     setCustomerType('individual');
     setCustomerTaxNumber("");
+    setSellerLegalNameSnapshot("");
+    setSellerTaxNumberSnapshot("");
+    setZatcaQrCodeSnapshot("");
+    setZatcaPhase2(false);
     setWarehouseId(null);
     setPaymentType("cash");
     setBasedOnType('');
@@ -1397,32 +1543,41 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
   /* ── تحميل PDF الفاتورة (تُستخدم في SendDocumentPanel) ── */
   const handleDownloadPdf = useCallback(async () => {
     try {
-      const qrEnabled = !!(qrSettingsQuery.data?.isEnabled && qrSettingsQuery.data?.showOnSalesInvoice);
-      let qrDataUrl = "";
-      if (qrEnabled) {
-        const { generateQrContent } = await import("@/shared/lib/qrUtils");
-        const content = generateQrContent(
-          qrSettingsQuery.data!.countrySystem as any,
-          {
-            sellerName: orgQuery.data?.name ?? qrSettingsQuery.data?.sellerName ?? "OneSoft ERP",
-            taxNumber: orgQuery.data?.taxNumber ?? qrSettingsQuery.data?.taxNumber ?? "",
-            invoiceDateTime: `${invoiceDate}T${new Date().toTimeString().slice(0,8)}`,
-            totalAmount: netTotal, vatAmount: totalTax,
-            invoiceNumber: invoiceNumber,
-            buyerName: customerName, buyerTaxNumber: customerTaxNumber,
-          } as any,
-          qrSettingsQuery.data?.customFormat ?? undefined,
-        );
-        if (content) {
-          qrDataUrl = await QRCode.toDataURL(content, { width: 200, margin: 1 }).catch(() => "");
-        }
+      if (!canUseSellerIdentityForPrint) {
+        toast.error(sellerSnapshotWarning);
+        return;
       }
+      const qrResult = await QRCodeService.resolveForInvoice(
+        qrSettingsQuery.data ? {
+          isEnabled: qrSettingsQuery.data.isEnabled,
+          countrySystem: qrSettingsQuery.data.countrySystem as any,
+          customFormat: qrSettingsQuery.data.customFormat ?? undefined,
+          showOnSalesInvoice: qrSettingsQuery.data.showOnSalesInvoice,
+          showOnPurchaseInvoice: qrSettingsQuery.data.showOnPurchaseInvoice,
+          showOnReceiptVoucher: qrSettingsQuery.data.showOnReceiptVoucher,
+        } : null,
+        {
+          sellerName: effectiveSellerLegalName,
+          taxNumber: effectiveSellerTaxNumber,
+          invoiceDateTime: `${invoiceDate}T${new Date().toTimeString().slice(0,8)}`,
+          totalAmount: netTotal,
+          vatAmount: totalTax,
+          invoiceNumber,
+          buyerName: customerName,
+          buyerTaxNumber: customerTaxNumber,
+        },
+        "sales_invoice",
+        zatcaQrCodeSnapshot,
+        zatcaPhase2,
+      );
       const ok = PrintEngine.buildAndPrint({
         documentType: "sales_invoice",
         data: {
           invoiceNumber: invoiceNumber || "—",
           invoiceDate,
           invoiceTime: new Date().toTimeString().slice(0, 8),
+          deliveryDate: invoiceDate,
+          warehouseName: warehousesQuery.data?.find((w: any) => w.id === warehouseId)?.name ?? warehouseDisplayName ?? undefined,
           customerName: customerName || "عميل نقدي",
           customerCode: customerCode || undefined,
           customerTaxNumber: customerTaxNumber || undefined,
@@ -1452,17 +1607,17 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
           grandTotal: netTotal,
           paidAmount,
           remainingAmount,
-          sellerName: orgQuery.data?.name ?? qrSettingsQuery.data?.sellerName ?? "OneSoft ERP",
-          sellerTaxNumber: orgQuery.data?.taxNumber ?? qrSettingsQuery.data?.taxNumber ?? "",
-          sellerCommercialReg: orgQuery.data?.commercialReg || undefined,
-          sellerAddress: orgQuery.data?.address ?? undefined,
-          sellerPhone: orgQuery.data?.phone ?? undefined,
+          sellerName: effectiveSellerLegalName,
+          sellerTaxNumber: effectiveSellerTaxNumber,
+          sellerCommercialReg: String(orgQuery.data?.commercialReg ?? "") || undefined,
+          sellerAddress: String(orgQuery.data?.address ?? "") || undefined,
+          sellerPhone: String(orgQuery.data?.phone ?? "") || undefined,
         },
         templateConfig,
-        qrDataUrl: qrDataUrl || undefined,
+         qrDataUrl: qrResult.dataUrl || undefined,
         qrLabel: qrSettingsQuery.data?.countrySystem === "zatca" ? "ZATCA QR"
           : qrSettingsQuery.data?.countrySystem === "eta" ? "ETA QR" : "QR Code",
-        qrSize: qrSettingsQuery.data?.qrSize ?? 100,
+          qrSize: QR_CODE_PRINT_PX,
       });
       if (!ok) toast.error("تعذّر فتح نافذة PDF — تحقق من إعدادات المتصفح (السماح بالنوافذ المنبثقة)");
     } catch (e: any) {
@@ -1470,11 +1625,18 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
     }
   }, [invoiceNumber, invoiceDate, customerName, customerCode, customerTaxNumber, sellerUserId, salespersonsQuery.data,
       paymentType, currency, notes, lines, subtotal, totalDiscount, totalTax, netTotal,
-      paidAmount, remainingAmount, orgQuery.data, qrSettingsQuery.data, templateConfig]);
+      paidAmount, remainingAmount, effectiveSellerLegalName, effectiveSellerTaxNumber,
+       canUseSellerIdentityForPrint, sellerSnapshotWarning, orgQuery.data, qrSettingsQuery.data, templateConfig, zatcaQrCodeSnapshot, zatcaPhase2]);
 
   // ── Unified Toolbar ──────────────────────────────────────────────────────────
   const _sipRef = useRef<any>({});
-  _sipRef.current = { erpMode, isDirty, savedInvoiceId, isPosted, handleNew, handleSave, handleSaveDraft, handleDelete, handleDuplicate, handleRepost, createMutation, unpostMutation, allInvoicesQuery, navInvoiceId, setNavInvoiceId, setErpMode, requestWorkClose, setShowPostingPreview, setShowPrintModal, setShowSendPanel, nextNumberQuery };
+  _sipRef.current = {
+    erpMode, isDirty, savedInvoiceId, isPosted, handleNew, handleSave, handleSaveDraft,
+    handleDelete, handleDuplicate, handleRepost, createMutation, unpostMutation,
+    allInvoicesQuery, navInvoiceId, setNavInvoiceId, setErpMode, requestWorkClose,
+    setShowPostingPreview, setShowPrintModal, setShowSendPanel, nextNumberQuery,
+    canUseSellerIdentityForPrint, sellerSnapshotWarning,
+  };
 
   // handlers مستقرة ([] deps) — جميع الوصولات عبر _sipRef.current
   const sipHandlers = useMemo<CommandHandlers>(() => ({
@@ -1492,7 +1654,14 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
     cancel: () => { const s = _sipRef.current; if (!s.savedInvoiceId) return; if (window.confirm("هل أنت متأكد من إلغاء ترحيل هذه الفاتورة؟")) s.unpostMutation.mutate({ invoiceId: s.savedInvoiceId }); },
     preview:   () => { const s = _sipRef.current; if (!s.savedInvoiceId) { toast.warning("يجب حفظ الفاتورة أولاً"); return; } s.setShowPostingPreview(true); },
     send:      () => { const s = _sipRef.current; if (!s.savedInvoiceId) { toast.warning("يجب حفظ الفاتورة أولاً قبل الإرسال"); return; } s.setShowSendPanel(true); },
-    print:     () => { _sipRef.current.setShowPrintModal(true); },
+    print:     () => {
+      const s = _sipRef.current;
+      if (!s.canUseSellerIdentityForPrint) {
+        toast.error(s.sellerSnapshotWarning);
+        return;
+      }
+      s.setShowPrintModal(true);
+    },
     exit:      () => {
       _sipRef.current.requestWorkClose();
     },
@@ -1900,9 +2069,9 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
           <div className="flex items-center w-full min-w-0" style={{ gap: 3, gridColumn: "2" }}>
             <label style={compactHeaderLabelStyle}>تاريخ التحرير</label>
             <div data-date-field className="flex min-w-0" style={{ flex: "0 0 118px", width: 118, transform: "translateX(-11px)", height: "var(--work-field-h, 26px)", border: "1px solid #d1d5db", borderRadius: 4, overflow: "hidden" }}>
-              <DateSegmentInput value={invoiceDate} onChange={setInvoiceDate} style={{ flex: 1, minWidth: 0, width: "100%", height: "var(--work-field-h, 26px)", border: "none", borderRadius: 0, justifyContent: "center", textAlign: "center", paddingInline: 2 }} />
-              <button type="button" onClick={() => invoiceDatePickerRef.current?.showPicker()} className="flex items-center justify-center flex-shrink-0" style={{ height: "var(--work-field-h, 26px)", width: "26px", background: "#f3f4f6", border: "none", borderInlineStart: "1px solid #d1d5db", color: "#555", cursor: "pointer", fontSize: "var(--work-font-size, 12px)" }}>📅</button>
-              <input ref={invoiceDatePickerRef} type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }} tabIndex={-1} aria-hidden="true" />
+              <DateSegmentInput value={zatcaDateUsesCurrentWindowsDay ? localDateValue() : invoiceDate} onChange={setInvoiceDate} readOnly={zatcaJournalSelected} style={{ flex: 1, minWidth: 0, width: "100%", height: "var(--work-field-h, 26px)", border: "none", borderRadius: 0, justifyContent: "center", textAlign: "center", paddingInline: 2 }} />
+              {!zatcaJournalSelected && <button type="button" onClick={() => invoiceDatePickerRef.current?.showPicker()} className="flex items-center justify-center flex-shrink-0" style={{ height: "var(--work-field-h, 26px)", width: "26px", background: "#f3f4f6", border: "none", borderInlineStart: "1px solid #d1d5db", color: "#555", cursor: "pointer", fontSize: "var(--work-font-size, 12px)" }}>📅</button>}
+              {!zatcaJournalSelected && <input ref={invoiceDatePickerRef} type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }} tabIndex={-1} aria-hidden="true" />}
             </div>
           </div>
 
@@ -2029,6 +2198,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
               {(() => {
                 const statusMap: Record<string, { label: string; color: string; bg: string; icon: string }> = {
                   not_submitted: { label: "لم تُرسَل للهيئة بعد",   color: "#6b7280", bg: "#f3f4f6", icon: "📭" },
+                  reporting_pending: { label: "تم الإصدار محليًا — بانتظار الإبلاغ", color: "#2563eb", bg: "#dbeafe", icon: "🧾" },
+                  clearance_pending: { label: "تم الإصدار محليًا — بانتظار التخليص", color: "#2563eb", bg: "#dbeafe", icon: "🧾" },
                   pending:       { label: "في انتظار معالجة الهيئة", color: "#d97706", bg: "#fef3c7", icon: "⏳" },
                   cleared:       { label: "مُخلَّصة من الهيئة ✓",   color: "#16a34a", bg: "#dcfce7", icon: "✅" },
                   reported:      { label: "مُبلَّغة للهيئة",         color: "#0ea5e9", bg: "#e0f2fe", icon: "📤" },
@@ -2069,15 +2240,15 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
                   🔑 البيانات التقنية
                 </div>
                 <div style={{ padding: "14px 16px", display: "grid", gridTemplateColumns: "140px 1fr", rowGap: "10px", alignItems: "start", fontSize: "var(--work-font-size, 12px)" }}>
-                  {[
+                  {([
                     { label: "UUID الفاتورة",      value: zatcaQuery.data.zatcaUuid },
                     { label: "Hash التشفيري",       value: zatcaQuery.data.zatcaHash },
                     { label: "PIH (الفاتورة السابقة)", value: zatcaQuery.data.zatcaPih },
                     { label: "رقم تسلسلي (Counter)", value: zatcaQuery.data.zatcaInvoiceCounter?.toString() },
-                  ].map(row => row.value ? (
+                  ] as Array<{ label: string; value: string | null | undefined }>).map(row => row.value ? (
                     <React.Fragment key={row.label}>
                       <div style={{ fontWeight: 700, color: "#6b7280", paddingLeft: 8 }}>{row.label}</div>
-                      <div style={{ fontFamily: "monospace", fontSize: "10px", color: "#1e293b", background: "#f8fafc", padding: "3px 8px", borderRadius: 4, wordBreak: "break-all" }}>{row.value}</div>
+                      <div style={{ fontFamily: "monospace", fontSize: "10px", color: "#1e293b", background: "#f8fafc", padding: "3px 8px", borderRadius: 4, wordBreak: "break-all" }}>{String(row.value)}</div>
                     </React.Fragment>
                   ) : null)}
                   {!zatcaQuery.data.zatcaUuid && (
@@ -2092,12 +2263,16 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
               {zatcaQuery.data.zatcaQrCode && (
                 <div style={{ marginTop: 16, background: "#fff", borderRadius: 10, border: "1px solid #e2e8f0", padding: "14px 16px" }}>
                   <div style={{ fontWeight: 700, fontSize: "var(--work-font-size, 12px)", color: "#374151", marginBottom: 10 }}>📱 QR Code الهيئة</div>
-                  <img src={`data:image/png;base64,${zatcaQuery.data.zatcaQrCode}`} alt="ZATCA QR" style={{ width: "140px", height: "140px" }} />
+                  <QRCodeDisplay
+                    content={zatcaQuery.data.zatcaQrCode}
+                    size={280}
+                    style={{ width: 280, height: 280 }}
+                  />
                 </div>
               )}
 
               {/* استجابة الهيئة */}
-              {zatcaQuery.data.zatcaResponse && (
+              {Boolean(zatcaQuery.data.zatcaResponse) && (
                 <div style={{ marginTop: 16, background: "#fff", borderRadius: 10, border: "1px solid #e2e8f0", overflow: "hidden" }}>
                   <div style={{ background: "#f8fafc", padding: "10px 16px", fontWeight: 700, fontSize: "var(--work-font-size, 12px)", color: "#374151", borderBottom: "1px solid #e2e8f0" }}>
                     📋 استجابة الهيئة
@@ -2152,29 +2327,24 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
                 <td className="inv-td text-center text-[#999] text-[11px]">{rowIdx + 1}</td>
 
                 <td className="inv-td p-0">
-                  <input
-                    ref={el => { if (el) cellRefs.current.set(`${rowIdx}-0`, el); }}
+                  <ProductLookupCell
+                    value={line.productCode}
+                    placeholder="كود / بحث..."
+                    products={(productsQuery.data ?? []) as ProductLookupOption[]}
+                    inputRef={el => { if (el) cellRefs.current.set(`${rowIdx}-0`, el); }}
+                    className="inv-cell"
                     data-focused-entity-type={line.productId ? "product" : undefined}
                     data-focused-entity-id={line.productId ?? undefined}
-                    data-focused-field="productCode"
-                    data-focused-source="sales-invoice"
-                    data-focused-row={line.id}
-                    data-focused-entity-title={line.productCode || line.productName || undefined}
-                    value={line.productCode}
-                    onChange={e => { if (!line.productId) handleProductCodeChange(rowIdx, e.target.value); }}
-                    onFocus={() => setSelectedLineIdx(rowIdx)}
-                    onBlur={() => handleProductCodeBlur(rowIdx)}
-                    onKeyDown={e => handleProductCodeKeyDown(e, rowIdx)}
-                    className="inv-cell"
-                    placeholder={line.productId ? "" : "كود / بحث..."}
-                    readOnly={!!line.productId}
-                    title={line.productId ? "كود الصنف لا يمكن تعديله" : "اكتب كود الصنف واضغط Enter"}
-                    style={line.productId ? { background: "#f5f5f3", color: "#555", cursor: "default" } : undefined}
+                    onChange={value => handleProductCodeChange(rowIdx, value)}
+                    onSelect={product => selectProductForLine(rowIdx, product)}
+                    displayValue={product => product.code ?? product.barcode ?? ""}
+                    onInvalid={() => rejectInvalidProduct(`${rowIdx}-0`)}
+                    onNavigate={event => handleCellKeyDown(event, rowIdx, 0)}
                   />
                 </td>
 
                 <td className="inv-td p-0">
-                  <ProductNameCell
+                  {line.isStockItem === false ? <ProductNameCell
                     rowIdx={rowIdx}
                     value={line.productName}
                     products={productsQuery.data ?? []}
@@ -2187,10 +2357,18 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
                     focusedSourceScreen="sales-invoice"
                     focusedRowId={line.id}
                     focusedEntityTitle={line.productCode || line.productName || undefined}
-                     onSelect={(name, code, id, unit, price, tax, itemType) => {
+                      onSelect={(name, code, id, unit, price, _tax, itemType, taxId) => {
                       setLines(prev => {
                         const updated = [...prev];
-                        const l = { ...updated[rowIdx], productName: name, productCode: code, productId: id, unit, unitPrice: price, taxPct: tax, isStockItem: itemType !== "service" };
+                         const definition = activeTaxes.find(t => t.id === taxId);
+                          const isApplicableTax = definition?.valueType === "percentage"
+                            && definition.category === "tax"
+                            && definition.applicationScope === "products_sales";
+                          if (taxId && !isApplicableTax) {
+                            toast.warning(`الضريبة المرتبطة بالصنف "${name}" غير مخصصة للأصناف والمبيعات؛ حدّث كارت الصنف قبل حفظ الفاتورة`);
+                          }
+                          const taxPct = isApplicableTax ? String(definition.value) : "0";
+                         const l = { ...updated[rowIdx], productName: name, productCode: code, productId: id, taxId, unit, unitPrice: price, taxPct, isStockItem: itemType !== "service" };
                         l.total = calcLineTotal(l);
                         updated[rowIdx] = l;
                         return updated;
@@ -2218,7 +2396,24 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
                     }}
                     onKeyDown={e => handleCellKeyDown(e, rowIdx, 1)}
                     onFocus={() => setSelectedLineIdx(rowIdx)}
-                  />
+                  /> : <ProductLookupCell
+                    value={line.productName}
+                    placeholder="اسم الصنف / بحث..."
+                    products={(productsQuery.data ?? []) as ProductLookupOption[]}
+                    inputRef={el => { if (el) cellRefs.current.set(`${rowIdx}-1`, el); }}
+                    className="inv-cell"
+                    data-focused-entity-type={line.productId ? "product" : undefined}
+                    data-focused-entity-id={line.productId ?? undefined}
+                    onChange={value => {
+                      setLines(prev => prev.map((item, index) => index === rowIdx
+                        ? { ...item, productName: value, productId: undefined, productCode: "", unit: "", unitPrice: "", taxPct: "0", total: "0" }
+                        : item));
+                    }}
+                    onSelect={product => selectProductForLine(rowIdx, product)}
+                    displayValue={product => product.name}
+                    onInvalid={() => rejectInvalidProduct(`${rowIdx}-1`)}
+                    onNavigate={event => handleCellKeyDown(event, rowIdx, 1)}
+                  />}
                 </td>
 
                 <td className="inv-td p-0">
@@ -2577,31 +2772,39 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
 
       {/* ── شاشة الدفع ──────────────────────────────────────────────────── */}
       {showPaymentModal && (
-        <PaymentModal
-          open={showPaymentModal}
+        <PaymentDialogErrorBoundary
           onClose={() => {
-            // إذا أُلغيت شاشة الدفع دون تأكيد، احتفظ بالمسودة كما هي ولا تُحدِث DB
             draftIdToFinalizeRef.current = null;
             pendingCreatePayloadRef.current = null;
             setShowPaymentModal(false);
           }}
-          invoiceId={pendingPayInvoiceId}
-          invoiceNumber={pendingPayInvoiceNumber}
-          invoiceTotal={pendingPayTotal}
-          currency={currency}
-          customerId={customerId}
-          onSaveFirst={!pendingPayInvoiceId ? saveForPayment : undefined}
-          onConfirmed={(paidAmt, breakdown) => {
-            setShowPaymentModal(false);
-            setPaymentBreakdown(breakdown);
-            const keys = Object.keys(breakdown);
-            const methods = keys.join(" + ");
-            toast.success(`✓ تم حفظ الفاتورة وتسجيل الدفع: ${paidAmt.toFixed(2)} ${currency}`, {
-              description: keys.length > 0 ? `وسائل الدفع: ${methods}` : undefined,
-              duration: 5000,
-            });
-          }}
-        />
+        >
+          <PaymentModal
+            open={showPaymentModal}
+            onClose={() => {
+              // إذا أُلغيت شاشة الدفع دون تأكيد، احتفظ بالمسودة كما هي ولا تُحدِث DB
+              draftIdToFinalizeRef.current = null;
+              pendingCreatePayloadRef.current = null;
+              setShowPaymentModal(false);
+            }}
+            invoiceId={pendingPayInvoiceId}
+            invoiceNumber={pendingPayInvoiceNumber}
+            invoiceTotal={pendingPayTotal}
+            currency={currency}
+            customerId={customerId}
+            onSaveFirst={!pendingPayInvoiceId ? saveForPayment : undefined}
+            onConfirmed={(paidAmt, breakdown) => {
+              setShowPaymentModal(false);
+              setPaymentBreakdown(breakdown);
+              const keys = Object.keys(breakdown);
+              const methods = keys.join(" + ");
+              toast.success(`✓ تم حفظ الفاتورة وتسجيل الدفع: ${paidAmt.toFixed(2)} ${currency}`, {
+                description: keys.length > 0 ? `وسائل الدفع: ${methods}` : undefined,
+                duration: 5000,
+              });
+            }}
+          />
+        </PaymentDialogErrorBoundary>
       )}
 
       {/* ── نافذة الطباعة مع QR Code ──────────────────────────────────── */}
@@ -2616,7 +2819,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
           docTypeName="فاتورة مبيعات"
           amount={(() => {
             try {
-              const n = Number(lines.reduce((s, l) => s + (parseFloat(l.total) || 0), 0) - (parseFloat(discountAmount) || 0));
+              const n = Number(lines.reduce((s, l) => s + (parseFloat(l.total) || 0), 0) - totalDiscount);
               return new Intl.NumberFormat("ar-SA", { minimumFractionDigits: 2 }).format(n);
             } catch { return "0.00"; }
           })()}
@@ -2627,16 +2830,16 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
         />
       )}
 
-      {showPrintModal && (
+      {showPrintModal && canUseSellerIdentityForPrint && (
         <InvoicePrintModal
           open={showPrintModal}
           onClose={() => setShowPrintModal(false)}
           templateConfig={templateConfig}
+           zatcaQrCode={zatcaQrCodeSnapshot || (zatcaQuery.data?.zatcaQrCode ?? "")}
+           zatcaPhase2={zatcaPhase2}
           qrSettings={qrSettingsQuery.data ? {
             isEnabled: qrSettingsQuery.data.isEnabled,
             countrySystem: qrSettingsQuery.data.countrySystem as any,
-            sellerName: qrSettingsQuery.data.sellerName ?? undefined,
-            taxNumber: qrSettingsQuery.data.taxNumber ?? undefined,
             customFormat: qrSettingsQuery.data.customFormat ?? undefined,
             showOnSalesInvoice: qrSettingsQuery.data.showOnSalesInvoice,
             showOnPurchaseInvoice: qrSettingsQuery.data.showOnPurchaseInvoice,
@@ -2648,6 +2851,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
             invoiceNumber: invoiceNumber || "—",
             invoiceDate,
             invoiceTime: new Date().toTimeString().slice(0, 8),
+            deliveryDate: invoiceDate,
+            warehouseName: warehousesQuery.data?.find((w: any) => w.id === warehouseId)?.name ?? warehouseDisplayName ?? undefined,
             customerName: customerName || "عميل نقدي",
             customerCode: customerCode || undefined,
             customerTaxNumber: customerTaxNumber || undefined,
@@ -2679,12 +2884,12 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
             grandTotal: netTotal,
             paidAmount,
             remainingAmount,
-            sellerName: orgQuery.data?.name ?? qrSettingsQuery.data?.sellerName ?? "OneSoft ERP",
-            sellerNameEn: orgQuery.data?.nameEn ?? undefined,
-            sellerTaxNumber: orgQuery.data?.taxNumber ?? qrSettingsQuery.data?.taxNumber ?? "",
-            sellerCommercialReg: orgQuery.data?.commercialReg || undefined,
-            sellerAddress: orgQuery.data?.address ?? undefined,
-            sellerPhone: orgQuery.data?.phone ?? undefined,
+            sellerName: effectiveSellerLegalName,
+            sellerNameEn: String(orgQuery.data?.englishName ?? orgQuery.data?.nameEn ?? "") || undefined,
+            sellerTaxNumber: effectiveSellerTaxNumber,
+            sellerCommercialReg: String(orgQuery.data?.commercialReg ?? "") || undefined,
+            sellerAddress: String(orgQuery.data?.address ?? "") || undefined,
+            sellerPhone: String(orgQuery.data?.phone ?? "") || undefined,
           }}
         />
       )}
@@ -3054,7 +3259,7 @@ function ProductNameCell({
   value: string;
   products: any[];
   cellRefs: React.MutableRefObject<Map<string, HTMLInputElement>>;
-  onSelect: (name: string, code: string, id: number, unit: string, price: string, tax: string, itemType: string) => void;
+   onSelect: (name: string, code: string, id: number, unit: string, price: string, tax: string, itemType: string, taxId?: number) => void;
   onChange?: (v: string) => void;
   onKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void;
   onFocus: () => void;
@@ -3098,7 +3303,16 @@ function ProductNameCell({
   const handleSelect = (p: any) => {
     setSearch(p.name);
     setOpen(false);
-    onSelect(p.name, p.code ?? p.barcode ?? "", p.id, p.unit ?? "", p.salePrice ? String(p.salePrice) : "", p.taxRate ? String(p.taxRate) : "0", p.itemType ?? "stock");
+    onSelect(
+      p.name,
+      p.code ?? p.barcode ?? "",
+      p.id,
+      p.unit ?? "",
+      p.salePrice ? String(p.salePrice) : "",
+      p.taxRate ? String(p.taxRate) : "0",
+      p.itemType ?? "stock",
+      p.taxId ?? undefined,
+    );
   };
 
   const tryExactMatch = () => {

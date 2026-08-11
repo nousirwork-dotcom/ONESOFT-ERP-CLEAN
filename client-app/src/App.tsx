@@ -12,6 +12,7 @@ import { TabManagerProvider, useTabManager } from "@/core/contexts/TabManagerCon
 import { UiPrefsProvider, useUiPrefs } from "@/core/contexts/UiPrefsContext";
 import AppsHome from "@/shared/components/AppsHome";
 import TrialBanner from "@/shared/components/TrialBanner";
+import ApplicationExitGuard from "@/shared/components/ApplicationExitGuard";
 import { LanguageProvider } from "@/core/contexts/LanguageContext";
 import Dashboard from "@/modules/dashboard/pages/Dashboard";
 import POS from "@/modules/sales/pages/POS";
@@ -22,7 +23,7 @@ import PurchasesModule, {
 } from "@/modules/purchases/pages/PurchasesModule";
 import SalesModule, {
   SalesTransactionsTab,
-  SalesInvoiceTab, SalesReturnTab, SalesCreditNoteTab, SalesQuotationTab,
+  SalesInvoiceTab, SalesReturnTab, SalesCreditNoteTab, SalesDebitNoteTab, SalesQuotationTab,
   SalesOrderTab, SalesDeliveryTab, SalesPosTab,
   SalesCustomersTab, SalesCustomerGroupsTab, SalesCustomerBalancesTab,
   SalesCustomerStatementTab, SalesCustomerReportsTab,
@@ -73,8 +74,7 @@ import SettingsModule, {
   CfgMessagingTemplatesTab, CfgMessagingLogTab, CfgAiAssistantTab,
   CfgPrintSettingsTab, CfgLogoStampTab, CfgSignaturesTab, CfgEmailPdfTab,
   CfgFieldDictionaryTab, CfgPaymentMethodsTab,
-  CfgZatcaTab, CfgZatcaMonitorTab, CfgZatcaInvoicesTab, CfgZatcaLogsTab,
-  CfgGosiTab, CfgGaztTab,
+  CfgElectronicInvoicingCenterTab, CfgElectronicInvoicingQrTab, CfgElectronicInvoicingZatcaTab,
   CfgZatcaCenterTab,
   CfgSystemInfoTab,
   CfgServiceManagementTab,
@@ -163,6 +163,7 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/sales/invoice":           SalesInvoiceTab,
   "/sales/return":            SalesReturnTab,
   "/sales/credit-note":       SalesCreditNoteTab,
+  "/sales/debit-note":        SalesDebitNoteTab,
   "/sales/quotation":         SalesQuotationTab,
   "/sales/order":             SalesOrderTab,
   "/sales/delivery":          SalesDeliveryTab,
@@ -280,6 +281,9 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
 
   "/cfg/document-templates":  CfgDocumentTemplatesTab,
   "/cfg/qr-settings":       CfgQrSettingsTab,
+  "/cfg/e-invoicing-center": CfgElectronicInvoicingCenterTab,
+  "/cfg/e-invoicing-center/qr": CfgElectronicInvoicingQrTab,
+  "/cfg/e-invoicing-center/zatca": CfgElectronicInvoicingZatcaTab,
   "/cfg/field-design":      CfgFieldDesignTab,
   "/cfg/backup":            CfgBackupTab,
   "/cfg/audit-log":         CfgAuditLogTab,
@@ -307,12 +311,6 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/cfg/signatures":             CfgSignaturesTab,
   "/cfg/email-pdf":              CfgEmailPdfTab,
   "/cfg/zatca-center":           CfgZatcaCenterTab,
-  "/cfg/zatca":                  CfgZatcaTab,
-  "/cfg/zatca-mon":              CfgZatcaMonitorTab,
-  "/cfg/zatca-inv":              CfgZatcaInvoicesTab,
-  "/cfg/zatca-log":              CfgZatcaLogsTab,
-  "/cfg/gosi":                   CfgGosiTab,
-  "/cfg/gazt":                   CfgGaztTab,
   "/cfg/system-info":            CfgSystemInfoTab,
   "/cfg/service-management":     CfgServiceManagementTab,
   "/cfg/updates":                CfgUpdatesTab,
@@ -320,6 +318,20 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/cfg/branding":               BrandingSettingsPage,
   "/cfg/license":                LicenseActivationPage,
 };
+
+// مسارات ZATCA الكلاسيكية تبقى معرّفة للتوافق مع التبويبات القديمة،
+// لكن لا يجوز أن تفتح واجهة الكلاسيك بعد توحيد المركز.
+const LEGACY_QR_PATH = "/cfg/qr-settings";
+const LEGACY_ZATCA_PATHS = new Set([
+  "/cfg/zatca",
+  "/cfg/zatca-mon",
+  "/cfg/zatca-inv",
+  "/cfg/zatca-log",
+  "/cfg/zatca-center",
+]);
+const ELECTRONIC_INVOICING_CENTER_PATH = "/cfg/e-invoicing-center";
+const ELECTRONIC_INVOICING_QR_PATH = `${ELECTRONIC_INVOICING_CENTER_PATH}/qr`;
+const ELECTRONIC_INVOICING_ZATCA_PATH = `${ELECTRONIC_INVOICING_CENTER_PATH}/zatca`;
 
 // ─── مسارات لا تعرض شريط الأدوات الموحد ──────────────────────────────────
 // صفحات التنقل والأقسام الرئيسية فقط — أي مسار آخر يرث showToolbar=true
@@ -481,13 +493,28 @@ function TabContent() {
         </div>
       )}
       {tabs.map(tab => {
-        const Component = PAGE_MAP[tab.path]
+        const isLegacyQrTab = tab.path === LEGACY_QR_PATH;
+        const isLegacyZatcaTab = LEGACY_ZATCA_PATHS.has(tab.path);
+        const effectivePath = isLegacyQrTab
+          ? ELECTRONIC_INVOICING_QR_PATH
+          : isLegacyZatcaTab
+            ? ELECTRONIC_INVOICING_ZATCA_PATH
+            : tab.path;
+        const isLegacyElectronicInvoicingTab = isLegacyQrTab || isLegacyZatcaTab;
+        const effectiveTab = isLegacyElectronicInvoicingTab
+          ? {
+              ...tab,
+              path: effectivePath,
+              label: "مركز الفوترة الإلكترونية",
+            }
+          : tab;
+        const Component = PAGE_MAP[effectivePath]
           ?? (tab.path.startsWith("/hs/custody-record/") ? CustodyRecordPage : null);
-        const showToolbar = !NO_TOOLBAR_PATHS.has(tab.path);
+        const showToolbar = !NO_TOOLBAR_PATHS.has(effectivePath);
         return (
-          <AppWindow key={tab.id} tab={tab} showToolbar={showToolbar}>
+          <AppWindow key={tab.id} tab={effectiveTab} showToolbar={showToolbar}>
             <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }} dir="rtl">
-              <TabPathContext.Provider value={tab.path}>
+              <TabPathContext.Provider value={effectivePath}>
                 {Component ? <Component /> : <NotFound />}
               </TabPathContext.Provider>
             </div>
@@ -509,13 +536,11 @@ function AppRoutes() {
         <Route path="/superadmin" component={SuperAdminPage} />
       )}
       <Route>
-        <TabManagerProvider>
-          <UiPrefsProvider>
-            <DashboardLayout>
-              <TabContent />
-            </DashboardLayout>
-          </UiPrefsProvider>
-        </TabManagerProvider>
+        <UiPrefsProvider>
+          <DashboardLayout>
+            <TabContent />
+          </DashboardLayout>
+        </UiPrefsProvider>
       </Route>
     </Switch>
   );
@@ -549,8 +574,10 @@ function App() {
               لا login — لا dashboard — لا أي صفحة أخرى.
               يُرفع الحجب تلقائياً بعد إعادة التشغيل مع الإصدار الجديد.
             */}
-            {!mandatoryUpdateActive && (
-              <Switch>
+            <TabManagerProvider>
+              <ApplicationExitGuard />
+              {!mandatoryUpdateActive && (
+                <Switch>
                 <Route path="/login" component={LoginPage} />
                 {/* صفحة التفعيل عامة — لا تحتاج تسجيل دخول (جهاز جديد بدون ترخيص) */}
                 <Route path="/cfg/license" component={LicenseActivationPage} />
@@ -577,8 +604,9 @@ function App() {
                     <AppRoutes />
                   </AuthGuard>
                 </Route>
-              </Switch>
-            )}
+                </Switch>
+              )}
+            </TabManagerProvider>
           </TooltipProvider>
         </ThemeProvider>
         </BrandingProvider>

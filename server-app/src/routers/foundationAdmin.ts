@@ -106,6 +106,7 @@ async function buildExportFkMaps(orgId: number) {
   const branchFkMap      = new Map<number, string>();
   const warehouseFkMap   = new Map<number, string>();
   const accountSkMap     = new Map<number, string>();
+  const accountCodeMap   = new Map<number, string>();
   const documentTypeFkMap = new Map<number, string>(); // document_types.id → foundationKey
 
   // للتحقق من ربط docType (string) في document_journals بأنواع المستندات المُصدَّرة
@@ -120,12 +121,18 @@ async function buildExportFkMaps(orgId: number) {
     .from(warehouses).where(eq(warehouses.orgId, orgId));
   for (const r of whRows) if (r.foundationKey) warehouseFkMap.set(r.id, r.foundationKey);
 
-  const acctRows = await db.select({ id: chartOfAccounts.id, systemKey: chartOfAccounts.systemKey })
+  const acctRows = await db.select({
+    id: chartOfAccounts.id,
+    systemKey: chartOfAccounts.systemKey,
+    code: chartOfAccounts.code,
+  })
     .from(chartOfAccounts).where(and(
       eq(chartOfAccounts.orgId, orgId),
-      sql`${chartOfAccounts.systemKey} IS NOT NULL`,
     ));
-  for (const r of acctRows) if (r.systemKey) accountSkMap.set(r.id, r.systemKey);
+  for (const r of acctRows) {
+    if (r.systemKey) accountSkMap.set(r.id, r.systemKey);
+    if (r.code) accountCodeMap.set(r.id, r.code);
+  }
 
   // بناء خريطة أنواع المستندات — لفحص أي FK يُشير إلى document_types بدون foundationKey
   // وبناء مجموعتَي typeId للتحقق من ربط docType في الدفاتر
@@ -144,7 +151,15 @@ async function buildExportFkMaps(orgId: number) {
     }
   }
 
-  return { branchFkMap, warehouseFkMap, accountSkMap, documentTypeFkMap, docTypeIncludedTypeIds, docTypeAllTypeIds };
+  return {
+    branchFkMap,
+    warehouseFkMap,
+    accountSkMap,
+    accountCodeMap,
+    documentTypeFkMap,
+    docTypeIncludedTypeIds,
+    docTypeAllTypeIds,
+  };
 }
 
 /**
@@ -157,13 +172,20 @@ function enrichWithFkRefs(
     branchFkMap: Map<number, string>;
     warehouseFkMap: Map<number, string>;
     accountSkMap: Map<number, string>;
+    accountCodeMap: Map<number, string>;
     documentTypeFkMap: Map<number, string>;
     docTypeIncludedTypeIds: Set<string>;
     docTypeAllTypeIds: Set<string>;
   },
 ): Record<string, unknown> {
   const enriched = { ...row };
-  const { branchFkMap, warehouseFkMap, accountSkMap, documentTypeFkMap } = fkMaps;
+  const {
+    branchFkMap,
+    warehouseFkMap,
+    accountSkMap,
+    accountCodeMap,
+    documentTypeFkMap,
+  } = fkMaps;
 
   if (typeof row.branchId === 'number') {
     enriched['_branchId_fk'] = branchFkMap.get(row.branchId) ?? null;
@@ -183,6 +205,26 @@ function enrichWithFkRefs(
     const id = row[field];
     if (typeof id === 'number') {
       enriched[`_${field}_fk`] = accountSkMap.get(id) ?? null;
+    }
+  }
+
+  if (tableName === 'document_journals') {
+    const config = enriched.paymentTypesConfig;
+    if (config && typeof config === 'object' && !Array.isArray(config)) {
+      const paymentConfig = config as Record<string, unknown>;
+      if (Array.isArray(paymentConfig.accountLinks)) {
+        paymentConfig.accountLinks = paymentConfig.accountLinks.map((rawLink) => {
+          if (!rawLink || typeof rawLink !== 'object' || Array.isArray(rawLink)) return rawLink;
+          const link = { ...(rawLink as Record<string, unknown>) };
+          const accountId = link.accountId;
+          if (typeof accountId === 'number') {
+            link.accountCode = accountCodeMap.get(accountId) ?? null;
+            delete link.accountId;
+          }
+          return link;
+        });
+        enriched.paymentTypesConfig = paymentConfig;
+      }
     }
   }
 
@@ -220,13 +262,22 @@ function collectFkErrors(
     branchFkMap: Map<number, string>;
     warehouseFkMap: Map<number, string>;
     accountSkMap: Map<number, string>;
+    accountCodeMap: Map<number, string>;
     documentTypeFkMap: Map<number, string>;
     docTypeIncludedTypeIds: Set<string>;
     docTypeAllTypeIds: Set<string>;
   },
 ): string[] {
   const errors: string[] = [];
-  const { branchFkMap, warehouseFkMap, accountSkMap, documentTypeFkMap, docTypeIncludedTypeIds, docTypeAllTypeIds } = fkMaps;
+  const {
+    branchFkMap,
+    warehouseFkMap,
+    accountSkMap,
+    accountCodeMap,
+    documentTypeFkMap,
+    docTypeIncludedTypeIds,
+    docTypeAllTypeIds,
+  } = fkMaps;
 
   const TABLE_LABELS_AR: Record<string, string> = {
     document_journals:   'دفتر',
@@ -291,6 +342,24 @@ function collectFkErrors(
             `${entityLabel} "${name}": ${fieldLabel} (id=${acctId}) لا يملك systemKey — لن يُحلَّ عند التطبيق`,
           );
         }
+      }
+    }
+
+    if (tableName === 'document_journals') {
+      const config = row.paymentTypesConfig;
+      const links = config && typeof config === 'object' && !Array.isArray(config)
+        ? (config as Record<string, unknown>).accountLinks
+        : null;
+      if (Array.isArray(links)) {
+        links.forEach((rawLink, index) => {
+          if (!rawLink || typeof rawLink !== 'object' || Array.isArray(rawLink)) return;
+          const link = rawLink as Record<string, unknown>;
+          if (typeof link.accountId === 'number' && !accountCodeMap.has(link.accountId)) {
+            errors.push(
+              `${entityLabel} "${name}": رابط الحساب المتداخل accountLinks[${index}] (id=${link.accountId}) لا يملك code أو systemKey — لن يُحلَّ عند التطبيق`,
+            );
+          }
+        });
       }
     }
   }
@@ -592,6 +661,9 @@ export const foundationAdminRouter = router({
           for (const [k, v] of Object.entries(row)) {
             if (!STRIP_KEYS.has(k)) cleaned[k] = v;
           }
+          // User IDs are scoped to the source organization. Never export a
+          // raw user FK into a snapshot that may be applied to another org.
+          if ('allowedUserId' in cleaned) cleaned.allowedUserId = null;
           return enrichWithFkRefs(cleaned, tableName, fkMaps);
         });
         totalRecords += rows.length;

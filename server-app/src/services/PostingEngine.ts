@@ -45,6 +45,8 @@ export type PostingResult = {
 
 export type AccountLinkConfig = {
   accountId:    number | null;
+  accountCode?: string | null;
+  accountSystemKey?: string | null;
   postingName:  string;
   postingSide:  string;
   description:  string;
@@ -54,16 +56,16 @@ export type AccountLinkConfig = {
 // resolveDocTypeAccounts — تحليل حسابات نوع المستند
 // ══════════════════════════════════════════════════════════════════════════════
 
-export async function resolveDocTypeAccountsByJournal(journalId: number, orgId: number) {
-  const docType = await db.query.documentTypes.findFirst({
+export async function resolveDocTypeAccountsByJournal(journalId: number, orgId: number, tx: DbClient = db) {
+  const docType = await tx.query.documentTypes.findFirst({
     where: and(eq(documentTypes.journal, String(journalId)), eq(documentTypes.orgId, orgId)),
   });
   if (!docType) return null;
-  return resolveDocTypeAccounts(docType.id, orgId);
+  return resolveDocTypeAccounts(docType.id, orgId, tx);
 }
 
-export async function resolveDocTypeAccounts(docTypeId: number, orgId: number) {
-  const docType = await db.query.documentTypes.findFirst({
+export async function resolveDocTypeAccounts(docTypeId: number, orgId: number, tx: DbClient = db) {
+  const docType = await tx.query.documentTypes.findFirst({
     where: and(eq(documentTypes.id, docTypeId), eq(documentTypes.orgId, orgId)),
   });
   if (!docType) return null;
@@ -77,7 +79,7 @@ export async function resolveDocTypeAccounts(docTypeId: number, orgId: number) {
 
   const walById = new Map<number, { accountId: number | null }>();
   if (linkIds.length > 0) {
-    const walRows = await db.query.warehouseAccountLinks.findMany({
+    const walRows = await tx.query.warehouseAccountLinks.findMany({
       where: inArray(warehouseAccountLinks.id, linkIds),
     });
     walRows.forEach(w => walById.set(w.id, w));
@@ -107,10 +109,10 @@ export async function resolveDocTypeAccounts(docTypeId: number, orgId: number) {
 // validateAccounts — التحقق من صحة الحسابات
 // ══════════════════════════════════════════════════════════════════════════════
 
-export async function validateAccounts(accountIds: (number | null)[]): Promise<void> {
+export async function validateAccounts(accountIds: (number | null)[], tx: DbClient = db): Promise<void> {
   const ids = accountIds.filter((id): id is number => id !== null);
   if (!ids.length) return;
-  const accs = await db.query.chartOfAccounts.findMany({
+  const accs = await tx.query.chartOfAccounts.findMany({
     where: inArray(chartOfAccounts.id, ids),
   });
   for (const acc of accs) {
@@ -227,7 +229,10 @@ export async function buildLinesFromAccountLinks(
 
   const accs = accIds.length
     ? await db.query.chartOfAccounts.findMany({
-        where: (a, { inArray }) => inArray(a.id, accIds),
+        where: (a, { and, eq, inArray }) => and(
+          inArray(a.id, accIds),
+          eq(a.orgId, orgId),
+        ),
       })
     : [];
   const accMap = new Map(accs.map(a => [a.id, a]));
@@ -241,6 +246,9 @@ export async function buildLinesFromAccountLinks(
     if (value === 0) continue;
 
     const acc    = accMap.get(link.accountId);
+    if (!acc) {
+      throw new Error(`الحساب المرتبط "${link.accountId}" غير موجود في المنظمة الحالية`);
+    }
     const isDebit = link.postingSide === 'debit';
     const lineDesc = link.description
       ? `${link.description} - ${invoice.invoiceNumber}`
@@ -278,6 +286,17 @@ export async function buildSalesInvoiceLines(
   journal: typeof documentJournals.$inferSelect | null,
   orgId: number,
 ) {
+  // A sales debit note increases the customer's receivable. It is not a
+  // payment/settlement document, so account-links and the legacy fallback must
+  // resolve its debit side as customer receivable.
+  if (invoice.invoiceType === 'debit_note') {
+    invoice = {
+      ...invoice,
+      paymentMethod: 'credit',
+      paymentBreakdown: null,
+      paidAmount: '0',
+    };
+  }
   const ptCfg = journal?.paymentTypesConfig as { accountLinks?: AccountLinkConfig[] } | null | undefined;
   const configLinks: AccountLinkConfig[] = Array.isArray(ptCfg?.accountLinks) ? (ptCfg!.accountLinks as AccountLinkConfig[]) : [];
   const hasConfiguredLinks = configLinks.some(l => l.accountId && l.postingName && l.postingSide);
@@ -658,7 +677,12 @@ export async function autoPostSalesInvoice(
     where: and(eq(salesInvoices.id, invoiceId), eq(salesInvoices.orgId, orgId)),
   });
   if (!invoice || invoice.isPosted) return null;
-  if (invoice.invoiceType !== 'sale' && invoice.invoiceType !== 'return') return null;
+  if (
+    invoice.invoiceType !== 'sale' &&
+    invoice.invoiceType !== 'return' &&
+    invoice.invoiceType !== 'credit_note' &&
+    invoice.invoiceType !== 'debit_note'
+  ) return null;
   if (!invoice.journalId && !invoice.docTypeId) return null;
 
   const journal = invoice.journalId
@@ -670,9 +694,9 @@ export async function autoPostSalesInvoice(
   if (journal?.postingMode === 'disabled') return null;
 
   const docTypeAccs = invoice.docTypeId
-    ? await resolveDocTypeAccounts(invoice.docTypeId, orgId)
+    ? await resolveDocTypeAccounts(invoice.docTypeId, orgId, client)
     : invoice.journalId
-      ? await resolveDocTypeAccountsByJournal(invoice.journalId, orgId)
+      ? await resolveDocTypeAccountsByJournal(invoice.journalId, orgId, client)
       : null;
 
   const effectiveJournal = {
@@ -694,16 +718,20 @@ export async function autoPostSalesInvoice(
     const hasDebitAcc = isCredit ? !!effectiveJournal.creditAccountId : !!effectiveJournal.cashAccountId;
     if (!effectiveJournal.salesAccountId || !hasDebitAcc) return null;
   }
-
   const { lines: rawLines, isBalanced } = await buildSalesInvoiceLines(invoice, effectiveJournal, orgId);
   if (!isBalanced || rawLines.length === 0) return null;
 
-  const isReturn = invoice.invoiceType === 'return';
+  const isDebitNote = (invoice.invoiceType as string) === 'debit_note';
+  const isReturn = invoice.invoiceType === 'return' || invoice.invoiceType === 'credit_note';
   const reversedLines = isReturn
     ? rawLines.map(l => ({ ...l, debit: l.credit, credit: l.debit }))
     : rawLines;
 
-  const docLabel    = isReturn ? 'مردود مبيعات' : 'فاتورة مبيعات';
+  const docLabel    = isDebitNote
+    ? 'إشعار مدين'
+    : invoice.invoiceType === 'credit_note'
+    ? 'إشعار دائن'
+    : isReturn ? 'مردود مبيعات' : 'فاتورة مبيعات';
   const docTypeName = docTypeAccs?.docType?.nameAr ?? docLabel;
   const lineDesc    = `${docTypeName} - ${invoice.invoiceNumber}`;
   const lines       = reversedLines.map(l => ({ ...l, description: lineDesc }));
@@ -714,7 +742,11 @@ export async function autoPostSalesInvoice(
     date:            invoice.invoiceDate,
     description:     docTypeName,
     reference:       invoice.invoiceNumber,
-    sourceDocType:   isReturn ? 'sales_return' : 'sales_invoice',
+    sourceDocType:   isDebitNote
+      ? 'debit_note'
+      : invoice.invoiceType === 'credit_note'
+      ? 'credit_note'
+      : isReturn ? 'sales_return' : 'sales_invoice',
     sourceDocId:     invoice.id,
     sourceDocNumber: invoice.invoiceNumber,
     lines,
@@ -722,11 +754,18 @@ export async function autoPostSalesInvoice(
   });
 
   await client.update(salesInvoices)
-    .set({ isPosted: true, postedAt: new Date(), postedJournalEntryId: entry.id, updatedAt: new Date() })
+    .set({
+      isPosted: true,
+      postedAt: new Date(),
+      postedJournalEntryId: entry.id,
+      updatedAt: new Date(),
+    })
     .where(and(eq(salesInvoices.id, invoiceId), eq(salesInvoices.orgId, orgId)));
 
   return { entryNumber: entry.entryNumber };
 }
+
+
 
 // ══════════════════════════════════════════════════════════════════════════════
 // autoPostPurchaseInvoice — ترحيل تلقائي فاتورة مشتريات / مردود
@@ -736,15 +775,17 @@ export async function autoPostPurchaseInvoice(
   invoiceId: number,
   orgId: number,
   userId: number,
+  tx?: DbClient,
 ): Promise<{ entryNumber: string } | null> {
-  const invoice = await db.query.purchaseInvoices.findFirst({
+  const client = tx ?? db;
+  const invoice = await client.query.purchaseInvoices.findFirst({
     where: and(eq(purchaseInvoices.id, invoiceId), eq(purchaseInvoices.orgId, orgId)),
   });
   if (!invoice || invoice.isPosted) return null;
   if (!invoice.journalId && !invoice.docTypeId) return null;
 
   const journal = invoice.journalId
-    ? await db.query.documentJournals.findFirst({
+    ? await client.query.documentJournals.findFirst({
         where: and(eq(documentJournals.id, invoice.journalId), eq(documentJournals.orgId, orgId)),
       })
     : null;
@@ -752,9 +793,9 @@ export async function autoPostPurchaseInvoice(
   if (journal?.postingMode === 'disabled') return null;
 
   const docTypeAccs = invoice.docTypeId
-    ? await resolveDocTypeAccounts(invoice.docTypeId, orgId)
+    ? await resolveDocTypeAccounts(invoice.docTypeId, orgId, client)
     : invoice.journalId
-      ? await resolveDocTypeAccountsByJournal(invoice.journalId, orgId)
+      ? await resolveDocTypeAccountsByJournal(invoice.journalId, orgId, client)
       : null;
 
   const effectiveJournal = {
@@ -768,11 +809,21 @@ export async function autoPostPurchaseInvoice(
   const isCredit = invoice.paymentMethod === 'credit';
   const hasCounterAcc = isCredit ? !!effectiveJournal.supplierAccountId : !!effectiveJournal.cashAccountId;
   if (!effectiveJournal.purchaseAccountId || !hasCounterAcc) return null;
+  await validateAccounts([
+    effectiveJournal.purchaseAccountId,
+    effectiveJournal.supplierAccountId,
+    effectiveJournal.cashAccountId,
+    effectiveJournal.taxAccountId,
+    effectiveJournal.discountAccountId,
+  ], client);
 
   const { lines: rawLines, isBalanced } = await buildPurchaseInvoiceLines(invoice, effectiveJournal, orgId);
   if (!isBalanced || rawLines.length === 0) return null;
 
   const isReturn    = invoice.invoiceType === 'return';
+  if (invoice.invoiceType === 'debit_note') {
+    throw new Error('إشعار المدين مستند مبيعات صادر ولا يجوز ترحيله من مسار المشتريات');
+  }
   const reversedLines = isReturn
     ? rawLines.map(l => ({ ...l, debit: l.credit, credit: l.debit }))
     : rawLines;
@@ -792,9 +843,10 @@ export async function autoPostPurchaseInvoice(
     sourceDocId:     invoice.id,
     sourceDocNumber: invoice.invoiceNumber,
     lines,
+    tx,
   });
 
-  await db.update(purchaseInvoices)
+  await client.update(purchaseInvoices)
     .set({ isPosted: true, postedAt: new Date(), postedJournalEntryId: entry.id, updatedAt: new Date() })
     .where(and(eq(purchaseInvoices.id, invoiceId), eq(purchaseInvoices.orgId, orgId)));
 

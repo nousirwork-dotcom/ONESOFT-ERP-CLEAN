@@ -30,6 +30,8 @@ export interface DocPageConfig {
   numberPrefix: string;
   journalDropdownTitle: string;
   basedOnOptions?: Array<{ value: string; label: string }>;
+  requireReference?: boolean;
+  requireReason?: boolean;
   canPost?: boolean;
   themeColor?: string;
 }
@@ -50,6 +52,7 @@ interface InvoiceLine {
   batchNumber: string;
   expiryDate: string;
   productId?: number;
+  taxId?: number;
 }
 
 type PaymentType = "cash" | "credit";
@@ -133,7 +136,7 @@ function ProductNameCell({
 }: {
   rowIdx: number; value: string; products: any[];
   cellRefs: React.MutableRefObject<Map<string, HTMLInputElement>>;
-  onSelect: (name: string, code: string, id: number, unit: string, price: string, tax: string) => void;
+  onSelect: (name: string, code: string, id: number, unit: string, price: string, tax: string, taxId?: number) => void;
   onKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void;
   onFocus: () => void;
 }) {
@@ -159,7 +162,15 @@ function ProductNameCell({
 
   const handleSelect = (p: any) => {
     setSearch(p.name); setOpen(false);
-    onSelect(p.name, p.sku ?? p.barcode ?? p.code ?? "", p.id, p.unit ?? "", p.salePrice ? String(p.salePrice) : "", p.taxRate ? String(p.taxRate) : "0");
+    onSelect(
+      p.name,
+      p.sku ?? p.barcode ?? p.code ?? "",
+      p.id,
+      p.unit ?? "",
+      p.salePrice ? String(p.salePrice) : "",
+      p.taxRate ? String(p.taxRate) : "0",
+      p.taxId ?? undefined,
+    );
   };
 
   useEffect(() => {
@@ -220,6 +231,10 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   const [dueDate, setDueDate]                         = useState("");
   const [partyId, setPartyId]                         = useState<number | null>(null);
   const [partyName, setPartyName]                     = useState("");
+  const [sellerLegalNameSnapshot, setSellerLegalNameSnapshot] = useState("");
+  const [sellerTaxNumberSnapshot, setSellerTaxNumberSnapshot] = useState("");
+  const [zatcaQrCodeSnapshot, setZatcaQrCodeSnapshot] = useState("");
+  const [zatcaPhase2, setZatcaPhase2] = useState(false);
   const [supplierInvoiceNumber, setSupplierInvoiceNumber] = useState("");
   const [branchId, setBranchId]                         = useState<number | null>(null);
   const [warehouseId, setWarehouseId]                 = useState<number | null>(null);
@@ -247,6 +262,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   const [savedInvoiceId, setSavedInvoiceId]       = useState<number | null>(null);
   const [navInvoiceId, setNavInvoiceId]           = useState<number | null>(null);
   const [isPosted, setIsPosted]                   = useState(false);
+  const [documentStatus, setDocumentStatus]       = useState<"draft" | "confirmed" | "paid" | "cancelled">("draft");
   const [showPostingPreview, setShowPostingPreview] = useState(false);
   const [purchaseBranchMenuOpen, setPurchaseBranchMenuOpen] = useState(false);
   const [purchaseBranchEditMode, setPurchaseBranchEditMode] = useState(false);
@@ -353,6 +369,8 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     refetchOnMount: "always",
   });
   const productsQuery   = trpc.products.list.useQuery({});
+  const activeTaxesQuery = trpc.taxDefinitions.list.useQuery({ activeOnly: true }, { staleTime: 60000 });
+  const activeTaxes = activeTaxesQuery.data ?? [];
   const journalsQuery   = trpc.documentJournals.list.useQuery({ docType: config.journalDocType });
   const docTypesQuery   = trpc.documentTypes.list.useQuery({ typeId: config.docTypeFilter });
   const purchaseBranchOptions = useMemo(() => {
@@ -449,6 +467,10 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     setDueDate(inv.dueDate ? new Date(inv.dueDate).toISOString().split("T")[0] : "");
     setPartyId(inv.customerId ?? inv.supplierId ?? null);
     setPartyName(inv.customerName ?? inv.supplierName ?? "");
+    setSellerLegalNameSnapshot(config.docCategory === "sales" ? (inv.sellerLegalName ?? "") : "");
+    setSellerTaxNumberSnapshot(config.docCategory === "sales" ? (inv.sellerTaxNumber ?? "") : "");
+    setZatcaQrCodeSnapshot(config.docCategory === "sales" ? (inv.zatcaQrCode ?? "") : "");
+    setZatcaPhase2(config.docCategory === "sales" && Boolean(inv.zatcaPhase2));
     setSupplierInvoiceNumber(inv.supplierInvoiceNumber || "");
     setWarehouseId(inv.warehouseId ?? null);
     setBranchId(
@@ -474,6 +496,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     setPaidAmountOverride(inv.paidAmount ?? "");
     setSavedInvoiceId(inv.id);
     setIsPosted(inv.isPosted ?? false);
+    setDocumentStatus((inv.status as "draft" | "confirmed" | "paid" | "cancelled") ?? "draft");
     setErpMode("view");
     if (inv.items && inv.items.length > 0) {
       setLines(inv.items.map((item: any) => ({
@@ -505,15 +528,28 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   // نوع الفاتورة للطباعة
   const isPrintEnabled =
     (config.docCategory === "purchase" && ["invoice", "order", "return"].includes(config.invoiceType)) ||
-    (config.docCategory === "sales"    && config.invoiceType === "return");
+    (config.docCategory === "sales"    && ["invoice", "return", "credit_note", "debit_note"].includes(config.invoiceType));
 
   const printDocType: string =
     config.docCategory === "purchase" && config.invoiceType === "order"  ? "purchase_order"  :
     config.docCategory === "purchase" && config.invoiceType === "return" ? "purchase_return" :
     config.docCategory === "purchase"                                    ? "purchase_invoice" :
+    config.invoiceType === "return"                                      ? "sales_return" :
+    config.invoiceType === "credit_note"                                 ? "credit_note" :
+    config.invoiceType === "debit_note"                                  ? "debit_note" :
     "sales_invoice";
 
   const orgQuery             = trpc.orgs.currentOrg.useQuery();
+  const effectiveSellerLegalName = sellerLegalNameSnapshot.trim() ||
+    String(orgQuery.data?.legalName ?? orgQuery.data?.name ?? "").trim();
+  const effectiveSellerTaxNumber = sellerTaxNumberSnapshot.trim() ||
+    String(orgQuery.data?.vatNumber ?? orgQuery.data?.taxNumber ?? "").trim();
+  const issuedSalesWithoutSellerSnapshot = config.docCategory === "sales" &&
+    !!savedInvoiceId &&
+    documentStatus !== "draft" &&
+    (!sellerLegalNameSnapshot.trim() || !sellerTaxNumberSnapshot.trim());
+  const canUseSellerIdentityForPrint = !issuedSalesWithoutSellerSnapshot;
+  const sellerSnapshotWarning = "لا يمكن إعادة طباعة أو توليد QR لهذه الفاتورة: لقطة اسم المنشأة والرقم الضريبي غير محفوظة تاريخيًا.";
   const qrSettingsQuery      = trpc.qrSettings.get.useQuery();
   const defaultTemplateQuery = trpc.documentTemplates.getDefault.useQuery(
     { docType: printDocType },
@@ -525,6 +561,12 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     { type: basedOnType as any, number: basedOnTrigger },
     { enabled: config.docCategory === "sales" && !!basedOnType && !!basedOnTrigger }
   );
+  const sourceDocumentId = basedOnQuery.data?.id;
+  const sourceInvoice = config.docCategory === "sales" && config.requireReference ? basedOnQuery.data : null;
+  const sourceInvoiceTypeLabel = sourceInvoice?.zatcaInvoiceType === "standard" ? "Standard" : "Simplified";
+  const sourceInvoiceDateLabel = sourceInvoice?.invoiceDate
+    ? new Date(sourceInvoice.invoiceDate).toLocaleDateString("ar-SA")
+    : "—";
 
   // Set initial invoice number
   useEffect(() => {
@@ -554,7 +596,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     if (src.customerName) setPartyName(src.customerName);
     if (src.customerId)   setPartyId(src.customerId);
     if (src.warehouseId && !journalWarehouseId) setWarehouseId(src.warehouseId ?? null);
-    if (src.currency) setCurrency(src.currency);
+    if (src.currency && !(config.requireReference && sourceDocumentId)) setCurrency(src.currency);
     if (src.notes)    setNotes(src.notes ?? "");
     if (src.items.length > 0) {
       setLines(src.items.map(i => ({
@@ -562,11 +604,11 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
         productCode: i.productCode, productName: i.productName, unit: i.unit || "",
         quantity: i.quantity, unitPrice: i.unitPrice, discountPct: i.discountPct,
         discountAmt: i.discountAmt, taxPct: i.taxPct, taxAmt: i.taxAmt,
-        total: i.total, productId: i.productId ?? undefined,
+        total: i.total, productId: i.productId ?? undefined, batchNumber: "", expiryDate: "",
       })));
     }
     toast.success(`✓ تم استيراد بيانات المستند ${src.number}`);
-  }, [basedOnQuery.data]);
+  }, [basedOnQuery.data, config.requireReference, sourceDocumentId]);
 
   // ── Mutations ──────────────────────────────────────────────────────────────
   const pendingNavRef = useRef<(() => void) | null>(null);
@@ -581,7 +623,20 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
         duration: 5000,
       });
       setSavedInvoiceId(data.id ?? null);
+      setDocumentStatus(((data as any).status as "draft" | "confirmed" | "paid" | "cancelled") ?? "confirmed");
+      if (config.docCategory === "sales" && (data as any).status !== "draft") {
+        setSellerLegalNameSnapshot(effectiveSellerLegalName);
+        setSellerTaxNumberSnapshot(effectiveSellerTaxNumber);
+      } else if (config.docCategory === "sales") {
+        setSellerLegalNameSnapshot("");
+        setSellerTaxNumberSnapshot("");
+      }
       setIsPosted(autoPosted);
+      const savedJournal = (journalsQuery.data ?? []).find((journal: any) =>
+        journal.id === ((data as any).journalId ?? journalId),
+      );
+      setZatcaPhase2(config.docCategory === "sales" && Boolean(savedJournal?.zatcaPosUnitId));
+      setZatcaQrCodeSnapshot((data as any).zatcaQrCode ?? "");
       setErpMode("view");
       pendingNavRef.current?.();
       pendingNavRef.current = null;
@@ -596,6 +651,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
         duration: 5000,
       });
       setSavedInvoiceId(data.id);
+      setDocumentStatus(((data as any).status as "draft" | "confirmed" | "paid" | "cancelled") ?? "confirmed");
       setIsPosted(false);
       setErpMode("view");
       pendingNavRef.current?.();
@@ -710,15 +766,23 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
         l.productCode = (found as any).sku ?? found.barcode ?? code;
         l.productName = found.name;
         l.productId   = found.id;
+        l.taxId       = (found as any).taxId ?? undefined;
         l.unit        = found.unit ?? "";
         l.unitPrice   = found.salePrice ? String(found.salePrice) : "";
-        l.taxPct      = found.taxRate ? String(found.taxRate) : "0";
+        const tax = activeTaxes.find(t => t.id === found.taxId);
+        const isApplicableTax = tax?.valueType === "percentage"
+          && tax.category === "tax"
+          && tax.applicationScope === "products_sales";
+        if (found.taxId && !isApplicableTax) {
+          toast.warning(`الضريبة المرتبطة بالصنف "${found.name}" غير مخصصة للأصناف والمبيعات؛ حدّث كارت الصنف قبل حفظ المستند`);
+        }
+        l.taxPct      = isApplicableTax ? String(tax.value) : "0";
         l.total       = calcLineTotal(l);
         u[idx] = l;
         return u;
       });
     }
-  }, [productsQuery.data]);
+  }, [productsQuery.data, activeTaxes]);
 
   const handleCellKeyDown = useCallback((
     e: KeyboardEvent<HTMLInputElement>, rowIdx: number, colIdx: number
@@ -960,6 +1024,12 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       return;
     }
     if (!invoiceNumber.trim()) { toast.error("رقم المستند مطلوب"); return; }
+    if (config.requireReference && !basedOnNum.trim()) {
+      toast.error("مرجع المستند الأصلي مطلوب"); return;
+    }
+    if (config.requireReason && !notes.trim()) {
+      toast.error("سبب الإصدار مطلوب"); return;
+    }
     const validLines = lines.filter(l => l.productName.trim() !== "");
     if (validLines.length === 0) { toast.error("يجب إضافة صنف واحد على الأقل"); return; }
     for (const l of validLines) {
@@ -1004,7 +1074,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       productId: l.productId, productCode: l.productCode || undefined, productName: l.productName,
       unit: l.unit || undefined, quantity: l.quantity, unitPrice: l.unitPrice,
       discountPercent: l.discountPct, discountAmount: l.discountAmt,
-       taxPercent: l.taxPct, taxAmount: l.taxAmt, total: l.total,
+       taxId: l.taxId, taxPercent: l.taxPct, taxAmount: l.taxAmt, total: l.total,
        ...(config.docCategory === "purchase" ? { batchNumber: l.batchNumber || undefined, expiryDate: l.expiryDate || undefined } : {}),
        sortOrder: idx,
     }));
@@ -1016,7 +1086,11 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       taxAmount: fmt(totalTax), total: fmt(netTotal),
       paidAmount: paid, remainingAmount: remaining,
       paymentMethod: payMethod as any, status: status as any,
-      notes: notes || undefined, items: itemsPayload,
+      notes: notes || undefined,
+      basedOnType: basedOnType || undefined,
+      basedOnNumber: basedOnNum || undefined,
+      ...(config.docCategory === "sales" && sourceDocumentId ? { sourceDocumentId } : {}),
+      items: itemsPayload,
     };
     if (config.docCategory === "sales") {
       salesCreateMutation.mutate({ ...common, customerId: partyId ?? undefined, customerName: partyName || undefined } as any);
@@ -1031,7 +1105,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   }, [
     invoiceNumber, invoiceDate, dueDate, partyId, partyName, supplierInvoiceNumber,
     warehouseId, currency, exchangeRate, paymentType, paidAmount, remainingAmount,
-    notes, lines, subtotal, totalDiscount, totalTax, netTotal,
+    notes, lines, subtotal, totalDiscount, totalTax, netTotal, sourceDocumentId,
     salesCreateMutation, purchaseCreateMutation, journalId, nextJournalNumberMutation,
      docTypeId, docTypesQuery.data, salesperson, stockQuery.data, config, branchId,
   ]);
@@ -1039,7 +1113,9 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   /* ── نسخة مماثلة ── */
   const handleDuplicate = useCallback(() => {
     if (!savedInvoiceId) { toast.warning("لا يوجد مستند محفوظ للنسخ — احفظ أولاً"); return; }
-    setSavedInvoiceId(null); setNavInvoiceId(null); setIsPosted(false); setShowPostingPreview(false);
+    setSavedInvoiceId(null); setNavInvoiceId(null); setIsPosted(false); setDocumentStatus("draft"); setShowPostingPreview(false);
+    setSellerLegalNameSnapshot(""); setSellerTaxNumberSnapshot("");
+    setZatcaQrCodeSnapshot(""); setZatcaPhase2(false);
     setErpMode("new");
     setBasedOnType(""); setBasedOnNum(""); setBasedOnTrigger("");
     setPaidAmountOverride("");
@@ -1058,7 +1134,9 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     setBasedOnType(""); setBasedOnNum(""); setBasedOnTrigger("");
     setNotes(""); setDueDate(""); setSalesperson(""); setPaidAmountOverride("");
     setErpMode("new"); setJournalWarehouseId(null);
-    setSavedInvoiceId(null); setNavInvoiceId(null); setIsPosted(false); setShowPostingPreview(false);
+    setSavedInvoiceId(null); setNavInvoiceId(null); setIsPosted(false); setDocumentStatus("draft"); setShowPostingPreview(false);
+    setSellerLegalNameSnapshot(""); setSellerTaxNumberSnapshot("");
+    setZatcaQrCodeSnapshot(""); setZatcaPhase2(false);
     if (journalId) {
       utils.documentJournals.previewNextNumber.fetch({ journalId }).then(p => {
         if (p) setInvoiceNumber(p);
@@ -1082,7 +1160,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       productId: l.productId, productCode: l.productCode || undefined, productName: l.productName,
       unit: l.unit || undefined, quantity: l.quantity, unitPrice: l.unitPrice,
       discountPercent: l.discountPct, discountAmount: l.discountAmt,
-       taxPercent: l.taxPct, taxAmount: l.taxAmt, total: l.total,
+       taxId: l.taxId, taxPercent: l.taxPct, taxAmount: l.taxAmt, total: l.total,
        ...(config.docCategory === "purchase" ? { batchNumber: l.batchNumber || undefined, expiryDate: l.expiryDate || undefined } : {}),
        sortOrder: idx,
     }));
@@ -1101,6 +1179,9 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       paymentMethod: "credit" as any,
       status: "draft" as any,
       notes: notes || undefined,
+      basedOnType: basedOnType || undefined,
+      basedOnNumber: basedOnNum || undefined,
+      ...(config.docCategory === "sales" && sourceDocumentId ? { sourceDocumentId } : {}),
       items: itemsPayload,
     };
     try {
@@ -1120,7 +1201,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   }, [
     invoiceDate, dueDate, partyId, partyName, supplierInvoiceNumber, warehouseId,
     currency, exchangeRate, notes, lines, subtotal, totalDiscount, totalTax, netTotal,
-    salesCreateMutation, purchaseCreateMutation, journalId, config.docCategory, config.invoiceType,
+    salesCreateMutation, purchaseCreateMutation, journalId, config.docCategory, config.invoiceType, sourceDocumentId,
   ]);
 
   // ── التنقل المركزي بين المستندات المحفوظة ────────────────────────────────────
@@ -1144,7 +1225,12 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
 
   // ── Unified Toolbar ──────────────────────────────────────────────────────────
   const _tbRef = useRef<any>({});
-  _tbRef.current = { erpMode, isSaving, savedInvoiceId, isPosted, isPrintEnabled, config, handleSave, handleNew, handleDuplicate, setErpMode, setPendingNav, setShowUnsaved, setShowPrintModal, setShowPostingPreview, unpostMutation: activeUnpostMutation };
+  _tbRef.current = {
+    erpMode, isSaving, savedInvoiceId, isPosted, isPrintEnabled, config, handleSave,
+    handleNew, handleDuplicate, setErpMode, setPendingNav, setShowUnsaved,
+    setShowPrintModal, setShowPostingPreview, unpostMutation: activeUnpostMutation,
+    canUseSellerIdentityForPrint, sellerSnapshotWarning,
+  };
   const toolbarActions = useMemo(() => {
     const canPost = config.canPost !== false;
     const hasSaved = savedInvoiceId !== null;
@@ -1165,7 +1251,18 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       preview: { supported: true as const, allowed: true, stateEnabled: hasSaved, disabledReason: "احفظ المستند أولًا للمطالعة", onClick: () => { const s = _tbRef.current; if (s.savedInvoiceId) s.setErpMode("view"); else toast.info("لا يوجد سجل محفوظ للمطالعة"); } },
       tools: { supported: true as const, allowed: true, stateEnabled: hasSaved, disabledReason: "احفظ المستند أولًا" },
       send: { supported: false as const, disabledReason: "الإرسال غير متاح في هذه الشاشة" },
-      print: { supported: true as const, allowed: true, stateEnabled: hasSaved, disabledReason: "احفظ المستند أولًا للطباعة", onClick: () => { const s = _tbRef.current; if (s.isPrintEnabled) s.setShowPrintModal(true); else toast.info("جاري الطباعة..."); } },
+      print: {
+        supported: true as const,
+        allowed: true,
+        stateEnabled: hasSaved,
+        disabledReason: "احفظ المستند أولًا للطباعة",
+        onClick: () => {
+          const s = _tbRef.current;
+          if (!s.isPrintEnabled) { toast.info("جاري الطباعة..."); return; }
+          if (!s.canUseSellerIdentityForPrint) { toast.error(s.sellerSnapshotWarning); return; }
+          s.setShowPrintModal(true);
+        },
+      },
       exit: { supported: true as const, allowed: true, stateEnabled: true, onClick: () => { const s = _tbRef.current; const dirty = s.erpMode === "new" || s.erpMode === "edit"; const doExit = () => toast.info("أغلق التبويب لإغلاق الشاشة"); if (dirty) { s.setPendingNav(() => doExit); s.setShowUnsaved(true); } else doExit(); } },
     }) as unknown as ToolbarActionMap;
   }, [erpMode, isSaving, savedInvoiceId, isPosted, isPrintEnabled, config, navHasRecord, navHasPrevious, navHasNext, navHandlers]);
@@ -1656,7 +1753,13 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
           </HF>
 
           <HF label="العملة">
-            <select value={currency} onChange={e => setCurrency(e.target.value)} className="classic-input w-full">
+            <select
+              value={currency}
+              onChange={e => setCurrency(e.target.value)}
+              className="classic-input w-full"
+              disabled={Boolean(sourceInvoice)}
+              title={sourceInvoice ? "عملة الإشعار موروثة من الفاتورة الأصلية" : undefined}
+            >
               <option value="SAR">ريال (SAR)</option>
               <option value="USD">دولار (USD)</option>
               <option value="EUR">يورو (EUR)</option>
@@ -1700,6 +1803,40 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
 
           <div />
         </div>
+        {sourceInvoice && (
+          <div
+            className="mt-2 rounded border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] text-slate-700"
+            dir="rtl"
+            aria-label="بطاقة الفاتورة الأصلية"
+          >
+            <div className="mb-1.5 flex items-center justify-between">
+              <strong className="text-blue-900">الفاتورة الأصلية — للقراءة فقط</strong>
+              <span className="rounded bg-white px-2 py-0.5 font-semibold text-blue-800">
+                {sourceInvoiceTypeLabel}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 md:grid-cols-4">
+              <span><b>الرقم:</b> {sourceInvoice.number || "—"}</span>
+              <span><b>التاريخ:</b> {sourceInvoiceDateLabel}</span>
+              <span><b>العميل:</b> {sourceInvoice.customerName || "—"}</span>
+              <span><b>العملة:</b> {sourceInvoice.currency || "SAR"}</span>
+              <span><b>الحالة:</b> {sourceInvoice.status || "—"}</span>
+              <span><b>الإجمالي:</b> {(sourceInvoice as { total?: string | number }).total || "0"}</span>
+              <span><b>المخزن/الفرع:</b> {sourceInvoice.warehouseName || "—"}</span>
+              <span><b>دفتر الفاتورة:</b> {sourceInvoice.journal?.name || sourceInvoice.journalId || "—"}</span>
+              <span>
+                <b>وحدة ZATCA:</b>{" "}
+                {sourceInvoice.zatcaUnit
+                  ? `${sourceInvoice.zatcaUnit.unitCode || ""}${sourceInvoice.zatcaUnit.unitName ? ` — ${sourceInvoice.zatcaUnit.unitName}` : ""}`
+                  : "—"}
+              </span>
+              <span><b>حالة ZATCA:</b> {sourceInvoice.zatcaStatus || "not_submitted"}</span>
+              <span className="col-span-2 break-all">
+                <b>UUID:</b> {sourceInvoice.zatcaUuid || "غير مُرسل بعد"}
+              </span>
+            </div>
+          </div>
+        )}
         </>
         )}
       </div>
@@ -1745,10 +1882,18 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
                 </td>
                 <td className="inv-td p-0">
                   <ProductNameCell rowIdx={rowIdx} value={line.productName} products={productsQuery.data ?? []} cellRefs={cellRefs}
-                    onSelect={(name, code, id, unit, price, tax) => {
+                     onSelect={(name, code, id, unit, price, _tax, taxId) => {
                       setLines(prev => {
                         const u = [...prev];
-                        const l = { ...u[rowIdx], productName: name, productCode: code, productId: id, unit, unitPrice: price, taxPct: tax };
+                         const definition = activeTaxes.find(t => t.id === taxId);
+                          const isApplicableTax = definition?.valueType === "percentage"
+                            && definition.category === "tax"
+                            && definition.applicationScope === "products_sales";
+                          if (taxId && !isApplicableTax) {
+                            toast.warning(`الضريبة المرتبطة بالصنف "${name}" غير مخصصة للأصناف والمبيعات؛ حدّث كارت الصنف قبل حفظ المستند`);
+                          }
+                          const taxPct = isApplicableTax ? String(definition.value) : "0";
+                         const l = { ...u[rowIdx], productName: name, productCode: code, productId: id, taxId, unit, unitPrice: price, taxPct };
                         l.total = calcLineTotal(l); u[rowIdx] = l; return u;
                       });
                     }}
@@ -2033,11 +2178,11 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       )}
 
       {/* ── Print Modal (Purchase Invoice / Sales Return) ──────────────────── */}
-      {showPrintModal && isPrintEnabled && (
+      {showPrintModal && isPrintEnabled && canUseSellerIdentityForPrint && (
         <InvoicePrintModal
           open={showPrintModal}
           onClose={() => setShowPrintModal(false)}
-          docType={printDocType as "sales_invoice" | "purchase_invoice" | "purchase_order" | "purchase_return"}
+           docType={printDocType as "sales_invoice" | "sales_return" | "credit_note" | "debit_note" | "purchase_invoice" | "purchase_order" | "purchase_return"}
           templateConfig={(() => {
             try {
               const raw = defaultTemplateQuery.data?.layoutJson;
@@ -2049,15 +2194,14 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
           qrSettings={qrSettingsQuery.data ? {
             isEnabled: qrSettingsQuery.data.isEnabled,
             countrySystem: qrSettingsQuery.data.countrySystem as any,
-            sellerName: qrSettingsQuery.data.sellerName ?? undefined,
-            taxNumber: qrSettingsQuery.data.taxNumber ?? undefined,
             customFormat: qrSettingsQuery.data.customFormat ?? undefined,
             showOnSalesInvoice: qrSettingsQuery.data.showOnSalesInvoice,
             showOnPurchaseInvoice: qrSettingsQuery.data.showOnPurchaseInvoice,
             showOnReceiptVoucher: qrSettingsQuery.data.showOnReceiptVoucher,
-            qrSize: qrSettingsQuery.data.qrSize,
-            qrPosition: qrSettingsQuery.data.qrPosition,
+            qrSize: 100,
           } : null}
+           zatcaQrCode={zatcaQrCodeSnapshot}
+           zatcaPhase2={zatcaPhase2}
           data={{
             invoiceNumber: invoiceNumber || "—",
             invoiceDate,
@@ -2085,12 +2229,12 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
             grandTotal: netTotal,
             paidAmount,
             remainingAmount,
-            sellerName: orgQuery.data?.name ?? qrSettingsQuery.data?.sellerName ?? "OneSoft ERP",
-            sellerNameEn: orgQuery.data?.nameEn ?? undefined,
-            sellerTaxNumber: orgQuery.data?.taxNumber ?? qrSettingsQuery.data?.taxNumber ?? "",
-            sellerCommercialReg: orgQuery.data?.commercialReg || undefined,
-            sellerAddress: orgQuery.data?.address ?? undefined,
-            sellerPhone: orgQuery.data?.phone ?? undefined,
+            sellerName: effectiveSellerLegalName,
+            sellerNameEn: String(orgQuery.data?.englishName ?? orgQuery.data?.nameEn ?? "") || undefined,
+            sellerTaxNumber: effectiveSellerTaxNumber,
+            sellerCommercialReg: String(orgQuery.data?.commercialReg ?? "") || undefined,
+            sellerAddress: String(orgQuery.data?.address ?? "") || undefined,
+            sellerPhone: String(orgQuery.data?.phone ?? "") || undefined,
           }}
         />
       )}

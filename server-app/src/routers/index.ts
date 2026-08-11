@@ -1,4 +1,5 @@
 import { router } from '../trpc.js';
+import { taxDefinitionsRouter } from './taxDefinitions.js';
 
 // ─── Routers ──────────────────────────────────────────────────────────────────
 import { orgsRouter }               from './orgs.js';
@@ -112,6 +113,7 @@ const baseConfig = {
   appSettings:         appSettingsRouter,
   uiPrefs:             uiPrefsRouter,
   paymentMethods:      paymentMethodsRouter,
+  taxDefinitions:      taxDefinitionsRouter,
   zatca:               zatcaRouter,
   sourceCode:          sourceCodeRouter,
   backup:              backupRouter,

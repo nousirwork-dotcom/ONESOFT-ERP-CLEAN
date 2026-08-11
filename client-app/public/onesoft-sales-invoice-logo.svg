@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160">
+  <defs>
+    <pattern id="p" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(35)">
+      <line x1="0" y1="0" x2="0" y2="8" stroke="#e7dfca" stroke-width="2"/>
+    </pattern>
+  </defs>
+  <rect width="240" height="160" fill="url(#p)"/>
+  <path d="M120 18C69 18 34 46 34 82c0 38 50 58 86 70 36-12 86-32 86-70 0-36-35-64-86-64z" fill="#07933d"/>
+  <path d="M120 37c34 0 58 18 58 43 0 24-33 40-58 49-25-9-58-25-58-49 0-25 24-43 58-43z" fill="#fff"/>
+  <rect x="90" y="52" width="44" height="58" rx="4" fill="#07933d"/>
+  <rect x="98" y="60" width="28" height="16" fill="#fff"/>
+  <path d="M134 63h12c8 0 13 7 13 15v25c0 5 4 9 9 9s9-4 9-9V81" fill="none" stroke="#07933d" stroke-width="7" stroke-linecap="round"/>
+  <path d="M162 64l13 13" stroke="#07933d" stroke-width="7" stroke-linecap="round"/>
+</svg>

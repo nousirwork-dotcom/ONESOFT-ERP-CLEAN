@@ -2,65 +2,118 @@
  * ZatcaCenterPage.tsx — مركز التكامل مع هيئة الزكاة والضريبة والجمارك
  * النسخة 2.0: Workflow متكامل + مؤشرات الحالة + لوحة تحكم محسّنة
  */
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { DateSegmentInput } from "@/shared/components/DateSegmentInput";
 import { trpc } from "@/shared/lib/trpc";
 import { toast } from "sonner";
 
 // ─── أنواع ────────────────────────────────────────────────────────────────────
 type Section =
-  | "dashboard" | "env" | "devices" | "certs" | "keys"
-  | "xmlcheck"  | "csr" | "register" | "csid" | "test"
-  | "send"      | "oplogs" | "errlogs" | "diag" | "reports";
+  | "activation" | "followup" | "dashboard" | "readiness" | "units" | "otp-sim" | "env" | "devices" | "certs" | "keys"
+  | "xmlcheck"  | "csr" | "register" | "csid" | "test" | "compliance"
+  | "send"      | "tracking" | "uncertain" | "oplogs" | "errlogs" | "diag" | "reports"
+  | "support";
 
 type SetupStepStatus = "done" | "active" | "pending" | "error";
+type LinkingEnvironment = "simulation" | "production";
+
+const ENVIRONMENT_COPY: Record<LinkingEnvironment, {
+  title: string;
+  fullTitle: string;
+  shortTitle: string;
+  description: string;
+  color: string;
+  softColor: string;
+}> = {
+  simulation: {
+    title: "الاختبار التجريبي",
+    fullTitle: "الاختبار التجريبي — (منصة محاكاة فاتورة) Fatoora Simulation",
+    shortTitle: "الاختبار التجريبي — Fatoora Simulation",
+    description: "بيئة اختيارية لاختبار ربط OneSoft وإنشاء XML والتوقيع الإلكتروني واختبارات المطابقة قبل استخدام الفواتير الحقيقية.",
+    color: "#2563eb",
+    softColor: "#eff6ff",
+  },
+  production: {
+    title: "الربط الفعلي",
+    fullTitle: "الربط الفعلي — (منصة فاتورة) Production",
+    shortTitle: "الربط الفعلي — Production",
+    description: "ربط وحدة الفوترة بمنصة فاتورة الفعلية وإصدار اعتمادات الإنتاج اللازمة لإرسال الفواتير الحقيقية إلى الهيئة.",
+    color: "#15803d",
+    softColor: "#f0fdf4",
+  },
+};
 
 // ─── قائمة الأقسام ────────────────────────────────────────────────────────────
-const SECTIONS: { id: Section; label: string; icon: string }[] = [
-  { id: "dashboard", label: "لوحة التحكم",            icon: "🏠" },
-  { id: "env",       label: "إعدادات البيئة",          icon: "🌐" },
-  { id: "devices",   label: "إدارة الأجهزة (EGS)",     icon: "💻" },
-  { id: "certs",     label: "إدارة الشهادات",          icon: "🛡️" },
-  { id: "keys",      label: "مفاتيح التشفير",          icon: "🔐" },
-  { id: "xmlcheck",  label: "التحقق من XML",           icon: "🔎" },
-  { id: "csr",       label: "إنشاء CSR",              icon: "📜" },
-  { id: "register",  label: "تسجيل الجهاز",            icon: "📱" },
-  { id: "csid",      label: "إدارة CSID",             icon: "🔑" },
-  { id: "test",      label: "اختبار الاتصال",          icon: "🔌" },
-  { id: "send",      label: "إرسال الفواتير",          icon: "📤" },
-  { id: "oplogs",    label: "سجل الإرسال",             icon: "📋" },
-  { id: "errlogs",   label: "سجل الأخطاء",            icon: "🚨" },
-  { id: "diag",      label: "أدوات التشخيص",          icon: "🔬" },
-  { id: "reports",   label: "التقارير",               icon: "📊" },
+const PRIMARY_SECTIONS: { id: Section; label: string; icon: string }[] = [
+  { id: "activation", label: "التفعيل والربط",       icon: "🔗" },
+  { id: "followup",   label: "التقارير والمتابعة",   icon: "📊" },
 ];
+
+const TECHNICAL_SECTIONS: { id: Exclude<Section, "activation" | "followup">; label: string; icon: string }[] = [
+  { id: "env",      label: "إعدادات الربط والبيئة", icon: "🌐" },
+  { id: "register", label: "تسجيل وحدة EGS",        icon: "📱" },
+  { id: "csid",     label: "حالة CSID",             icon: "🔑" },
+  { id: "devices",  label: "إدارة EGS",       icon: "💻" },
+  { id: "certs",    label: "الشهادات",         icon: "🛡️" },
+  { id: "keys",     label: "مفاتيح التشفير",   icon: "🔐" },
+  { id: "csr",      label: "إنشاء CSR",        icon: "📜" },
+  { id: "test",     label: "اختبار الاتصال",  icon: "🔌" },
+  { id: "xmlcheck", label: "التحقق من XML",    icon: "🔎" },
+  { id: "diag",     label: "التشخيص",          icon: "🧰" },
+  { id: "oplogs",   label: "السجلات الفنية",   icon: "📋" },
+  { id: "errlogs",  label: "الأخطاء والتنبيهات", icon: "🚨" },
+];
+
+const JOURNAL_TYPE_LABELS: Record<string, string> = {
+  sales_invoice: "فاتورة مبيعات",
+  sales_return: "مردود مبيعات",
+  credit_note: "إشعار دائن مبيعات",
+  debit_note: "إشعار مدين مبيعات",
+};
+
+function journalTypeLabel(docType: string) {
+  return JOURNAL_TYPE_LABELS[docType] ?? "دفتر مبيعات";
+}
+
+function locationLabel(item: { branchName?: string | null; warehouseName?: string | null }) {
+  return item.branchName && item.warehouseName
+    ? `${item.branchName} — ${item.warehouseName}`
+    : item.warehouseName ?? item.branchName ?? "غير محدد";
+}
 
 // ─── خطوات الإعداد ────────────────────────────────────────────────────────────
 const SETUP_STEPS: { id: number; label: string; sublabel: string; section: Section; icon: string }[] = [
-  { id: 1,  label: "اختيار البيئة",         sublabel: "Sandbox أو Production", section: "env",      icon: "🌐" },
-  { id: 2,  label: "إنشاء CSR",             sublabel: "Certificate Signing Request", section: "csr", icon: "📜" },
-  { id: 3,  label: "إرسال CSR للهيئة",      sublabel: "عبر بوابة ZATCA",       section: "csr",      icon: "📤" },
-  { id: 4,  label: "استلام الشهادة",        sublabel: "Public Certificate",    section: "certs",    icon: "🛡️" },
-  { id: 5,  label: "حفظ الشهادة العامة",    sublabel: "Public Certificate PEM", section: "certs",   icon: "📋" },
-  { id: 6,  label: "إنشاء / حفظ Secret Key",sublabel: "مفتاح التوثيق",        section: "csid",     icon: "🗝️" },
-  { id: 7,  label: "تسجيل الجهاز (EGS)",   sublabel: "ربط الجهاز بالهيئة",   section: "register", icon: "📱" },
-  { id: 8,  label: "اختبار الاتصال",        sublabel: "التحقق من الربط",       section: "test",     icon: "🔌" },
-  { id: 9,  label: "إرسال أول فاتورة تجريبية", sublabel: "للتحقق النهائي",    section: "send",     icon: "🧾" },
-  { id: 10, label: "اكتمال الإعداد",        sublabel: "النظام جاهز للإنتاج",  section: "dashboard",icon: "🎉" },
+  { id: 1,  label: "بيانات المنشأة",          sublabel: "التحقق من بيانات المنشأة", section: "readiness", icon: "🏢" },
+  { id: 2,  label: "وحدة الفوترة والدفاتر",   sublabel: "ربط الوحدة بالدفاتر والفروع", section: "units", icon: "🧩" },
+  { id: 3,  label: "نوع الفواتير",            sublabel: "مبسطة أو قياسية أو كلاهما", section: "readiness", icon: "🧾" },
+  { id: 4,  label: "المحاكاة الرسمية للهيئة", sublabel: "مرحلة الاعتماد قبل الإنتاج", section: "otp-sim", icon: "🌐" },
+  { id: 5,  label: "اختبارات المطابقة",       sublabel: "التحقق قبل التفعيل الفعلي", section: "test", icon: "📋" },
+  { id: 6,  label: "الإنتاج الفعلي",          sublabel: "يُفتح بعد اكتمال المتطلبات", section: "env", icon: "🚀" },
 ];
 
 // ─── أنماط مشتركة ─────────────────────────────────────────────────────────────
 const fld: React.CSSProperties = { height: 28, border: "1px solid #cbd5e1", borderRadius: 4, padding: "0 8px", fontSize: 12, width: "100%", background: "#fff" };
 const lbl: React.CSSProperties = { fontSize: 11, fontWeight: 700, color: "#374151", display: "block", marginBottom: 3 };
 const grp: React.CSSProperties = { marginBottom: 14 };
+const smallBtn: React.CSSProperties = { height: 24, padding: "0 8px", border: "none", borderRadius: 4, fontSize: 10, fontWeight: 700, cursor: "pointer" };
 
 const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> = {
-  not_submitted: { label: "لم تُرسَل",   color: "#6b7280", bg: "#f3f4f6" },
-  pending:       { label: "في الانتظار", color: "#d97706", bg: "#fef3c7" },
-  cleared:       { label: "مُخلَّصة",    color: "#16a34a", bg: "#dcfce7" },
-  reported:      { label: "مُبلَّغة",    color: "#0ea5e9", bg: "#e0f2fe" },
-  rejected:      { label: "مرفوضة",     color: "#dc2626", bg: "#fee2e2" },
-  error:         { label: "خطأ",         color: "#dc2626", bg: "#fee2e2" },
-  success:       { label: "ناجحة",       color: "#16a34a", bg: "#dcfce7" },
+  not_submitted:         { label: "لم تُرسَل",                    color: "#6b7280", bg: "#f3f4f6" },
+  ready_to_submit:       { label: "جاهزة للإرسال",                color: "#475569", bg: "#f1f5f9" },
+  reporting_pending:     { label: "تم الإصدار — بانتظار الإبلاغ", color: "#2563eb", bg: "#dbeafe" },
+  clearance_pending:     { label: "تم الإصدار — بانتظار التخليص", color: "#2563eb", bg: "#dbeafe" },
+  submitting:            { label: "جاري الإرسال",                 color: "#7c3aed", bg: "#ede9fe" },
+  submitted_pending:     { label: "أُرسل — بانتظار الرد",         color: "#d97706", bg: "#fef3c7" },
+  cleared:               { label: "مقبولة — تخليص",                color: "#16a34a", bg: "#dcfce7" },
+  reported:              { label: "مقبولة — إبلاغ",                color: "#0ea5e9", bg: "#e0f2fe" },
+  accepted_with_warnings:{ label: "مقبولة مع تحذيرات",             color: "#ca8a04", bg: "#fef9c3" },
+  rejected:              { label: "مرفوضة",                         color: "#dc2626", bg: "#fee2e2" },
+  connection_issue:      { label: "مشكلة اتصال",                  color: "#dc2626", bg: "#fee2e2" },
+  retry_pending:         { label: "بانتظار إعادة المحاولة",       color: "#ea580c", bg: "#ffedd5" },
+  uncertain:             { label: "حالة غير مؤكدة",               color: "#9333ea", bg: "#f3e8ff" },
+  pending:               { label: "في الانتظار",                  color: "#d97706", bg: "#fef3c7" },
+  error:                 { label: "خطأ",                          color: "#dc2626", bg: "#fee2e2" },
+  success:               { label: "ناجحة",                        color: "#16a34a", bg: "#dcfce7" },
 };
 
 // ─── مكوّنات مشتركة ────────────────────────────────────────────────────────────
@@ -178,16 +231,12 @@ function SetupWizard({ onClose, onNavigate, cfg, stats }: {
   const [activeStep, setActiveStep] = useState(1);
 
   const getStepStatus = (id: number): SetupStepStatus => {
-    if (id === 1)  return cfg?.environment ? "done" : "active";
+    if (id === 1)  return cfg?.legalName && cfg?.vatNumber ? "done" : "active";
     if (id === 2)  return "pending";
-    if (id === 3)  return "pending";
+    if (id === 3)  return cfg?.sellerType ? "done" : "pending";
     if (id === 4)  return cfg?.csid ? "done" : "pending";
-    if (id === 5)  return cfg?.csid ? "done" : "pending";
-    if (id === 6)  return cfg?.csid ? "done" : "pending";
-    if (id === 7)  return "pending";
-    if (id === 8)  return (cfg as any)?.lastConnectionStatus === "success" ? "done" : "pending";
-    if (id === 9)  return (stats?.cleared ?? 0) > 0 ? "done" : "pending";
-    if (id === 10) return cfg?.enabled && (cfg as any)?.lastConnectionStatus === "success" ? "done" : "pending";
+    if (id === 5)  return (cfg as any)?.lastConnectionStatus === "success" ? "done" : "pending";
+    if (id === 6)  return cfg?.enabled && cfg?.environment === "production" ? "done" : "pending";
     return "pending";
   };
 
@@ -212,8 +261,8 @@ function SetupWizard({ onClose, onNavigate, cfg, stats }: {
         <div style={{ background: "linear-gradient(135deg, #1e293b, #334155)", padding: "20px 24px", color: "#fff", display: "flex", alignItems: "center", gap: 16 }}>
           <div style={{ fontSize: 32 }}>🏛️</div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 800, fontSize: 16 }}>معالج إعداد الربط مع هيئة الزكاة</div>
-            <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>اتبع الخطوات لإكمال الربط الكامل مع منظومة الفوترة الإلكترونية</div>
+            <div style={{ fontWeight: 800, fontSize: 16 }}>مراجعة مراحل التفعيل والربط</div>
+            <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>اتبع المراحل الست لإعداد الفوترة الإلكترونية والانتقال إلى الإنتاج</div>
           </div>
           <div style={{ textAlign: "center" }}>
             <div style={{ fontSize: 22, fontWeight: 800, color: "#D19C05" }}>{progress}%</div>
@@ -275,7 +324,7 @@ function SetupWizard({ onClose, onNavigate, cfg, stats }: {
               </button>
               <button onClick={() => { onNavigate(step.section); onClose(); }}
                 style={{ height: 34, padding: "0 20px", background: "#D19C05", color: "#fff", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                🔗 انتقل لهذا القسم
+                 فتح المرحلة
               </button>
               <button onClick={() => setActiveStep(s => Math.min(SETUP_STEPS.length, s + 1))} disabled={activeStep === SETUP_STEPS.length}
                 style={{ height: 34, padding: "0 16px", background: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: activeStep === SETUP_STEPS.length ? "not-allowed" : "pointer", opacity: activeStep === SETUP_STEPS.length ? 0.5 : 1, marginRight: "auto" }}>
@@ -291,16 +340,12 @@ function SetupWizard({ onClose, onNavigate, cfg, stats }: {
 
 function StepDetail({ step, cfg, stats }: { step: number; cfg: any; stats: any }) {
   const stepInfo: Record<number, { desc: string; items: string[]; note?: string }> = {
-    1:  { desc: "حدد البيئة التي ستتعامل معها. استخدم Sandbox للاختبار أولاً قبل الانتقال إلى الإنتاج.", items: ["Sandbox: للاختبار والتطوير بدون تأثير حقيقي", "Production: الإرسال الفعلي للهيئة"], note: cfg?.environment ? `البيئة الحالية: ${cfg.environment === "production" ? "✅ الإنتاج" : "🧪 الاختبار"}` : "لم تُحدَّد البيئة بعد" },
-    2:  { desc: "أنشئ طلب توقيع الشهادة (CSR) باستخدام خوارزمية EC secp256k1. يحتوي CSR على بيانات منشأتك.", items: ["الاسم التجاري وبيانات المنشأة", "الرقم الضريبي VAT", "عنوان المنشأة المسجّل", "نوع النشاط التجاري"] },
-    3:  { desc: "أرسل ملف CSR إلى بوابة هيئة الزكاة والضريبة والجمارك للحصول على الشهادة الرقمية.", items: ["تسجيل الدخول لبوابة fatoora.zatca.gov.sa", "رفع ملف CSR", "انتظار الموافقة (يستغرق دقائق)", "تنزيل الشهادة المُعتمَدة"] },
-    4:  { desc: "بعد الموافقة، ستصلك شهادة X.509 من الهيئة. احتفظ بها في مكان آمن.", items: ["صيغة PEM أو Base64", "تحتوي على المفتاح العام", "صالحة لفترة محددة (عادة سنة)", "تتضمن بيانات المنشأة المُتحقَّق منها"] },
-    5:  { desc: "أدخل الشهادة العامة في النظام لاستخدامها في توقيع الفواتير.", items: ["انسخ محتوى الشهادة كاملاً", "أدخله في قسم إدارة CSID", "تأكد من صحة الصيغة", "احفظ التغييرات"] },
-    6:  { desc: "Secret Key هو مفتاح التوثيق مع الهيئة. يأتي مع الشهادة من بوابة ZATCA.", items: ["يُعطى من الهيئة مع CSID", "لا يُعرض مرة ثانية — احفظه فوراً", "يُخزَّن مشفّراً في قاعدة البيانات", "لا تشاركه مع أحد"] },
-    7:  { desc: "سجّل جهاز الفوترة (EGS) في منظومة الهيئة باستخدام CSID والشهادة.", items: ["UUID فريد لكل جهاز", "اسم الجهاز والفرع المرتبط", "إرسال طلب التسجيل", "الحصول على Device ID من الهيئة"] },
-    8:  { desc: "تحقق من صحة الاتصال بين نظامك وخوادم الهيئة.", items: ["فحص CSID والشهادة", "اختبار الاتصال بالـ API", "التحقق من الاستجابة", "تسجيل نتيجة الاختبار"], note: (cfg as any)?.lastConnectionStatus === "success" ? "✅ آخر اختبار ناجح" : "لم يتم اختبار الاتصال بعد" },
-    9:  { desc: "أرسل فاتورة تجريبية للتأكد من سير العملية كاملاً.", items: ["اختر فاتورة غير مرسلة", "تحقق من صحة XML", "أرسل للهيئة وانتظر الاستجابة", "تحقق من وصول استجابة Cleared"], note: (stats?.cleared ?? 0) > 0 ? `✅ ${stats.cleared} فاتورة مُخلَّصة` : "لم تُرسَل أي فاتورة بعد" },
-    10: { desc: "مبروك! النظام جاهز للعمل في بيئة الإنتاج.", items: ["راقب لوحة التحكم يومياً", "تابع سجل الأخطاء", "تجديد الشهادة قبل انتهائها", "التواصل مع الدعم عند الحاجة"] },
+    1: { desc: "ابدأ بمراجعة بيانات المنشأة ورقم التسجيل الضريبي والعنوان قبل إنشاء وحدة الفوترة.", items: ["اسم المنشأة القانوني", "الرقم الضريبي", "العنوان وبيانات التواصل"] },
+    2: { desc: "أنشئ وحدة فوترة واربطها بالفرع ونقطة الإصدار والدفاتر المناسبة.", items: ["اختيار دفتر مبيعات", "تحديد الفرع والمخزن", "ربط دفاتر دورة المبيعات"] },
+    3: { desc: "حدد نطاق الفواتير التي ستخضع للربط: مبسطة أو قياسية أو كلاهما.", items: ["Reporting للفواتير المبسطة", "Clearance للفواتير القياسية", "مراجعة الإعداد قبل الاعتماد"] },
+    4: { desc: "استخدم المحاكاة الرسمية للهيئة كمرحلة اعتماد لإصدار الشهادة وتجهيز وحدة الفوترة.", items: ["إنشاء CSR على الخادم", "إدخال OTP الصادر من البوابة الرسمية", "طلب Compliance وProduction CSID وفق الصلاحيات"] },
+    5: { desc: "تحقق من صحة XML والتوقيع وتدفق الإرسال قبل طلب التفعيل الفعلي.", items: ["فحص XML", "اختبار الاتصال", "مراجعة نتيجة المطابقة والتنبيهات"] },
+    6: { desc: "لا يُفتح الإنتاج إلا بعد اكتمال المراحل السابقة واعتماد مسؤول الربط.", items: ["اعتماد الانتقال إلى الإنتاج", "تفعيل وحدة EGS", "مراقبة الشهادة والاتصال بعد التفعيل"] },
   };
 
   const info = stepInfo[step];
@@ -353,24 +398,24 @@ function DashboardSection({ onStartSetup, onNavigate }: { onStartSetup: () => vo
 
   const statCards = [
     { label: "إجمالي الفواتير", value: s?.totalInvoices ?? 0, icon: "📄", color: "#6366f1" },
-    { label: "مُخلَّصة",         value: s?.cleared ?? 0,        icon: "✅", color: "#16a34a" },
+    { label: "Mock: تخليص تجريبي", value: s?.cleared ?? 0,        icon: "✅", color: "#16a34a" },
     { label: "في الانتظار",    value: s?.pending ?? 0,        icon: "⏳", color: "#d97706" },
-    { label: "مرفوضة",          value: s?.rejected ?? 0,       icon: "❌", color: "#dc2626" },
+    { label: "Mock: رفض تجريبي", value: s?.rejected ?? 0,       icon: "❌", color: "#dc2626" },
     { label: "أخطاء",           value: s?.errors ?? 0,         icon: "⚠️", color: "#7c3aed" },
     { label: "لم تُرسَل",       value: s?.notSubmitted ?? 0,   icon: "📭", color: "#6b7280" },
   ];
 
   return (
     <div>
-      <SecTitle icon="🏠" title="لوحة التحكم — مركز التكامل مع هيئة الزكاة" />
+       <SecTitle icon="🏠" title="لوحة التحكم — مركز الفوترة الإلكترونية" />
 
       {/* زر بدء الإعداد */}
       {readyPct < 100 && (
         <div style={{ background: "linear-gradient(135deg, #1e293b, #334155)", borderRadius: 12, padding: "20px 24px", marginBottom: 20, display: "flex", gap: 20, alignItems: "center" }}>
           <div style={{ fontSize: 48 }}>🏛️</div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 800, fontSize: 16, color: "#fff", marginBottom: 4 }}>الربط مع هيئة الزكاة والضريبة والجمارك</div>
-            <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 8 }}>اتبع الخطوات العشر لإكمال الإعداد الكامل والبدء في إرسال الفواتير الإلكترونية</div>
+             <div style={{ fontWeight: 800, fontSize: 16, color: "#fff", marginBottom: 4 }}>إعداد مركز الفوترة الإلكترونية</div>
+              <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 8 }}>أنشئ وحدة ربط من دفتر مبيعات، وسيُعد OneSoft الربط الفني تلقائيًا داخل البيئة التجريبية.</div>
             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
               <div style={{ flex: 1, height: 6, borderRadius: 3, background: "rgba(255,255,255,0.15)" }}>
                 <div style={{ height: "100%", width: `${readyPct}%`, background: "#D19C05", borderRadius: 3 }} />
@@ -389,8 +434,8 @@ function DashboardSection({ onStartSetup, onNavigate }: { onStartSetup: () => vo
         <div style={{ background: "#dcfce7", border: "1px solid #16a34a", borderRadius: 10, padding: "14px 18px", marginBottom: 20, display: "flex", gap: 12, alignItems: "center" }}>
           <span style={{ fontSize: 28 }}>🎉</span>
           <div>
-            <div style={{ fontWeight: 800, fontSize: 14, color: "#16a34a" }}>النظام مُعدّ بالكامل وجاهز للعمل</div>
-            <div style={{ fontSize: 12, color: "#166534" }}>تم إتمام جميع خطوات الإعداد بنجاح</div>
+            <div style={{ fontWeight: 800, fontSize: 14, color: "#16a34a" }}>نموذج الربط الداخلي مكتمل</div>
+            <div style={{ fontSize: 12, color: "#166534" }}>هذا لا يعني جاهزية ZATCA للإنتاج؛ Production محجوبة</div>
           </div>
         </div>
       )}
@@ -422,7 +467,7 @@ function DashboardSection({ onStartSetup, onNavigate }: { onStartSetup: () => vo
           )}
           {(s?.rejected ?? 0) > 0 && (
             <div style={{ background: "#fef2f2", border: "1px solid #f87171", borderRadius: 8, padding: "10px 14px", display: "flex", gap: 10, alignItems: "center" }}>
-              ❌ <span style={{ color: "#7f1d1d", fontWeight: 700, fontSize: 12, flex: 1 }}>يوجد {s!.rejected} فاتورة مرفوضة تحتاج مراجعة</span>
+              ❌ <span style={{ color: "#7f1d1d", fontWeight: 700, fontSize: 12, flex: 1 }}>يوجد {s!.rejected} فاتورة Mock مرفوضة تجريبيًا تحتاج مراجعة داخلية</span>
               <button onClick={() => onNavigate("errlogs")} style={{ height: 26, padding: "0 12px", background: "#dc2626", color: "#fff", border: "none", borderRadius: 5, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>سجل الأخطاء</button>
             </div>
           )}
@@ -430,6 +475,18 @@ function DashboardSection({ onStartSetup, onNavigate }: { onStartSetup: () => vo
             <div style={{ background: "#fffbeb", border: "1px solid #fbbf24", borderRadius: 8, padding: "10px 14px", display: "flex", gap: 10, alignItems: "center" }}>
               ⏳ <span style={{ color: "#78350f", fontWeight: 700, fontSize: 12, flex: 1 }}>يوجد {s!.pending} فاتورة في الانتظار — أرسلها للهيئة</span>
               <button onClick={() => onNavigate("send")} style={{ height: 26, padding: "0 12px", background: "#d97706", color: "#fff", border: "none", borderRadius: 5, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>إرسال الآن</button>
+            </div>
+          )}
+          {(s?.simplifiedReportingOverdue ?? 0) > 0 && (
+            <div style={{ background: "#fef2f2", border: "1px solid #dc2626", borderRadius: 8, padding: "10px 14px", display: "flex", gap: 10, alignItems: "center" }}>
+              ⏰ <span style={{ color: "#991b1b", fontWeight: 700, fontSize: 12, flex: 1 }}>يوجد {s!.simplifiedReportingOverdue} فاتورة مبسطة تجاوزت مهلة الإبلاغ 24 ساعة</span>
+              <button onClick={() => onNavigate("uncertain")} style={{ height: 26, padding: "0 12px", background: "#dc2626", color: "#fff", border: "none", borderRadius: 5, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>مراجعة الآن</button>
+            </div>
+          )}
+          {(s?.simplifiedReportingDueSoon ?? 0) > 0 && (
+            <div style={{ background: "#fff7ed", border: "1px solid #fb923c", borderRadius: 8, padding: "10px 14px", display: "flex", gap: 10, alignItems: "center" }}>
+              ⚠️ <span style={{ color: "#9a3412", fontWeight: 700, fontSize: 12, flex: 1 }}>يوجد {s!.simplifiedReportingDueSoon} فاتورة مبسطة تقترب من مهلة الإبلاغ 24 ساعة</span>
+              <button onClick={() => onNavigate("send")} style={{ height: 26, padding: "0 12px", background: "#ea580c", color: "#fff", border: "none", borderRadius: 5, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>إرسال الآن</button>
             </div>
           )}
         </div>
@@ -444,13 +501,13 @@ function DashboardSection({ onStartSetup, onNavigate }: { onStartSetup: () => vo
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 20 }}>
           <StatusCard label="البيئة الحالية"      value={cfg?.environment === "production" ? "🟢 الإنتاج" : cfg?.environment === "sandbox" ? "🧪 الاختبار" : "غير محدد"} dot={envDot} sub={cfg?.environment ? "تم التهيئة" : "اضغط لإعداد البيئة"} onClick={() => onNavigate("env")} />
-          <StatusCard label="حالة الاتصال"        value={(cfg as any)?.lastConnectionStatus === "success" ? "متصل ✓" : (cfg as any)?.lastConnectionStatus === "failed" ? "منقطع ✗" : "لم يُختبر"} dot={connDot} sub={cfg?.lastConnectionTest ? `آخر اختبار: ${new Date(cfg.lastConnectionTest).toLocaleDateString("ar-SA")}` : "لم يُجرَ اختبار بعد"} onClick={() => onNavigate("test")} />
+           <StatusCard label="حالة Mock"        value={(cfg as any)?.lastConnectionStatus === "success" ? "Mock ✓" : (cfg as any)?.lastConnectionStatus === "failed" ? "Mock ✗" : "لم تُختبر"} dot={connDot} sub={cfg?.lastConnectionTest ? `آخر اختبار Mock: ${new Date(cfg.lastConnectionTest).toLocaleDateString("ar-SA")}` : "لا يوجد اتصال خارجي"} onClick={() => onNavigate("test")} />
           <StatusCard label="شهادة CSID"          value={cfg?.csid ? "موجودة ✓" : "غير موجودة"} dot={csidDot} sub={certDays !== null ? (certDays > 0 ? `${certDays} يوم متبقٍ` : "منتهية!") : "—"} onClick={() => onNavigate("certs")} />
           <StatusCard label="Secret Key"          value={cfg?.csid ? "موجود ✓" : "غير موجود"} dot={keyDot} sub="مشفّر AES-256-GCM في DB" onClick={() => onNavigate("keys")} />
           <StatusCard label="الأجهزة (EGS)"       value="0 جهاز مسجّل" dot={devDot} sub="انقر لإدارة الأجهزة" onClick={() => onNavigate("devices")} />
           <StatusCard label="تفعيل ZATCA"         value={cfg?.enabled ? "مُفعَّلة ✓" : "غير مُفعَّلة"} dot={enabledDot} sub={cfg?.vatNumber ?? "الرقم الضريبي غير محدد"} onClick={() => onNavigate("env")} />
-          <StatusCard label="فواتير اليوم"         value={String(s?.todayCount ?? s?.cleared ?? 0)} dot={(s?.todayCount ?? 0) > 0 ? "ok" : "none"} sub={`إجمالي مُخلَّصة: ${s?.cleared ?? 0}`} onClick={() => onNavigate("oplogs")} />
-          <StatusCard label="نسبة نجاح الإرسال"  value={s?.totalInvoices ? `${Math.round((s.cleared / s.totalInvoices) * 100)}%` : "—"} dot={s?.totalInvoices && s.cleared / s.totalInvoices > 0.8 ? "ok" : s?.totalInvoices ? "warn" : "none"} sub={`${s?.rejected ?? 0} مرفوضة`} onClick={() => onNavigate("reports")} />
+           <StatusCard label="فواتير اليوم (Mock)" value={String(s?.todayCount ?? s?.cleared ?? 0)} dot={(s?.todayCount ?? 0) > 0 ? "ok" : "none"} sub={`إجمالي تخليص تجريبي: ${s?.cleared ?? 0}`} onClick={() => onNavigate("oplogs")} />
+          <StatusCard label="نسبة نجاح Mock"  value={s?.totalInvoices ? `${Math.round((s.cleared / s.totalInvoices) * 100)}%` : "—"} dot={s?.totalInvoices && s.cleared / s.totalInvoices > 0.8 ? "ok" : s?.totalInvoices ? "warn" : "none"} sub={`${s?.rejected ?? 0} رفض Mock تجريبي`} onClick={() => onNavigate("reports")} />
         </div>
       )}
 
@@ -460,10 +517,10 @@ function DashboardSection({ onStartSetup, onNavigate }: { onStartSetup: () => vo
         <KpiCard label="الأجهزة النشطة"     icon="💻" value={0}                                                        color="#0ea5e9" sub="من 1 جهاز إجمالي"         onClick={() => onNavigate("devices")} />
         <KpiCard label="شهادات سارية"        icon="🛡️" value={cfg?.csid ? 1 : 0}                                       color="#16a34a" sub={certDays !== null ? `${certDays} يوم متبقٍ` : "—"} onClick={() => onNavigate("certs")} />
         <KpiCard label="CSID نشطة"           icon="🔑" value={cfg?.csid ? 1 : 0}                                       color="#8b5cf6" sub="معرّفات الاتصال"            onClick={() => onNavigate("csid")} />
-        <KpiCard label="إجمالي الفواتير"     icon="📄" value={s?.totalInvoices ?? 0}                                   color="#6366f1" sub={`${s?.cleared ?? 0} مُخلَّصة`} onClick={() => onNavigate("oplogs")} />
+         <KpiCard label="إجمالي الفواتير"     icon="📄" value={s?.totalInvoices ?? 0}                                   color="#6366f1" sub={`${s?.cleared ?? 0} تخليص Mock تجريبي`} onClick={() => onNavigate("oplogs")} />
         <KpiCard label="شهادات منتهية"       icon="⏰" value={certDays !== null && certDays <= 0 ? 1 : 0}             color="#dc2626" sub="تحتاج تجديد فوري"           onClick={() => onNavigate("certs")} />
         <KpiCard label="ستنتهي قريباً"       icon="🕐" value={certDays !== null && certDays > 0 && certDays <= 30 ? 1 : 0} color="#d97706" sub="خلال 30 يوم"         onClick={() => onNavigate("certs")} />
-        <KpiCard label="مرفوضة"              icon="❌" value={s?.rejected ?? 0}                                        color="#ef4444" sub="تحتاج مراجعة"              onClick={() => onNavigate("errlogs")} />
+         <KpiCard label="رفض Mock تجريبي"      icon="❌" value={s?.rejected ?? 0}                                        color="#ef4444" sub="تحتاج مراجعة داخلية"              onClick={() => onNavigate("errlogs")} />
         <KpiCard label="في الانتظار"         icon="⏳" value={s?.pending ?? 0}                                         color="#f59e0b" sub="لم تُرسَل بعد"             onClick={() => onNavigate("send")} />
       </div>
 
@@ -489,14 +546,14 @@ function DashboardSection({ onStartSetup, onNavigate }: { onStartSetup: () => vo
           </div>
           {s && s.totalInvoices > 0 && (
             <>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "#374151", marginBottom: 4 }}>نسبة الامتثال</div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#374151", marginBottom: 4 }}>نسبة نجاح Mock</div>
               <div style={{ height: 10, borderRadius: 5, background: "#f1f5f9", overflow: "hidden", marginBottom: 6 }}>
                 <div style={{ height: "100%", width: `${Math.round((s.cleared / s.totalInvoices) * 100)}%`, background: "linear-gradient(90deg,#16a34a,#22c55e)", borderRadius: 5, transition: "width 0.5s" }} />
               </div>
               <div style={{ display: "flex", gap: 12, fontSize: 11 }}>
                 <span style={{ color: "#16a34a", fontWeight: 700 }}>{Math.round((s.cleared / s.totalInvoices) * 100)}%</span>
-                <span style={{ color: "#6b7280" }}>{s.cleared} من {s.totalInvoices}</span>
-                {s.rejected > 0 && <span style={{ color: "#dc2626" }}>• {s.rejected} مرفوضة</span>}
+                <span style={{ color: "#6b7280" }}>{s.cleared} تخليص Mock تجريبي من {s.totalInvoices}</span>
+                {s.rejected > 0 && <span style={{ color: "#dc2626" }}>• {s.rejected} رفض Mock تجريبي</span>}
               </div>
             </>
           )}
@@ -510,11 +567,11 @@ function DashboardSection({ onStartSetup, onNavigate }: { onStartSetup: () => vo
             <button onClick={() => onNavigate("oplogs")} style={{ fontSize: 10, color: "#D19C05", background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}>عرض الكل ↗</button>
           </div>
           <Timeline items={[
-            ...((cfg as any)?.lastConnectionStatus === "success" ? [{ icon: "✅", label: "نجاح الربط بالهيئة", detail: "اختبار الاتصال ناجح", time: cfg?.lastConnectionTest ? new Date(cfg.lastConnectionTest).toLocaleDateString("ar-SA") : "—", color: "#16a34a" }] : []),
-            ...(cfg?.csid ? [{ icon: "🔑", label: "تم إنشاء CSID", detail: "شهادة الاتصال نشطة", time: "—", color: "#8b5cf6" }] : []),
+             ...((cfg as any)?.lastConnectionStatus === "success" ? [{ icon: "✅", label: "نجاح اختبار Mock", detail: "لا يوجد اتصال فعلي بـ Fatoora", time: cfg?.lastConnectionTest ? new Date(cfg.lastConnectionTest).toLocaleDateString("ar-SA") : "—", color: "#16a34a" }] : []),
+             ...(cfg?.csid ? [{ icon: "🔑", label: "CSID محاكاة موجود", detail: "ليس اعتمادًا رسميًا", time: "—", color: "#8b5cf6" }] : []),
             ...(cfg?.environment ? [{ icon: "🌐", label: `تم تعيين البيئة: ${cfg.environment === "production" ? "الإنتاج" : "الاختبار"}`, detail: "إعدادات البيئة محفوظة", time: "—", color: "#0ea5e9" }] : []),
-            ...((s?.cleared ?? 0) > 0 ? [{ icon: "📄", label: `${s!.cleared} فاتورة مُخلَّصة`, detail: "تم إرسالها بنجاح", time: "اليوم", color: "#16a34a" }] : []),
-            ...((s?.rejected ?? 0) > 0 ? [{ icon: "❌", label: `${s!.rejected} فاتورة مرفوضة`, detail: "تحتاج مراجعة", time: "اليوم", color: "#dc2626" }] : []),
+            ...((s?.cleared ?? 0) > 0 ? [{ icon: "📄", label: `${s!.cleared} فاتورة Mock بتخليص تجريبي`, detail: "بيانات اختبار — لا يوجد اتصال فعلي بـ Fatoora", time: "اليوم", color: "#16a34a" }] : []),
+            ...((s?.rejected ?? 0) > 0 ? [{ icon: "❌", label: `${s!.rejected} فاتورة Mock مرفوضة تجريبيًا`, detail: "تحتاج مراجعة داخلية فقط", time: "اليوم", color: "#dc2626" }] : []),
           ]} />
           {!(cfg?.environment) && !(cfg?.csid) && <div style={{ textAlign: "center", color: "#9ca3af", fontSize: 12, padding: "12px 0" }}>ابدأ الإعداد لرؤية السجل الزمني</div>}
         </div>
@@ -542,6 +599,258 @@ function DashboardSection({ onStartSetup, onNavigate }: { onStartSetup: () => vo
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// 1b. جاهزية الربط — قراءة فقط قبل رحلة CSR/OTP
+// ══════════════════════════════════════════════════════════════════════════════
+function ReadinessSection({ onNavigate, onOpenCompanyInfo }: {
+  onNavigate: (section: Section) => void;
+  onOpenCompanyInfo?: () => void;
+}) {
+  const utils = trpc.useUtils();
+  const [warehouseId, setWarehouseId] = useState<number | null>(null);
+  const [invoiceType, setInvoiceType] = useState<"simplified" | "standard" | "both">("both");
+  const [unitId, setUnitId] = useState<number | null>(null);
+  const [savedLoaded, setSavedLoaded] = useState(false);
+
+  const readinessQ = trpc.zatca.getReadiness.useQuery({
+    warehouseId: warehouseId ?? undefined,
+    invoiceType,
+  });
+  const data = readinessQ.data;
+  const organizationComplete = Boolean(data?.organization?.dataComplete);
+  const overallReady = Boolean(data?.preCsrReady);
+  const saveM = trpc.zatca.saveReadinessSettings.useMutation({
+    onSuccess: () => {
+      toast.success("تم حفظ إعداد الجاهزية في قاعدة البيانات");
+      utils.zatca.getReadiness.invalidate();
+    },
+    onError: error => toast.error(error.message),
+  });
+
+  useEffect(() => {
+    if (savedLoaded || !data?.savedSettings) return;
+    const saved = data.savedSettings;
+    setWarehouseId(saved.warehouseId);
+    setInvoiceType((saved.invoiceType as typeof invoiceType) || "both");
+    setUnitId(saved.zatcaPosUnitId ?? null);
+    setSavedLoaded(true);
+  }, [data?.savedSettings, savedLoaded]);
+
+  const setWarehouse = (value: number | null) => {
+    setWarehouseId(value);
+    setUnitId(null);
+  };
+  const statusStyle = (ok: boolean, neutral = false) => ({
+    background: neutral ? "#f8fafc" : ok ? "#f0fdf4" : "#fff7ed",
+    border: `1px solid ${neutral ? "#e2e8f0" : ok ? "#bbf7d0" : "#fed7aa"}`,
+    color: neutral ? "#475569" : ok ? "#166534" : "#9a3412",
+  });
+  const Status = ({ ok, text }: { ok: boolean; text: string }) => (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 700, color: ok ? "#16a34a" : "#d97706" }}>
+      <span style={{ width: 8, height: 8, borderRadius: "50%", background: ok ? "#16a34a" : "#d97706" }} />
+      {text}
+    </span>
+  );
+
+  return (
+    <div>
+      <SecTitle icon="✅" title="جاهزية الربط مع منصة فاتورة" />
+      <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1e40af", borderRadius: 8, padding: "11px 13px", fontSize: 12, lineHeight: 1.8, marginBottom: 14 }}>
+        هذه الشاشة فحص قراءة فقط قبل إنشاء CSR. لا تنشئ دفاتر أو وحدة ربط أو بيانات ضريبية، ولا تُرسل OTP أو أي طلب خارجي.
+      </div>
+      <div style={{
+        background: overallReady ? "#f0fdf4" : "#fef2f2",
+        border: `1px solid ${overallReady ? "#86efac" : "#fecaca"}`,
+        color: overallReady ? "#166534" : "#991b1b",
+        borderRadius: 10, padding: "13px 15px", marginBottom: 14,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 18 }}>{overallReady ? "✅" : "⛔"}</span>
+          <strong style={{ fontSize: 14 }}>
+            {overallReady ? "جاهز لإنشاء CSR" : "غير جاهز"}
+          </strong>
+        </div>
+        <div style={{ fontSize: 11, marginTop: 5, lineHeight: 1.7 }}>
+          {overallReady
+            ? "اكتملت جميع شروط ما قبل التفعيل."
+            : organizationComplete
+              ? "يوجد شرط أو أكثر من شروط ما قبل التفعيل لم يكتمل."
+              : "بيانات المنشأة ناقصة؛ لا يمكن إنشاء CSR قبل استكمالها."}
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+        <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: 14 }}>
+          <label style={lbl}>المنشأة</label>
+          <select style={fld} value={data?.organization?.id ?? ""} disabled>
+            {(data?.availableOrganizations ?? []).map(org => (
+              <option key={org.id} value={org.id}>{org.name}{org.nameEn ? ` — ${org.nameEn}` : ""}</option>
+            ))}
+          </select>
+          <div style={{ marginTop: 9, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: 11, color: "#64748b" }}>المنشأة الحالية لحساب المستخدم</span>
+            <Status ok={organizationComplete} text={organizationComplete ? "بيانات مكتملة" : "بيانات ناقصة"} />
+          </div>
+          {!data?.organization?.dataComplete && (
+            <div style={{ marginTop: 8, fontSize: 11, color: "#9a3412", lineHeight: 1.7 }}>
+              الناقص: {data?.organization?.missingFields?.join("، ") || "جارٍ الفحص"}
+            </div>
+          )}
+          {onOpenCompanyInfo && (
+            <button
+              onClick={onOpenCompanyInfo}
+              style={{ ...smallBtn, marginTop: 10, background: "#fff7ed", color: "#9a3412", border: "1px solid #fdba74" }}
+            >
+              🏢 فتح معلومات الشركة
+            </button>
+          )}
+        </div>
+        <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: 14 }}>
+          <label style={lbl}>المخزن / الفرع</label>
+          <select
+            style={fld}
+            value={warehouseId ?? ""}
+            onChange={e => setWarehouse(Number(e.target.value) || null)}
+          >
+            <option value="">اختر المخزن/الفرع</option>
+            {(data?.locations ?? []).map(location => (
+              <option key={location.id} value={location.id}>{location.label}</option>
+            ))}
+          </select>
+          <div style={{ marginTop: 9, fontSize: 11, color: "#64748b" }}>
+            يُستنتج الفرع من المخزن، ولا تُدخل أي ID يدويًا.
+          </div>
+        </div>
+        <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: 14 }}>
+          <label style={lbl}>وحدة الربط</label>
+          <select
+            style={fld}
+            value={unitId ?? ""}
+            onChange={event => setUnitId(Number(event.target.value) || null)}
+            disabled={!warehouseId}
+          >
+            <option value="">اختيار تلقائي من الدفاتر</option>
+            {data?.linkingUnits
+              ?.filter(unit => unit.warehouseId === warehouseId)
+              .map(unit => <option key={unit.id} value={unit.id}>{unit.unitName} — {unit.unitCode}</option>)}
+          </select>
+          <div style={{ marginTop: 9, fontSize: 11, color: "#64748b" }}>
+            الإعداد محفوظ للمنظمة، ولا تُحفظ هنا أي أسرار أو مفاتيح.
+          </div>
+        </div>
+      </div>
+
+      <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: 14, marginBottom: 14 }}>
+        <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 9 }}>نوع الفواتير المستهدف</div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {[
+            ["simplified", "فواتير مبسطة"],
+            ["standard", "فواتير عادية"],
+            ["both", "كلاهما"],
+          ].map(([value, label]) => (
+            <button key={value} onClick={() => setInvoiceType(value as typeof invoiceType)}
+              style={{ height: 32, padding: "0 15px", borderRadius: 7, border: `1px solid ${invoiceType === value ? "#D19C05" : "#cbd5e1"}`, background: invoiceType === value ? "#fef3c7" : "#fff", color: invoiceType === value ? "#92400e" : "#475569", fontWeight: 700, fontSize: 11, cursor: "pointer" }}>
+              {invoiceType === value ? "● " : "○ "}{label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {readinessQ.isLoading ? <Skeleton height={150} radius={10} /> : (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+            <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: 14 }}>
+              <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 10 }}>حالة الدفاتر الأربعة</div>
+              {(data?.journals ?? []).map(journal => (
+                <div key={journal.docType} style={{ ...statusStyle(journal.found && journal.linked), display: "flex", alignItems: "center", gap: 8, padding: "8px 9px", borderRadius: 6, marginBottom: 6 }}>
+                  <span style={{ flex: 1, fontSize: 11, fontWeight: 700 }}>{journal.label}</span>
+                  <span style={{ fontSize: 10, color: "#64748b" }}>
+                    {!journal.found ? "الدفتر غير موجود" : !journal.linked ? "غير مرتبط" : "مرتبط"}
+                  </span>
+                  <Status
+                    ok={journal.found && journal.linked && organizationComplete}
+                    text={!journal.found ? "ناقص" : !journal.linked ? "غير مرتبط" : organizationComplete ? "مكتمل" : "يُراجع بعد اكتمال المنشأة"}
+                  />
+                </div>
+              ))}
+              {!warehouseId && <div style={{ fontSize: 11, color: "#9a3412", marginTop: 8 }}>اختر المخزن/الفرع لفحص دفاتره.</div>}
+              {data?.allJournalsSameUnit && <div style={{ fontSize: 11, color: "#166534", marginTop: 8 }}>الدفاتر الأربعة مرتبطة بوحدة ربط واحدة.</div>}
+            </div>
+            <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: 14 }}>
+              <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 10 }}>الشاشات وقدرة XML</div>
+              {(data?.screens ?? []).map(screen => (
+                <div key={screen.docType} style={{ ...statusStyle(screen.screenExists && screen.xmlReady), padding: "8px 9px", borderRadius: 6, marginBottom: 6 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ flex: 1, fontSize: 11, fontWeight: 700 }}>{screen.label}</span>
+                    <Status ok={screen.screenExists} text={screen.screenExists ? "الشاشة موجودة" : "غير موجودة"} />
+                  </div>
+                  <div style={{ fontSize: 10, color: "#64748b", marginTop: 4 }}>{screen.detail}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: 14, marginBottom: 14 }}>
+            <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 10 }}>بوابة Fatoora Simulation</div>
+            <div style={{ ...statusStyle(Boolean(data?.simulation.configured)), padding: "9px 10px", borderRadius: 7, display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ flex: 1, fontSize: 11, fontWeight: 700 }}>
+                {data?.simulation.configured ? "تم اختيار بيئة Simulation الرسمية" : "بيئة Simulation غير مهيأة"}
+              </span>
+              <Status ok={Boolean(data?.simulation.configured)} text={data?.simulation.configured ? "مكتملة" : "ناقصة"} />
+              {!data?.simulation.configured && <button onClick={() => onNavigate("env")} style={{ ...smallBtn, background: "#fef3c7", color: "#92400e" }}>فتح إعداد البيئة</button>}
+            </div>
+          </div>
+
+          <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: 14, marginBottom: 14 }}>
+            <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 4 }}>الفحص الاسترشادي قبل المطابقة</div>
+            <div style={{ fontSize: 10, color: "#64748b", marginBottom: 10 }}>
+              هذا فحص جاهزية محلي لقدرة إنشاء XML، وهو شرط سابق لإنشاء CSR وليس اختبار مطابقة رسميًا. تبدأ اختبارات المطابقة الرسمية بعد الحصول على Compliance CSID.
+            </div>
+            {(data?.operationalTests ?? []).map(test => (
+              <div key={test.docType} style={{ ...statusStyle(test.completed), display: "flex", alignItems: "center", gap: 8, padding: "7px 9px", borderRadius: 6, marginBottom: 5 }}>
+                <span style={{ flex: 1, fontSize: 11, fontWeight: 700 }}>{test.label}</span>
+                <span style={{ fontSize: 10, color: "#64748b" }}>
+                  {test.completed ? `مستند ${test.invoiceNumber ?? ""} اجتاز الفحص` : "لا توجد نتيجة تشغيلية مكتملة"}
+                </span>
+                <Status ok={test.completed} text={test.completed ? "تم" : "لم يتم"} />
+              </div>
+            ))}
+            <div style={{ marginTop: 8, fontSize: 11, fontWeight: 800, color: data?.operationalTestCompleted ? "#166534" : "#9a3412" }}>
+              فحص الجاهزية المحلي: {data?.operationalTestCompleted ? "متاح" : "لم يبدأ بعد"}
+            </div>
+          </div>
+
+          {!data?.preCsrReady && (
+            <div style={{ background: "#fff7ed", border: "1px solid #fdba74", color: "#9a3412", borderRadius: 8, padding: "11px 13px", marginBottom: 12 }}>
+              <div style={{ fontWeight: 800, fontSize: 12, marginBottom: 5 }}>لا يمكن بدء إنشاء CSR بعد</div>
+              <ul style={{ margin: 0, paddingRight: 18, fontSize: 11, lineHeight: 1.8 }}>
+                {(data?.reasons ?? ["جارٍ فحص متطلبات الجاهزية"]).map(reason => <li key={reason}>{reason}</li>)}
+              </ul>
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <button
+              disabled={!warehouseId || saveM.isPending}
+              onClick={() => warehouseId && saveM.mutate({ warehouseId, invoiceType, zatcaPosUnitId: unitId })}
+              style={{ ...smallBtn, height: 36, background: warehouseId ? "#406B93" : "#cbd5e1", color: "#fff", cursor: warehouseId ? "pointer" : "not-allowed" }}
+            >
+              {saveM.isPending ? "جارٍ الحفظ..." : "💾 حفظ إعداد الجاهزية"}
+            </button>
+            <button
+               disabled={!data?.preCsrReady}
+               onClick={() => onNavigate("otp-sim")}
+               style={{ height: 36, padding: "0 18px", border: "none", borderRadius: 7, background: data?.preCsrReady ? "#D19C05" : "#cbd5e1", color: "#fff", fontWeight: 800, fontSize: 12, cursor: data?.preCsrReady ? "pointer" : "not-allowed" }}
+            >
+               {data?.preCsrReady ? "🌐 فتح بوابة Simulation وإدخال OTP" : "🔒 بدء المحاكاة معطّل حتى اكتمال الجاهزية"}
+            </button>
+            <button onClick={() => readinessQ.refetch()} style={{ ...smallBtn, height: 30, background: "#f1f5f9", color: "#475569" }}>🔄 تحديث الفحص</button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // 2. إعدادات البيئة
 // ══════════════════════════════════════════════════════════════════════════════
 function EnvSection() {
@@ -562,24 +871,35 @@ function EnvSection() {
       <SecTitle icon="🌐" title="إعدادات البيئة" />
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
-        {(["sandbox", "production"] as const).map(env => (
-          <div key={env} onClick={() => isAdmin && set("environment", env)}
-            style={{ borderRadius: 10, padding: "16px 18px", border: `2px solid ${cfg.environment === env ? (env === "production" ? "#16a34a" : "#D19C05") : "#e2e8f0"}`, background: cfg.environment === env ? (env === "production" ? "#dcfce7" : "#fef3c7") : "#fff", cursor: isAdmin ? "pointer" : "default", transition: "all 0.15s" }}>
-            <div style={{ fontSize: 28, marginBottom: 6 }}>{env === "production" ? "🟢" : "🧪"}</div>
-            <div style={{ fontWeight: 800, fontSize: 14, color: cfg.environment === env ? (env === "production" ? "#16a34a" : "#D19C05") : "#374151" }}>
-              {env === "production" ? "بيئة الإنتاج (Production)" : "بيئة الاختبار (Sandbox)"}
+        {(["simulation"] as const).map(env => (
+          <div key={env} onClick={() => isAdmin && (
+            env === "simulation"
+              ? setForm(f => ({ ...f, environment: env, apiBaseUrl: "https://gw-fatoora.zatca.gov.sa/e-invoicing/simulation" }))
+              : set("environment", env)
+          )}
+            style={{ borderRadius: 10, padding: "16px 18px", border: `2px solid ${cfg.environment === env ? "#D19C05" : "#e2e8f0"}`, background: cfg.environment === env ? "#fef3c7" : "#fff", cursor: isAdmin ? "pointer" : "default", transition: "all 0.15s" }}>
+            <div style={{ fontSize: 28, marginBottom: 6 }}>🌐</div>
+            <div style={{ fontWeight: 800, fontSize: 14, color: cfg.environment === env ? "#D19C05" : "#374151" }}>
+              المحاكاة الرسمية للهيئة
             </div>
             <div style={{ fontSize: 11, color: "#6b7280", marginTop: 4 }}>
-              {env === "production" ? "الإرسال الفعلي للفواتير إلى هيئة الزكاة" : "للاختبار والتطوير — لا تؤثر على الفواتير الحقيقية"}
+              مرحلة الاعتماد الرسمية قبل التفعيل في الإنتاج
             </div>
             {cfg.environment === env && (
               <div style={{ marginTop: 8, display: "inline-flex", alignItems: "center", gap: 4 }}>
-                <span style={{ width: 8, height: 8, borderRadius: "50%", background: env === "production" ? "#16a34a" : "#D19C05" }} />
-                <span style={{ fontSize: 11, fontWeight: 700, color: env === "production" ? "#16a34a" : "#D19C05" }}>البيئة الحالية</span>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#D19C05" }} />
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#D19C05" }}>البيئة الحالية</span>
               </div>
             )}
           </div>
         ))}
+        <div style={{ borderRadius: 10, padding: "16px 18px", border: "2px solid #fecaca", background: "#fff7f7", opacity: 0.8 }}>
+          <div style={{ fontSize: 28, marginBottom: 6 }}>⛔</div>
+          <div style={{ fontWeight: 800, fontSize: 14, color: "#b91c1c" }}>Production محجوبة</div>
+          <div style={{ fontSize: 11, color: "#7f1d1d", marginTop: 4, lineHeight: 1.6 }}>
+            لا يُسمح بحفظ CSID أو Secret أو الاتصال الفعلي قبل تأمين النشر واعتماد SDK وFatoora Simulation.
+          </div>
+        </div>
       </div>
 
       {isAdmin && (
@@ -588,10 +908,13 @@ function EnvSection() {
             ⚠️ تغيير البيئة من إنتاج إلى اختبار سيوقف إرسال الفواتير الحقيقية.
           </div>
           <div style={grp}>
-            <label style={lbl}>API Base URL</label>
-            <input style={{ ...fld, direction: "ltr", fontFamily: "monospace", fontSize: 11 }}
-              value={(cfg as any).apiBaseUrl ?? ""} onChange={e => set("apiBaseUrl", e.target.value)}
-              placeholder="https://gw-fatoora.zatca.gov.sa/e-invoicing/developer-portal" />
+            <label style={lbl}>API Base URL الرسمي (مشتق من البيئة)</label>
+            <input
+              style={{ ...fld, direction: "ltr", fontFamily: "monospace", fontSize: 11, background: "#f8fafc", color: "#475569" }}
+              value={(cfg as any).apiBaseUrl ?? ""}
+              readOnly
+              aria-readonly="true"
+            />
           </div>
           <div style={grp}>
             <label style={lbl}>إصدار API</label>
@@ -602,12 +925,11 @@ function EnvSection() {
           </div>
           <div style={{ background: "#f8fafc", borderRadius: 8, padding: "12px 14px", border: "1px solid #e2e8f0", marginBottom: 14 }}>
             <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 8 }}>🔗 روابط API المرحلة الثانية</div>
-            {[
-              { label: "OAuth URL",     value: "https://gw-fatoora.zatca.gov.sa/e-invoicing/developer-portal/oauth/token" },
-              { label: "Compliance",    value: "https://gw-fatoora.zatca.gov.sa/e-invoicing/developer-portal/compliance" },
-              { label: "Reporting",     value: "https://gw-fatoora.zatca.gov.sa/e-invoicing/developer-portal/invoices/reporting/single" },
-              { label: "Clearance",     value: "https://gw-fatoora.zatca.gov.sa/e-invoicing/developer-portal/invoices/clearance/single" },
-            ].map(u => (
+             {[
+               { label: "Compliance", value: `${(cfg as any).apiBaseUrl ?? ""}/compliance` },
+               { label: "Reporting",  value: `${(cfg as any).apiBaseUrl ?? ""}/invoices/reporting/single` },
+               { label: "Clearance",  value: `${(cfg as any).apiBaseUrl ?? ""}/invoices/clearance/single` },
+             ].map(u => (
               <div key={u.label} style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 11, marginBottom: 4 }}>
                 <span style={{ width: 90, fontWeight: 600, color: "#6b7280", flexShrink: 0 }}>{u.label}</span>
                 <span style={{ fontFamily: "monospace", fontSize: 10, color: "#374151" }}>{u.value}</span>
@@ -624,6 +946,658 @@ function EnvSection() {
         </>
       )}
       {!isAdmin && <div style={{ background: "#f1f5f9", borderRadius: 8, padding: "14px 16px", fontSize: 12, color: "#6b7280", border: "1px solid #e2e8f0" }}>🔒 تغيير إعدادات البيئة متاح لمسؤول ZATCA فقط.</div>}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 2b. وحدات الربط ودفاترها — إدارة داخل مركز ZATCA فقط
+// ══════════════════════════════════════════════════════════════════════════════
+function LinkingUnitsSection({ onActivate }: { onActivate?: () => void }) {
+  const utils = trpc.useUtils();
+  const unitsQ = trpc.zatca.listPosUnits.useQuery();
+  const journalsQ = trpc.zatca.listLinkingJournalOptions.useQuery();
+  const [form, setForm] = useState({ journalId: "", unitName: "" });
+  const [linkingUnitId, setLinkingUnitId] = useState<number | null>(null);
+  const [auditUnitId, setAuditUnitId] = useState<number | null>(null);
+
+  const createM = trpc.zatca.createPosUnit.useMutation({
+    onSuccess: () => {
+      toast.success("تم إنشاء وحدة الربط وربط الدفتر الأول");
+      setForm({ journalId: "", unitName: "" });
+      utils.zatca.listPosUnits.invalidate();
+      utils.zatca.listLinkingJournalOptions.invalidate();
+    },
+    onError: e => toast.error(e.message),
+  });
+  const linkM = trpc.zatca.linkJournalToPosUnit.useMutation({
+    onSuccess: () => {
+      toast.success("تم ربط الدفتر بوحدة ZATCA");
+      setLinkingUnitId(null);
+      utils.zatca.listPosUnits.invalidate();
+      utils.zatca.listLinkingJournalOptions.invalidate();
+    },
+    onError: e => toast.error(e.message),
+  });
+  const unlinkM = trpc.zatca.unlinkJournalFromPosUnit.useMutation({
+    onSuccess: () => {
+      toast.success("تم فك ربط الدفتر دون حذف بيانات ZATCA");
+      utils.zatca.listPosUnits.invalidate();
+      utils.zatca.listLinkingJournalOptions.invalidate();
+    },
+    onError: e => toast.error(e.message),
+  });
+  const lifecycleM = trpc.zatca.setUnitEnvironmentLifecycle.useMutation({
+    onSuccess: data => {
+      toast.success(data.status === "archived" ? "تمت أرشفة البيئة" : "تم تحديث حالة البيئة");
+      utils.zatca.listPosUnits.invalidate();
+    },
+    onError: e => toast.error(e.message),
+  });
+  const cancelM = trpc.zatca.confirmUnitCancellation.useMutation({
+    onSuccess: () => {
+      toast.success("تم تسجيل تأكيد الإلغاء في سجل المراجعة");
+      utils.zatca.listPosUnits.invalidate();
+    },
+    onError: e => toast.error(e.message),
+  });
+  const archiveM = trpc.zatca.archivePosUnit.useMutation({
+    onSuccess: () => {
+      toast.success("تمت أرشفة الوحدة دون حذف بياناتها");
+      utils.zatca.listPosUnits.invalidate();
+    },
+    onError: e => toast.error(e.message),
+  });
+  const deleteDraftM = trpc.zatca.deleteDraftPosUnit.useMutation({
+    onSuccess: () => {
+      toast.success("تم حذف مسودة الربط غير المستخدمة");
+      utils.zatca.listPosUnits.invalidate();
+      utils.zatca.listLinkingJournalOptions.invalidate();
+    },
+    onError: e => toast.error(e.message),
+  });
+  const auditQ = trpc.zatca.getUnitLifecycleEvents.useQuery(
+    { posUnitId: auditUnitId ?? 0 },
+    { enabled: auditUnitId != null },
+  );
+
+  const journals = journalsQ.data ?? [];
+  const selected = journals.find(j => j.id === Number(form.journalId));
+  const unlinked = journals.filter(j => j.zatcaPosUnitId == null);
+  const sameLocation = selected
+    ? unlinked.filter(j => j.warehouseId === selected.warehouseId && j.id !== selected.id)
+    : [];
+  const selectedLocationJournals = selected
+    ? journals.filter(j => j.warehouseId === selected.warehouseId)
+    : [];
+  const requiredJournalTypes = ["sales_invoice", "sales_return", "credit_note", "debit_note"];
+  const missingJournalTypes = requiredJournalTypes.filter(type =>
+    !selectedLocationJournals.some(j => j.docType === type)
+  );
+  const canCreate = Boolean(
+    form.journalId
+    && selected
+    && form.unitName.trim()
+    && missingJournalTypes.length === 0
+  );
+  const busy = createM.isPending || linkM.isPending || unlinkM.isPending
+    || cancelM.isPending || archiveM.isPending || deleteDraftM.isPending;
+  const clientUnitStatus = (status?: string | null) =>
+    status === "active" ? "نشطة"
+      : status === "initializing" ? "قيد التهيئة"
+        : status === "archived" ? "مؤرشفة"
+          : "غير مهيأة";
+  const clientEnvironmentStatus = (
+    status?: string | null,
+    hasEnvironment = false,
+    registrationStatus?: string | null,
+  ) =>
+    status === "cancelled_from_fatoora" ? "ملغاة من منصة فاتورة"
+      : status === "archived" ? "مؤرشفة"
+        : status === "active" || registrationStatus === "operational" ? "نشطة"
+          : hasEnvironment ? "قيد التهيئة"
+            : "غير مهيأة";
+  const clientLifecycleAction = (action?: string | null) =>
+    action === "confirm_cancellation_from_fatoora" ? "تأكيد الإلغاء من منصة فاتورة"
+      : action === "archive_environment" ? "أرشفة البيئة"
+        : action === "archive_unit" ? "أرشفة الوحدة"
+          : action === "refresh_environment" ? "تحديث حالة البيئة"
+            : "إجراء دورة حياة";
+  const clientLifecycleStatus = (status?: string | null) =>
+    status === "cancelled_from_fatoora" ? "ملغاة من منصة فاتورة"
+      : status === "archived" ? "مؤرشفة"
+        : status === "active" ? "نشطة"
+          : status === "initializing" ? "قيد التهيئة"
+            : "غير مهيأة";
+  const environmentStatusColor = (status?: string | null) =>
+    status === "active" ? "#166534"
+      : status === "cancelled_from_fatoora" || status === "archived" ? "#991b1b"
+        : "#64748b";
+  const askReason = (label: string, required = false) => {
+    const value = window.prompt(`${label}${required ? " (مطلوب)" : " (اختياري)"}`);
+    if (required && !value?.trim()) {
+      toast.error("يجب إدخال السبب");
+      return null;
+    }
+    return value?.trim() ?? "";
+  };
+  const runEnvironmentAction = (
+    posUnitId: number,
+    environment: "simulation" | "production",
+    action: "refresh" | "archive",
+  ) => {
+    if (action === "archive" && !window.confirm("ستُؤرشف هذه البيئة ولن تُستخدم لاحقًا، مع إبقاء الشهادات والمفاتيح والفواتير محفوظة. هل تريد المتابعة؟")) return;
+    const reason = action === "archive" ? askReason("سبب الأرشفة") : "";
+    if (reason === null) return;
+    lifecycleM.mutate({ posUnitId, environment, action, ...(reason ? { reason } : {}) });
+  };
+  const openCancellationInstructions = (environment: "simulation" | "production") => {
+    window.alert(
+      `${ENVIRONMENT_COPY[environment].shortTitle}\n\n`
+      + "هذا الخيار لا ينفذ إلغاءً تقنيًا ولا يحذف شهادة أو مفتاحًا من OneSoft.\n"
+      + "افتح منصة فاتورة، نفّذ الإلغاء هناك وفق إجراءاتها، ثم عد إلى البطاقة واختر «تأكيد الإلغاء بعد التنفيذ» لتسجيل الإقرار فقط.",
+    );
+  };
+  const confirmCancellation = (posUnitId: number, environment: "simulation" | "production") => {
+    if (!window.confirm("أقرّ بأنني نفذت إلغاء هذه الوحدة من منصة فاتورة خارجيًا. سيتم منع استخدامها داخل OneSoft وتسجيل العملية في سجل المراجعة.")) return;
+    const reason = askReason("سبب الإلغاء من منصة فاتورة", true);
+    if (reason === null) return;
+    cancelM.mutate({ posUnitId, environment, reason });
+  };
+
+  return (
+    <div>
+      <SecTitle icon="🧩" title="وحدات الربط والدفاتر" />
+      <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1e40af", borderRadius: 8, padding: "10px 12px", fontSize: 12, lineHeight: 1.7, marginBottom: 14 }}>
+        أنشئ وحدة ربط من أحد دفاتر المبيعات، وسيقوم OneSoft بتحديد المخزن وتجميع الدفاتر المرتبطة وإعداد الربط الفني تلقائيًا.
+      </div>
+
+      <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: 14, marginBottom: 16 }}>
+        <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 10 }}>＋ إنشاء وحدة ربط جديدة</div>
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(220px,1.4fr) 1fr 1fr", gap: 8, alignItems: "end" }}>
+          <div>
+            <label style={lbl}>دفتر فاتورة مبيعات *</label>
+            <select style={fld} value={form.journalId} onChange={e => {
+              const next = journals.find(j => j.id === Number(e.target.value));
+              setForm(f => ({
+                ...f,
+                journalId: e.target.value,
+                unitName: next ? `وحدة ربط – ${next.warehouseName ?? "المخزن الرئيسي"} – نقطة إصدار 1` : "",
+              }));
+            }}>
+              <option value="">اختر دفترًا غير مرتبط</option>
+              {unlinked.map(j => <option key={j.id} value={j.id}>{j.code} — {j.name} — {journalTypeLabel(j.docType)}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={lbl}>رمز وحدة الربط</label>
+            <div style={{ ...fld, background: "#f8fafc", color: "#64748b", display: "flex", alignItems: "center" }}>
+              يُولّد تلقائيًا من الخادم لكل منشأة
+            </div>
+          </div>
+          <div>
+            <label style={lbl}>اسم الوحدة *</label>
+            <input style={fld} value={form.unitName} onChange={e => setForm(f => ({ ...f, unitName: e.target.value }))} placeholder="وحدة ربط – المخزن الرئيسي – كاشير 1" />
+          </div>
+        </div>
+        {selected && (
+          <div style={{ marginTop: 12, border: "1px solid #c7d2fe", background: "#f8faff", borderRadius: 8, padding: 12 }}>
+            <div style={{ fontWeight: 800, fontSize: 12, color: "#3730a3", marginBottom: 8 }}>مراجعة بيانات وحدة الربط</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 8 }}>
+              {[
+                ["الدفتر المحدد", `${selected.code} — ${selected.name}`],
+                ["نوع المستند", journalTypeLabel(selected.docType)],
+                ["المخزن/الفرع المستنتج", locationLabel(selected)],
+                ["حالة الدفتر", selected.zatcaPosUnitId ? "مرتبط" : "غير مرتبط"],
+                ["دفاتر مؤهلة إضافية", String(sameLocation.length)],
+                ["سياسة المخزن", "يُحدد من الدفتر تلقائيًا"],
+              ].map(([label, value]) => (
+                <div key={label} style={{ background: "#fff", borderRadius: 6, padding: "7px 9px", border: "1px solid #e5e7eb" }}>
+                  <div style={{ color: "#64748b", fontSize: 10 }}>{label}</div>
+                  <strong style={{ fontSize: 11 }}>{value}</strong>
+                </div>
+              ))}
+            </div>
+            {sameLocation.length > 0 && (
+              <div style={{ marginTop: 8, color: "#475569", fontSize: 11 }}>
+                دفاتر أخرى في نفس الموقع: {sameLocation.map(j => `${j.code} — ${journalTypeLabel(j.docType)}`).join("، ")}
+              </div>
+            )}
+          </div>
+        )}
+        <div style={{ marginTop: 12, border: "1px solid #e2e8f0", background: "#fff", borderRadius: 8, padding: 12 }}>
+          <div style={{ fontWeight: 800, fontSize: 12, marginBottom: 8 }}>تحقق الدفاتر الأربعة قبل إنشاء الوحدة</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 6 }}>
+            {requiredJournalTypes.map(type => {
+              const found = selectedLocationJournals.find(j => j.docType === type);
+              return (
+                <div key={type} style={{
+                  padding: "7px 9px", borderRadius: 6,
+                  background: found ? "#f0fdf4" : "#fff7ed",
+                  border: `1px solid ${found ? "#bbf7d0" : "#fed7aa"}`,
+                  color: found ? "#166534" : "#9a3412", fontSize: 11,
+                }}>
+                  {found ? "✓" : "!"} {journalTypeLabel(type)}
+                  {found && <span style={{ display: "block", color: "#64748b", fontSize: 10, marginTop: 2 }}>{found.code} — {found.name}</span>}
+                </div>
+              );
+            })}
+          </div>
+          {selected && missingJournalTypes.length > 0 && (
+            <div style={{ marginTop: 8, color: "#9a3412", fontSize: 11 }}>
+              لا يمكن إنشاء وحدة الربط قبل ظهور: {missingJournalTypes.map(journalTypeLabel).join("، ")}.
+            </div>
+          )}
+        </div>
+        <div style={{ display: "flex", justifyContent: "flex-start", marginTop: 12 }}>
+          <button disabled={!canCreate || busy} onClick={() => createM.mutate({ journalId: Number(form.journalId), unitName: form.unitName.trim() })}
+            style={{ ...smallBtn, height: 32, padding: "0 18px", background: canCreate && !busy ? "#D19C05" : "#cbd5e1", color: "#fff", cursor: canCreate && !busy ? "pointer" : "not-allowed", fontSize: 12 }}>
+            {createM.isPending ? "جارٍ الإنشاء..." : "إنشاء وحدة الربط"}
+          </button>
+        </div>
+        {!journalsQ.isLoading && unlinked.length === 0 && <div style={{ marginTop: 8, color: "#9ca3af", fontSize: 11 }}>لا توجد دفاتر مؤهلة غير مرتبطة.</div>}
+      </div>
+
+      {unitsQ.isLoading ? <Skeleton height={80} /> : (
+        <div style={{ display: "grid", gap: 10 }}>
+          {(unitsQ.data ?? []).map(unit => (
+            <div key={unit.id} style={{ background: "#fff", border: unit.oneSoftStatus === "archived" ? "1px solid #cbd5e1" : "1px solid #e2e8f0", borderRadius: 10, padding: 14, opacity: unit.oneSoftStatus === "archived" ? 0.82 : 1 }}>
+              <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10 }}>
+                <div style={{ width: 38, height: 38, borderRadius: 9, background: "#fef3c7", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>🧩</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 800, fontSize: 13 }}>{unit.unitName} <span style={{ color: "#64748b", fontFamily: "monospace", fontSize: 11 }}>({unit.unitCode})</span></div>
+                  <div style={{ color: "#6b7280", fontSize: 11 }}>
+                    المخزن/الفرع: {unit.branchName ? `${unit.branchName} — ` : ""}{unit.warehouseName ?? "—"}
+                  </div>
+                   {(unit.commonName || unit.egsSerialNumber) && (
+                     <div style={{ marginTop: 5, color: "#64748b", fontSize: 10, lineHeight: 1.6 }}>
+                       <span>Common Name: <b style={{ fontFamily: "monospace", color: "#334155" }}>{unit.commonName ?? "—"}</b></span>
+                       <span style={{ marginInlineStart: 12 }}>EGS Serial: <b style={{ fontFamily: "monospace", color: "#334155" }}>{unit.egsSerialNumber ?? "—"}</b></span>
+                     </div>
+                   )}
+                </div>
+                 <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: "#334155" }}>
+                      {clientUnitStatus(unit.oneSoftStatus)}
+                   </span>
+                   <StatusBadge status={unit.environmentStatuses?.simulation?.registrationStatus ?? "pending"} />
+                 </div>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8, marginBottom: 10 }}>
+                <div style={{ background: "#eff6ff", borderRadius: 6, padding: "9px 10px", fontSize: 10, border: "1px solid #bfdbfe" }}>
+                  <div style={{ color: "#1d4ed8", fontWeight: 800, marginBottom: 5 }}>الاختبار التجريبي</div>
+                    <strong style={{ color: environmentStatusColor(unit.environmentStatuses?.simulation?.lifecycleStatus) }}>
+                      {clientEnvironmentStatus(
+                        unit.environmentStatuses?.simulation?.lifecycleStatus,
+                        Boolean(unit.environmentStatuses?.simulation),
+                        unit.environmentStatuses?.simulation?.registrationStatus,
+                      )}
+                  </strong>
+                   <div style={{ color: environmentStatusColor(unit.environmentStatuses?.simulation?.lifecycleStatus), marginTop: 4 }}>
+                      حالة الاستخدام: {clientEnvironmentStatus(
+                        unit.environmentStatuses?.simulation?.lifecycleStatus,
+                        Boolean(unit.environmentStatuses?.simulation),
+                        unit.environmentStatuses?.simulation?.registrationStatus,
+                      )}
+                   </div>
+                  <div style={{ color: "#64748b", marginTop: 4 }}>
+                    {unit.environmentStatuses?.simulation?.certificatePresent ? "الشهادة موجودة" : "لا توجد شهادة"}
+                  </div>
+                  <div style={{ color: "#64748b", marginTop: 4 }}>
+                    المطابقة: {unit.environmentCompliance?.simulation?.length
+                      ? `${unit.environmentCompliance.simulation.filter((test: any) => test.status === "passed" || test.status === "passed_with_warnings" || test.status === "completed_previously").length}/${unit.environmentCompliance.simulation.length} مكتملة`
+                      : "لا توجد نتائج"}
+                  </div>
+                    <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 8 }}>
+                     <button disabled={busy} onClick={() => runEnvironmentAction(unit.id, "simulation", "refresh")} style={{ ...smallBtn, background: "#f1f5f9", color: "#475569" }}>↻ تحديث الحالة</button>
+                     {unit.environmentStatuses?.simulation && unit.environmentStatuses.simulation.lifecycleStatus !== "archived" && <button disabled={busy} onClick={() => runEnvironmentAction(unit.id, "simulation", "archive")} style={{ ...smallBtn, background: "#f1f5f9", color: "#475569" }}>▣ أرشفة البيئة</button>}
+                     <button disabled={busy} onClick={() => openCancellationInstructions("simulation")} style={{ ...smallBtn, background: "#fff", color: "#7c2d12", border: "1px solid #fed7aa" }}>↗ إلغاء من منصة فاتورة</button>
+                     {unit.environmentStatuses?.simulation && <button disabled={busy} onClick={() => confirmCancellation(unit.id, "simulation")} style={{ ...smallBtn, background: "#fee2e2", color: "#991b1b" }}>✓ تأكيد الإلغاء بعد التنفيذ</button>}
+                   </div>
+                </div>
+                <div style={{ background: "#f0fdf4", borderRadius: 6, padding: "9px 10px", fontSize: 10, border: "1px solid #bbf7d0" }}>
+                  <div style={{ color: "#15803d", fontWeight: 800, marginBottom: 5 }}>الربط الفعلي</div>
+                    <strong style={{ color: environmentStatusColor(unit.environmentStatuses?.production?.lifecycleStatus) }}>
+                      {clientEnvironmentStatus(
+                        unit.environmentStatuses?.production?.lifecycleStatus,
+                        Boolean(unit.environmentStatuses?.production),
+                        unit.environmentStatuses?.production?.registrationStatus,
+                      )}
+                  </strong>
+                   <div style={{ color: environmentStatusColor(unit.environmentStatuses?.production?.lifecycleStatus), marginTop: 4 }}>
+                      حالة الاستخدام: {clientEnvironmentStatus(
+                        unit.environmentStatuses?.production?.lifecycleStatus,
+                        Boolean(unit.environmentStatuses?.production),
+                        unit.environmentStatuses?.production?.registrationStatus,
+                      )}
+                   </div>
+                  <div style={{ color: "#64748b", marginTop: 4 }}>
+                    {unit.environmentStatuses?.production?.certificatePresent ? "الشهادة موجودة" : "لم يبدأ"}
+                  </div>
+                  <div style={{ color: "#64748b", marginTop: 4 }}>
+                    المطابقة: {unit.environmentCompliance?.production?.length
+                      ? `${unit.environmentCompliance.production.filter((test: any) => test.status === "passed" || test.status === "passed_with_warnings" || test.status === "completed_previously").length}/${unit.environmentCompliance.production.length} مكتملة`
+                      : "لا توجد نتائج"}
+                  </div>
+                    <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 8 }}>
+                     <button disabled={busy} onClick={() => runEnvironmentAction(unit.id, "production", "refresh")} style={{ ...smallBtn, background: "#f1f5f9", color: "#475569" }}>↻ تحديث الحالة</button>
+                     {unit.environmentStatuses?.production && unit.environmentStatuses.production.lifecycleStatus !== "archived" && <button disabled={busy} onClick={() => runEnvironmentAction(unit.id, "production", "archive")} style={{ ...smallBtn, background: "#f1f5f9", color: "#475569" }}>▣ أرشفة البيئة</button>}
+                     <button disabled={busy} onClick={() => openCancellationInstructions("production")} style={{ ...smallBtn, background: "#fff", color: "#7c2d12", border: "1px solid #fed7aa" }}>↗ إلغاء من منصة فاتورة</button>
+                     {unit.environmentStatuses?.production && <button disabled={busy} onClick={() => confirmCancellation(unit.id, "production")} style={{ ...smallBtn, background: "#fee2e2", color: "#991b1b" }}>✓ تأكيد الإلغاء بعد التنفيذ</button>}
+                   </div>
+                </div>
+              </div>
+              <div style={{ fontWeight: 700, fontSize: 11, marginBottom: 6 }}>الدفاتر المرتبطة ({unit.journals.length})</div>
+              {unit.journals.length === 0 && <div style={{ color: "#9ca3af", fontSize: 11, marginBottom: 8 }}>لا توجد دفاتر مرتبطة.</div>}
+              {unit.journals.map(journal => (
+                <div key={journal.journalId} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderTop: "1px solid #f1f5f9", fontSize: 11 }}>
+                  <span style={{ flex: 1 }}><strong>{journal.journalCode}</strong> — {journal.journalName} <span style={{ color: "#9ca3af" }}>({journalTypeLabel(journal.docType)})</span></span>
+                  <button disabled={busy} onClick={() => unlinkM.mutate({ journalId: journal.journalId })} style={{ ...smallBtn, background: "#fff", color: "#dc2626", border: "1px solid #fecaca", cursor: busy ? "not-allowed" : "pointer" }}>فك الربط</button>
+                </div>
+              ))}
+              {linkingUnitId === unit.id ? (
+                <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                  <select style={{ ...fld, flex: 1 }} defaultValue="" onChange={e => {
+                    const journalId = Number(e.target.value);
+                    if (journalId) linkM.mutate({ posUnitId: unit.id, journalId });
+                  }}>
+                    <option value="">اختر دفترًا لإضافته</option>
+                    {unlinked.filter(j => j.warehouseId === unit.warehouseId).map(j => <option key={j.id} value={j.id}>{j.code} — {j.name} — {journalTypeLabel(j.docType)}</option>)}
+                  </select>
+                  <button onClick={() => setLinkingUnitId(null)} style={{ ...smallBtn, background: "#f1f5f9", color: "#475569" }}>إلغاء</button>
+                </div>
+              ) : (
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+                  <button onClick={() => setLinkingUnitId(unit.id)} disabled={busy} style={{ ...smallBtn, background: "#eff6ff", color: "#1d4ed8", cursor: busy ? "not-allowed" : "pointer" }}>إدارة الدفاتر</button>
+                  <button onClick={() => onActivate?.()} style={{ ...smallBtn, background: "#fef3c7", color: "#92400e" }}>فتح التفعيل</button>
+                  <button onClick={() => toast.info(`تفاصيل وحدة الربط: ${unit.unitName}`)} style={{ ...smallBtn, background: "#f1f5f9", color: "#475569" }}>التفاصيل</button>
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 12, paddingTop: 10, borderTop: "1px solid #f1f5f9" }}>
+                <button disabled={busy || unit.oneSoftStatus === "archived"} onClick={() => {
+                  const reason = askReason("سبب الأرشفة", true);
+                  if (reason !== null) archiveM.mutate({ posUnitId: unit.id, reason });
+                }} style={{ ...smallBtn, background: "#f1f5f9", color: "#475569" }}>▣ أرشفة الوحدة</button>
+                {unit.oneSoftStatus === "draft" && <button disabled={busy} onClick={() => {
+                  if (window.confirm("سيُحذف الربط المسودة فقط إذا لم يكن مستخدمًا أو مرتبطًا بأي بيانات. هل تريد المتابعة؟")) deleteDraftM.mutate({ posUnitId: unit.id });
+                }} style={{ ...smallBtn, background: "#fee2e2", color: "#991b1b" }}>حذف المسودة</button>}
+                <button disabled={busy} onClick={() => setAuditUnitId(auditUnitId === unit.id ? null : unit.id)} style={{ ...smallBtn, background: "#eef2ff", color: "#3730a3" }}>
+                  {auditUnitId === unit.id ? "إخفاء سجل التدقيق" : "سجل التدقيق"}
+                </button>
+              </div>
+              {auditUnitId === unit.id && (
+                <div style={{ marginTop: 10, padding: 10, borderRadius: 8, background: "#f8fafc", border: "1px solid #e2e8f0" }}>
+                  <div style={{ fontWeight: 800, fontSize: 11, marginBottom: 7 }}>سجل إجراءات دورة الحياة</div>
+                  {auditQ.isLoading ? <div style={{ color: "#64748b", fontSize: 11 }}>جارٍ تحميل السجل...</div>
+                    : auditQ.data?.length ? auditQ.data.map(event => (
+                      <div key={event.id} style={{ display: "flex", gap: 8, alignItems: "baseline", borderTop: "1px solid #e2e8f0", padding: "6px 0", fontSize: 10 }}>
+                        <strong style={{ minWidth: 155 }}>{clientLifecycleAction(event.action)}</strong>
+                        <span style={{ color: "#475569" }}>{clientLifecycleStatus(event.previousStatus)} ← {clientLifecycleStatus(event.nextStatus)}</span>
+                        <span style={{ color: "#64748b", flex: 1 }}>{event.reason ?? ""}</span>
+                        <span style={{ color: "#94a3b8" }}>{event.actorUsername ?? "—"} · {new Date(event.createdAt).toLocaleString("ar-SA")}</span>
+                      </div>
+                    )) : <div style={{ color: "#64748b", fontSize: 11 }}>لا توجد إجراءات مسجلة.</div>}
+                </div>
+              )}
+            </div>
+          ))}
+          {!unitsQ.isLoading && (unitsQ.data ?? []).length === 0 && <div style={{ background: "#fff", border: "1px dashed #cbd5e1", borderRadius: 10, padding: 24, textAlign: "center", color: "#64748b", fontSize: 12 }}>لم يتم إنشاء وحدات ربط بعد. ابدأ باختيار دفتر فاتورة مبيعات تابع لنقطة الإصدار.</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 2c. تفعيل Fatoora Simulation — OTP مؤقت ولا يُحفظ
+// ══════════════════════════════════════════════════════════════════════════════
+function OtpSimulationSection({
+  initialPosUnitId = null,
+  allowOperational = false,
+}: {
+  initialPosUnitId?: number | null;
+  allowOperational?: boolean;
+} = {}) {
+  const unitsQ = trpc.zatca.listPosUnits.useQuery();
+  const utils = trpc.useUtils();
+  const [posUnitId, setPosUnitId] = useState<number | null>(initialPosUnitId);
+  const [csrRequestId, setCsrRequestId] = useState<number | null>(null);
+  const [otp, setOtp] = useState("");
+  const [result, setResult] = useState<any>(null);
+  const [csrStatus, setCsrStatus] = useState<any>(null);
+  const [activationPhase, setActivationPhase] = useState<
+    "idle" | "security" | "compliance" | "ready" | "error"
+  >("idle");
+
+  const statusQ = trpc.zatca.getSimulationOnboardingStatus.useQuery(
+    { posUnitId: posUnitId ?? 0 },
+    { enabled: !!posUnitId },
+  );
+  const complianceM = trpc.zatca.requestSimulationComplianceCsid.useMutation({
+    onSuccess: (data) => {
+      setResult(data);
+      setOtp("");
+      setActivationPhase(data.ok ? "ready" : "error");
+      utils.zatca.getConfig.invalidate();
+      statusQ.refetch();
+      if (data.ok) toast.success(data.message);
+      else toast.error(data.message);
+    },
+    onError: (error) => {
+      setActivationPhase("error");
+      toast.error(error.message);
+    },
+  });
+  const createCsrM = trpc.zatca.createSimulationCsr.useMutation({
+    onSuccess: (data, variables) => {
+      setCsrStatus(data);
+      setCsrRequestId(data.csrRequestId);
+      setResult(null);
+      setActivationPhase("compliance");
+      statusQ.refetch();
+      toast.success("تم إنشاء المفتاح وCSR — جارٍ إرسال طلب Compliance باستخدام OTP");
+      complianceM.mutate({
+        posUnitId: data.posUnitId,
+        csrRequestId: data.csrRequestId,
+        otp: variables.otp,
+      });
+    },
+    onError: (error) => {
+      setActivationPhase("error");
+      toast.error(error.message);
+    },
+  });
+  const operationalM = trpc.zatca.requestSimulationOperationalCsid.useMutation({
+    onSuccess: (data) => {
+      setResult(data);
+      statusQ.refetch();
+      if (data.ok) toast.success(data.message);
+      else toast.error(data.message);
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  const selectedUnit = (unitsQ.data ?? []).find(unit => unit.id === posUnitId);
+  const hasCsr = !!(csrStatus?.csrRequestId || statusQ.data?.csr?.id);
+  const hasComplianceCsid = !!statusQ.data?.csid?.id;
+  const operationalReady = !!statusQ.data?.operationalReady;
+  const isActivating = createCsrM.isPending || complianceM.isPending;
+  const activationProgress = [
+    { id: "security", label: "جاري إنشاء بيانات أمان الوحدة", done: hasCsr || hasComplianceCsid },
+    { id: "compliance", label: "جاري إرسال طلب التهيئة", done: hasComplianceCsid },
+    { id: "csid", label: "جاري الحصول على Compliance CSID", done: hasComplianceCsid },
+    { id: "ready", label: "تم تجهيز الوحدة لاختبارات المطابقة", done: activationPhase === "ready" },
+  ];
+
+  if (allowOperational) {
+    return (
+      <div style={{ maxWidth: 680 }}>
+        <SecTitle icon="🔑" title="طلب CSID التشغيلي" />
+        <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1e40af", borderRadius: 8, padding: 12, fontSize: 12, lineHeight: 1.8, marginBottom: 16 }}>
+          لا يُطلب CSID التشغيلي إلا بعد نجاح اختبارات المطابقة الرسمية. يستخدم الخادم Compliance CSID المحفوظ داخليًا، ولا يحتاج هذا الطلب إلى OTP جديد.
+        </div>
+        <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: 18 }}>
+          <label style={lbl}>وحدة الربط</label>
+          <select
+            value={posUnitId ?? ""}
+            onChange={e => {
+              const value = Number(e.target.value);
+              setPosUnitId(value || null);
+              setResult(null);
+            }}
+            style={{ ...fld, maxWidth: 420, marginBottom: 14 }}
+          >
+            <option value="">اختر وحدة ربط EGS</option>
+            {(unitsQ.data ?? []).map(unit => (
+              <option key={unit.id} value={unit.id}>
+                {unit.unitCode} — {unit.unitName} — {unit.warehouseName ?? "مخزن غير محدد"}
+              </option>
+            ))}
+          </select>
+          {posUnitId && (
+            <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 12, marginBottom: 14, fontSize: 11, lineHeight: 1.8 }}>
+              <div>حالة Compliance CSID: {hasComplianceCsid ? "موجود" : "غير موجود"}</div>
+              <div>حالة الجهاز: {statusQ.data?.device?.registrationStatus ?? "لم يبدأ"}</div>
+              <div>حالة التشغيل: {operationalReady ? "موجود" : "لم يُطلب بعد"}</div>
+            </div>
+          )}
+          <button
+            onClick={() => posUnitId && operationalM.mutate({ posUnitId, csrRequestId: statusQ.data?.csr?.id })}
+            disabled={!posUnitId || !hasComplianceCsid || operationalReady || operationalM.isPending}
+            style={{ ...smallBtn, height: 30, background: posUnitId && hasComplianceCsid && !operationalReady ? "#7c3aed" : "#cbd5e1", color: "#fff", cursor: posUnitId && hasComplianceCsid && !operationalReady ? "pointer" : "not-allowed" }}
+          >
+            {operationalM.isPending ? "جارٍ طلب CSID التشغيلي..." : operationalReady ? "✅ CSID التشغيلي موجود" : "طلب CSID التشغيلي"}
+          </button>
+          {result && (
+            <div style={{ marginTop: 14, background: result.ok ? "#f0fdf4" : "#fef2f2", border: `1px solid ${result.ok ? "#86efac" : "#fecaca"}`, borderRadius: 8, padding: 12, fontSize: 11, lineHeight: 1.8 }}>
+              <strong>{result.ok ? "✅ تم استلام الرد الرسمي" : "❌ لم يكتمل طلب CSID التشغيلي"}</strong>
+              <div>Request ID: <span style={{ fontFamily: "monospace" }}>{result.requestId ?? "—"}</span></div>
+              <div>HTTP Status: <span style={{ fontFamily: "monospace" }}>{result.httpStatus ?? "لا يوجد رد"}</span></div>
+              <div>{result.message}</div>
+              <div style={{ color: "#64748b" }}>لم يتم عرض أو حفظ أي Secret أو Private Key في هذه الشاشة.</div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ maxWidth: 680 }}>
+      <SecTitle icon="🔐" title="تفعيل وحدة الربط" />
+      <div style={{ background: "#fff7ed", border: "1px solid #fdba74", color: "#9a3412", borderRadius: 8, padding: 12, fontSize: 12, lineHeight: 1.8, marginBottom: 16 }}>
+        <strong>قبل البدء:</strong> افتح منصة Fatoora Simulation، أنشئ OTP صالحًا لهذه الوحدة، ثم أدخله هنا. لا يُحفظ OTP ولا يُعرض أي مفتاح خاص أو Secret في المتصفح.
+      </div>
+      <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: 18 }}>
+         <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 8 }}>وحدة الربط</div>
+        <select
+          value={posUnitId ?? ""}
+          onChange={e => {
+            const value = Number(e.target.value);
+            setPosUnitId(value || null);
+            setCsrRequestId(null);
+            setCsrStatus(null);
+            setResult(null);
+            setActivationPhase("idle");
+          }}
+          style={{ ...fld, maxWidth: 420, marginBottom: 14 }}
+        >
+          <option value="">اختر وحدة ربط EGS</option>
+          {(unitsQ.data ?? []).map(unit => (
+            <option key={unit.id} value={unit.id}>
+              {unit.unitCode} — {unit.unitName} — {unit.warehouseName ?? "مخزن غير محدد"}
+            </option>
+          ))}
+        </select>
+
+        {selectedUnit && (
+          <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 12, marginBottom: 14, fontSize: 11, lineHeight: 1.8 }}>
+            <strong>{selectedUnit.unitName}</strong>
+            <div>الدفاتر المرتبطة: {selectedUnit.journals.length} — الاعتماد واحد لكل دفاتر هذه الوحدة.</div>
+          </div>
+        )}
+
+         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+           <div style={{ fontWeight: 800, fontSize: 13 }}>رمز OTP</div>
+           <a href="https://fatoora.zatca.gov.sa/" target="_blank" rel="noreferrer" style={{ fontSize: 10 }}>فتح منصة المحاكاة الرسمية ↗</a>
+         </div>
+        <p style={{ color: "#64748b", fontSize: 11, lineHeight: 1.7, marginTop: 0 }}>
+           افتح بوابة Fatoora Simulation، أنشئ OTP لوحدة EGS، ثم أدخله هنا. لا يُحفظ OTP ولا يظهر في السجلات.
+        </p>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <input
+            value={otp}
+            onChange={e => setOtp(e.target.value.replace(/\s/g, "").slice(0, 64))}
+            autoComplete="one-time-code"
+            placeholder="OTP من Fatoora Simulation"
+            style={{ ...fld, width: 250, direction: "ltr", fontFamily: "monospace", letterSpacing: 1 }}
+          />
+           <span style={{ fontSize: 10, color: otp ? "#166534" : "#9a3412" }}>
+             {otp ? "OTP مُدخل" : "OTP مطلوب قبل إنشاء CSR"}
+           </span>
+        </div>
+        <div style={{ marginTop: 8, fontSize: 10, color: "#64748b" }}>
+          أدخل OTP الذي تولده المنصة خلال ساعة من إنشائه.
+        </div>
+        {isActivating && (
+          <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 8, padding: 11, margin: "12px 0" }}>
+            <div style={{ height: 5, background: "#dbeafe", borderRadius: 5, overflow: "hidden", marginBottom: 10 }}>
+              <div
+                style={{
+                  height: "100%",
+                  width: `${Math.max(12, (activationProgress.filter(item => item.done).length / activationProgress.length) * 100)}%`,
+                  background: "#2563eb",
+                  borderRadius: 5,
+                  transition: "width .25s ease",
+                }}
+              />
+            </div>
+            {activationProgress.map(item => (
+              <div key={item.id} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 11, color: item.done ? "#166534" : "#1e40af", marginBottom: 5 }}>
+                <span>{item.done ? "✓" : item.id === activationPhase ? "…" : "○"}</span>
+                <span>{item.label}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        {hasComplianceCsid && !isActivating && activationPhase !== "error" && (
+          <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#166534", borderRadius: 8, padding: 10, margin: "12px 0", fontSize: 11, fontWeight: 700 }}>
+            ✅ تم تجهيز الوحدة لاختبارات المطابقة
+          </div>
+        )}
+         <button
+           disabled={!posUnitId || !otp || isActivating || hasComplianceCsid}
+           onClick={() => {
+             if (!posUnitId || !otp) return;
+             setActivationPhase("security");
+             createCsrM.mutate({
+               posUnitId,
+               otp,
+               branchName: selectedUnit?.branchName ?? selectedUnit?.warehouseName ?? "OneSoft",
+               branchLocation: selectedUnit?.warehouseName ?? "Saudi Arabia",
+               businessCategory: "Retail and invoicing",
+             });
+           }}
+           style={{ ...smallBtn, height: 36, width: "100%", background: posUnitId && otp && !hasComplianceCsid ? "#D19C05" : "#cbd5e1", color: "#fff", cursor: posUnitId && otp && !hasComplianceCsid ? "pointer" : "not-allowed" }}
+         >
+           {createCsrM.isPending ? "جاري إنشاء بيانات أمان الوحدة..." : complianceM.isPending ? "جاري الحصول على Compliance CSID..." : hasComplianceCsid ? "✅ الوحدة مفعّلة للمطابقة" : "تفعيل الوحدة"}
+         </button>
+         <details style={{ marginTop: 14, color: "#475569", fontSize: 10 }}>
+           <summary style={{ cursor: "pointer", fontWeight: 700 }}>التفاصيل الفنية</summary>
+           <div style={{ marginTop: 8, lineHeight: 1.8 }}>
+             <div>EC Key وCSR: {hasCsr ? "تم إنشاؤهما داخليًا" : "لم يُنشآ بعد"}</div>
+             <div>Compliance CSID: {hasComplianceCsid ? "تم حفظه مشفرًا على الخادم" : "لم يُستلم بعد"}</div>
+             {result && (
+               <div style={{ marginTop: 8, background: result.ok ? "#f0fdf4" : "#fef2f2", border: `1px solid ${result.ok ? "#86efac" : "#fecaca"}`, borderRadius: 6, padding: 8 }}>
+                 <strong>{result.ok ? "تم استلام الرد الرسمي" : "لم يكتمل طلب Compliance CSID"}</strong>
+                 <div>Request ID: <span style={{ fontFamily: "monospace" }}>{result.requestId ?? "—"}</span></div>
+                 <div>HTTP Status: <span style={{ fontFamily: "monospace" }}>{result.httpStatus ?? "لا يوجد رد"}</span></div>
+                 <div>{result.message}</div>
+               </div>
+             )}
+           </div>
+         </details>
+      </div>
     </div>
   );
 }
@@ -655,7 +1629,7 @@ function DevicesSection() {
       <SecTitle icon="💻" title="إدارة الأجهزة (EGS)" />
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-        <div style={{ fontSize: 12, color: "#6b7280" }}>أجهزة الفوترة الإلكترونية المسجّلة لدى الهيئة</div>
+        <div style={{ fontSize: 12, color: "#6b7280" }}>أجهزة الفوترة الإلكترونية — Mock فقط، لا تسجيل لدى الهيئة</div>
         <button onClick={() => setShowAdd(!showAdd)}
           style={{ height: 32, padding: "0 16px", background: "#D19C05", color: "#fff", border: "none", borderRadius: 6, fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
           ＋ إضافة جهاز
@@ -741,7 +1715,7 @@ function DevicesSection() {
               style={{ height: 30, padding: "0 14px", background: "#0ea5e9", border: "none", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer", color: "#fff" }}>
               🔌 اختبار الجهاز
             </button>
-            <button title="مزامنة بيانات الجهاز مع الهيئة" onClick={() => toast.info("جارٍ المزامنة...")}
+            <button title="مزامنة Mock فقط — لا اتصال بالهيئة" onClick={() => toast.info("Mock فقط — لا يوجد اتصال خارجي")}
               style={{ height: 30, padding: "0 14px", background: "#8b5cf6", border: "none", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer", color: "#fff" }}>
               🔄 مزامنة
             </button>
@@ -769,8 +1743,17 @@ function DevicesSection() {
 // ══════════════════════════════════════════════════════════════════════════════
 function CertsSection() {
   const cfgQ = trpc.zatca.getConfig.useQuery();
+  const unitsQ = trpc.zatca.listPosUnits.useQuery();
   const cfg  = cfgQ.data;
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
+  const certUnitId = unitsQ.data?.[0]?.id ?? null;
+  const onboardingQ = trpc.zatca.getSimulationOnboardingStatus.useQuery(
+    { posUnitId: certUnitId ?? 0 },
+    { enabled: Boolean(certUnitId) },
+  );
+  const complianceCsidPresent = Boolean(onboardingQ.data?.complianceCsidPresent);
+  const operationalCsidPresent = Boolean(onboardingQ.data?.operationalCsidPresent);
+  const anyCsidPresent = complianceCsidPresent || operationalCsidPresent;
 
   const certDays = cfg?.certExpiryDate ? Math.ceil((new Date(cfg.certExpiryDate).getTime() - Date.now()) / 86400000) : null;
   const certDot: "ok"|"warn"|"error"|"none" = certDays === null ? "none" : certDays <= 0 ? "error" : certDays <= 30 ? "warn" : "ok";
@@ -788,25 +1771,30 @@ function CertsSection() {
     },
     {
       label: "Public Certificate", icon: "📋", desc: "الشهادة العامة الصادرة من هيئة الزكاة",
-      status: cfg?.csid ? "active" : "missing",
+      status: anyCsidPresent ? "active" : "missing",
       date: cfg?.certExpiryDate ? new Date(cfg.certExpiryDate).toLocaleDateString("ar-SA") : null, issuer: "ZATCA CA",
       details: {
-        fingerprint:        cfg?.csid ? "SHA-256: xx:xx:...(مشفّر)" : "—",
-        subject:            cfg?.businessName ? `CN=${cfg.businessName}, O=${cfg.businessName}, C=SA` : "—",
-        serialNumber:       cfg?.csid ? "0x1A2B3C (مثال)" : "—",
+        fingerprint:        anyCsidPresent ? "SHA-256: xx:xx:...(مشفّر)" : "—",
+        subject:            cfg?.legalName ? `CN=${cfg.legalName}, O=${cfg.legalName}, C=SA` : "—",
+        serialNumber:       anyCsidPresent ? "0x1A2B3C (مثال)" : "—",
         signatureAlgorithm: "SHA256WithECDSA",
         validFrom:          "—",
         validTo:            cfg?.certExpiryDate ? new Date(cfg.certExpiryDate).toLocaleDateString("ar-SA") : "—",
       },
     },
     {
-      label: "CSID", icon: "🔑", desc: "معرّف شهادة الاتصال — مُعطى من الهيئة",
-      status: cfg?.csid ? "active" : "missing", date: null, issuer: "ZATCA",
+      label: "Compliance CSID", icon: "🔑", desc: "معرّف شهادة المطابقة — صادر من Fatoora Simulation",
+      status: complianceCsidPresent ? "active" : "missing", date: null, issuer: "ZATCA",
+      details: { fingerprint: "—", subject: "—", serialNumber: "—", signatureAlgorithm: "—", validFrom: "—", validTo: "—" },
+    },
+    {
+      label: "Operational CSID", icon: "🚀", desc: "معرّف الشهادة التشغيلية — لا يُطلب قبل نجاح المطابقة الرسمية",
+      status: operationalCsidPresent ? "active" : "pending", date: null, issuer: "ZATCA",
       details: { fingerprint: "—", subject: "—", serialNumber: "—", signatureAlgorithm: "—", validFrom: "—", validTo: "—" },
     },
     {
       label: "Secret Key", icon: "🗝️", desc: "المفتاح السري للتوثيق — مشفّر AES-256-GCM",
-      status: cfg?.csid ? "active" : "missing", date: null, issuer: "ZATCA",
+      status: anyCsidPresent ? "active" : "missing", date: null, issuer: "ZATCA",
       details: { fingerprint: "—", subject: "—", serialNumber: "—", signatureAlgorithm: "AES-256-GCM", validFrom: "—", validTo: "—" },
     },
   ];
@@ -821,9 +1809,9 @@ function CertsSection() {
 
       {/* حالة الشهادة */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 16 }}>
-        <StatusCard label="حالة الشهادة"        value={cfg?.csid ? "صالحة ✓" : "غير موجودة"} dot={cfg?.csid ? "ok" : "none"} sub={cfg?.csid ? "شهادة X.509 من ZATCA" : "أنشئ CSR وسجّل الجهاز"} />
+        <StatusCard label="حالة الشهادة"        value={anyCsidPresent ? "صالحة ✓" : "غير موجودة"} dot={anyCsidPresent ? "ok" : "none"} sub={anyCsidPresent ? "شهادة X.509 من ZATCA" : "أنشئ CSR وسجّل الجهاز"} />
         <StatusCard label="تاريخ الانتهاء"       value={cfg?.certExpiryDate ? new Date(cfg.certExpiryDate).toLocaleDateString("ar-SA") : "—"} dot={certDot} sub={certDays !== null ? (certDays > 0 ? `${certDays} يوم متبقٍ` : "منتهية — تجديد فوري!") : "لم تُحدَّد"} />
-        <StatusCard label="الجهة المصدرة / النوع" value={cfg?.csid ? "ZATCA CA" : "—"} dot={cfg?.csid ? "ok" : "none"} sub={cfg?.environment === "production" ? "شهادة إنتاج" : cfg?.environment === "sandbox" ? "شهادة اختبار" : "—"} />
+        <StatusCard label="الجهة المصدرة / النوع" value={anyCsidPresent ? "ZATCA CA" : "—"} dot={anyCsidPresent ? "ok" : "none"} sub={operationalCsidPresent ? "Operational CSID" : complianceCsidPresent ? "Compliance CSID" : "—"} />
       </div>
 
       {certDot === "warn" && (
@@ -1014,64 +2002,7 @@ function KeysSection() {
 // 7. إنشاء CSR
 // ══════════════════════════════════════════════════════════════════════════════
 function CsrSection() {
-  const cfgQ = trpc.zatca.getConfig.useQuery();
-  const cfg  = cfgQ.data;
-  const [form, setForm] = useState({ cn: "", ou: "", o: "", c: "SA", uid: "", serialNumber: "" });
-  const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
-
-  return (
-    <div style={{ maxWidth: 640 }}>
-      <SecTitle icon="📜" title="إنشاء CSR (Certificate Signing Request)" />
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 16 }}>
-        <StatusCard label="الحالة"     value="لم يُنشَأ بعد" dot="none" />
-        <StatusCard label="الخوارزمية" value="EC secp256k1"  dot="ok"  />
-        <StatusCard label="الإصدار"    value="ZATCA v2.1"    dot="ok"  />
-      </div>
-
-      <div style={{ background: "#fef3c7", border: "1px solid #fde68a", borderRadius: 8, padding: "10px 14px", marginBottom: 16, fontSize: 12, color: "#92400e" }}>
-        ℹ️ يُشتَق CSR من بيانات منشأتك. تأكد من مطابقة البيانات لما هو مسجّل لدى الهيئة.
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
-        <div style={grp}>
-          <label style={lbl}>CN (الاسم العام) *</label>
-          <input style={fld} value={form.cn || cfg?.businessName || ""} onChange={e => set("cn", e.target.value)} placeholder="اسم المنشأة بالإنجليزية" />
-        </div>
-        <div style={grp}>
-          <label style={lbl}>O (المنشأة) *</label>
-          <input style={fld} value={form.o || cfg?.businessName || ""} onChange={e => set("o", e.target.value)} placeholder="Organization Name" />
-        </div>
-        <div style={grp}>
-          <label style={lbl}>OU (القسم)</label>
-          <input style={fld} value={form.ou} onChange={e => set("ou", e.target.value)} placeholder="E-Invoicing Department" />
-        </div>
-        <div style={grp}>
-          <label style={lbl}>C (الدولة)</label>
-          <input style={{ ...fld, direction: "ltr" }} value={form.c} onChange={e => set("c", e.target.value)} placeholder="SA" />
-        </div>
-        <div style={grp}>
-          <label style={lbl}>UID (الرقم الضريبي) *</label>
-          <input style={{ ...fld, fontFamily: "monospace", direction: "ltr" }} value={form.uid || cfg?.vatNumber || ""} onChange={e => set("uid", e.target.value)} placeholder="3XXXXXXXXXXXXXX3" />
-        </div>
-        <div style={grp}>
-          <label style={lbl}>Serial Number</label>
-          <input style={{ ...fld, fontFamily: "monospace", direction: "ltr" }} value={form.serialNumber} onChange={e => set("serialNumber", e.target.value)} placeholder="1-TST|2-TST|3-XXX" />
-        </div>
-      </div>
-
-      <div style={{ display: "flex", gap: 10 }}>
-        <button onClick={() => toast.info("إنشاء CSR — سيتم تطويره قريباً مع تكامل الباك إند")}
-          style={{ height: 36, padding: "0 24px", background: "#D19C05", color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-          🔧 إنشاء CSR الآن
-        </button>
-        <button onClick={() => toast.info("استيراد CSR موجود")}
-          style={{ height: 36, padding: "0 16px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, fontSize: 12, cursor: "pointer" }}>
-          📥 استيراد CSR موجود
-        </button>
-      </div>
-    </div>
-  );
+  return <OtpSimulationSection />;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1170,11 +2101,11 @@ function CsidSection() {
       {isAdmin ? (
         <>
           <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 14, marginBottom: 14 }}>
-            <div>
-              <label style={lbl}>CSID (معرّف الشهادة)</label>
-              <textarea style={{ ...fld, height: 70, fontFamily: "monospace", fontSize: 10, direction: "ltr", resize: "vertical" }}
-                value={cfg.csid ?? ""} onChange={e => set("csid", e.target.value)} placeholder="Base64 encoded CSID from ZATCA portal..." />
-            </div>
+             <div>
+               <label style={lbl}>CSID (معرّف الشهادة)</label>
+               <textarea disabled style={{ ...fld, height: 70, fontFamily: "monospace", fontSize: 10, direction: "ltr", resize: "vertical", background: "#f8fafc" }}
+                 value="" readOnly placeholder="محجوب حتى اعتماد مسار Secrets الرسمي" />
+             </div>
             <div>
               <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 3 }}>
                 <label style={{ ...lbl, margin: 0 }}>Secret Key</label>
@@ -1182,15 +2113,15 @@ function CsidSection() {
                   {showKey ? "إخفاء" : "إظهار"}
                 </button>
               </div>
-              <input type={showKey ? "text" : "password"} style={{ ...fld, fontFamily: "monospace", direction: "ltr" }}
-                value={cfg.secretKey ?? ""} onChange={e => set("secretKey", e.target.value)} placeholder="••••••••••••••••" />
-              <div style={{ fontSize: 10, color: "#dc2626", marginTop: 3 }}>🔒 لا يُعرض بعد الحفظ — احتفظ بنسخة آمنة</div>
+               <input disabled type={showKey ? "text" : "password"} style={{ ...fld, fontFamily: "monospace", direction: "ltr", background: "#f8fafc" }}
+                 value="" readOnly placeholder="محجوب حتى اعتماد مسار Secrets الرسمي" />
+               <div style={{ fontSize: 10, color: "#dc2626", marginTop: 3 }}>🔒 لا يُخزَّن Secret في النشر العام — استخدم OTP محاكاة فقط</div>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               <div>
                 <label style={lbl}>رقم تسلسل الشهادة</label>
                 <input style={{ ...fld, direction: "ltr", fontFamily: "monospace" }}
-                  value={cfg.certSerialNumber ?? ""} onChange={e => set("certSerialNumber", e.target.value)} placeholder="SN-XXXXXXX" />
+                   value="" readOnly disabled placeholder="محجوب حتى اعتماد الشهادة الرسمية" />
               </div>
               <div>
                 <label style={lbl}>تاريخ انتهاء الشهادة</label>
@@ -1199,10 +2130,10 @@ function CsidSection() {
             </div>
           </div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <button onClick={() => saveM.mutate(cfg as any)} disabled={saveM.isPending}
-              style={{ height: 32, padding: "0 18px", background: "#D19C05", color: "#fff", border: "none", borderRadius: 6, fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
-              {saveM.isPending ? "جارٍ الحفظ..." : "💾 حفظ"}
-            </button>
+             <button disabled
+               style={{ height: 32, padding: "0 18px", background: "#cbd5e1", color: "#fff", border: "none", borderRadius: 6, fontWeight: 700, fontSize: 12, cursor: "not-allowed" }}>
+               حفظ بيانات الاعتماد — محجوب
+             </button>
             <button onClick={() => setForm({})} style={{ height: 32, padding: "0 14px", background: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: 6, fontWeight: 700, fontSize: 12, cursor: "pointer" }}>تراجع</button>
             <button disabled style={{ height: 32, padding: "0 14px", background: "#fee2e2", border: "1px solid #dc2626", borderRadius: 6, fontWeight: 700, fontSize: 12, cursor: "not-allowed", color: "#dc2626", opacity: 0.5 }}>🔄 تجديد (قريباً)</button>
           </div>
@@ -1236,7 +2167,7 @@ function TestSection() {
     { label: "رابط API الهيئة",      ok: !!cfg?.apiBaseUrl,   dot: !!cfg?.apiBaseUrl ? "ok" as const : "error" as const, desc: cfg?.apiBaseUrl || "غير محدد" },
     { label: "تفعيل منظومة ZATCA",   ok: !!cfg?.enabled,      dot: !!cfg?.enabled ? "ok" as const : "warn" as const, desc: cfg?.enabled ? "مُفعَّلة ✓" : "غير مُفعَّلة" },
     { label: "الرقم الضريبي (VAT)",  ok: !!cfg?.vatNumber && /^3\d{13}3$/.test(cfg?.vatNumber ?? ""), dot: !!cfg?.vatNumber ? "ok" as const : "error" as const, desc: cfg?.vatNumber || "غير محدد" },
-    { label: "اسم المنشأة",          ok: !!cfg?.businessName, dot: !!cfg?.businessName ? "ok" as const : "warn" as const, desc: cfg?.businessName || "غير محدد" },
+    { label: "اسم المنشأة",          ok: !!cfg?.legalName, dot: !!cfg?.legalName ? "ok" as const : "warn" as const, desc: cfg?.legalName || "غير محدد" },
   ];
 
   return (
@@ -1280,14 +2211,156 @@ function TestSection() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// اختبارات المطابقة الرسمية — Compliance CSID فقط
+// ══════════════════════════════════════════════════════════════════════════════
+function ComplianceTestsSection({
+  posUnitId: initialPosUnitId = null,
+  invoiceType = "both",
+  warehouseId,
+}: {
+  posUnitId?: number | null;
+  invoiceType?: "simplified" | "standard" | "both";
+  warehouseId?: number | null;
+} = {}) {
+  const unitsQ = trpc.zatca.listPosUnits.useQuery();
+  const utils = trpc.useUtils();
+  const [posUnitId, setPosUnitId] = useState<number | null>(initialPosUnitId);
+  const selectedUnitId = posUnitId ?? initialPosUnitId ?? unitsQ.data?.[0]?.id ?? null;
+  const selectedUnit = (unitsQ.data ?? []).find(unit => unit.id === selectedUnitId);
+  const readinessWarehouseId = warehouseId ?? selectedUnit?.warehouseId ?? null;
+  const readinessQ = trpc.zatca.getReadiness.useQuery(
+    { warehouseId: readinessWarehouseId ?? undefined, invoiceType },
+    { enabled: Boolean(readinessWarehouseId) },
+  );
+  const prepareM = trpc.zatca.prepareComplianceFixtures.useMutation({
+    onSuccess: async (result) => {
+      await readinessQ.refetch();
+      await utils.zatca.getReadiness.invalidate();
+      toast.success(result.message);
+    },
+    onError: (error) => toast.error(error.message),
+  });
+  const runM = trpc.zatca.runComplianceTests.useMutation({
+    onSuccess: async (result) => {
+      await readinessQ.refetch();
+      await utils.zatca.getReadiness.invalidate();
+      result.ok ? toast.success(result.message) : toast.warning(result.message);
+    },
+    onError: (error) => toast.error(error.message),
+  });
+  const tests = (readinessQ.data?.complianceTests ?? []) as unknown as Array<{
+    testKey: string;
+    label: string;
+    status: string;
+    completed: boolean;
+    fixtureReady: boolean;
+    fixtureNumber: string | null;
+    httpStatus: number | null;
+    requestId: string | null;
+    warnings: Array<{ code?: string; message?: string }>;
+    errors: Array<{ code?: string; message?: string }>;
+    attemptedAt: string | Date | null;
+  }>;
+  const statusText: Record<string, string> = {
+    not_started: "لم يبدأ",
+    submitting: "جارٍ الإرسال",
+    passed: "ناجح",
+    passed_with_warnings: "ناجح مع تحذيرات",
+    completed_previously: "مكتمل سابقًا",
+    not_eligible: "لا يوجد مستند مؤهل",
+    failed: "فشل",
+  };
+  const statusColor = (status: string) =>
+    status === "passed" || status === "passed_with_warnings" || status === "completed_previously"
+      ? "#166534"
+      : status === "failed"
+        ? "#b91c1c"
+        : status === "not_eligible"
+          ? "#a16207"
+          : "#64748b";
+  const incompleteTests = tests.filter(test => !test.completed).length;
+  const fixtureReadyCount = readinessQ.data?.complianceFixtureReadyCount
+    ?? tests.filter(test => test.fixtureReady).length;
+  const fixtureTotal = readinessQ.data?.complianceFixtureTotal ?? tests.length;
+
+  return (
+    <div style={{ maxWidth: 820 }}>
+      <SecTitle icon="📋" title="اختبارات المطابقة الرسمية" />
+      <div style={{ background: "#fffbeb", border: "1px solid #facc15", color: "#854d0e", borderRadius: 9, padding: 12, fontSize: 11, lineHeight: 1.8, marginBottom: 14 }}>
+        هذه الاختبارات ترسل XML موقّعًا فعليًا إلى <code>/compliance/invoices</code> باستخدام Compliance CSID. فحص XML المحلي أو اختبار الاتصال لا يُحسب نجاحًا للمطابقة.
+      </div>
+      <div style={{ background: fixtureReadyCount === fixtureTotal && fixtureTotal > 0 ? "#f0fdf4" : "#f8fafc", border: `1px solid ${fixtureReadyCount === fixtureTotal && fixtureTotal > 0 ? "#bbf7d0" : "#e2e8f0"}`, borderRadius: 9, padding: "9px 12px", marginBottom: 12, fontSize: 11, color: "#334155" }}>
+        مستندات المطابقة المعزولة الجاهزة: <strong style={{ color: fixtureReadyCount === fixtureTotal && fixtureTotal > 0 ? "#166534" : "#a16207" }}>{fixtureReadyCount} / {fixtureTotal}</strong>
+        <span style={{ marginInlineStart: 10, color: "#64748b" }}>لا تدخل هذه المستندات في الحسابات أو المخزون أو أرقام الدفاتر التجارية.</span>
+      </div>
+      {(!initialPosUnitId || unitsQ.data && unitsQ.data.length > 1) && (
+        <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 9, padding: 12, marginBottom: 12 }}>
+          <label style={lbl}>وحدة EGS لاختبارات المطابقة</label>
+          <select value={selectedUnitId ?? ""} onChange={e => setPosUnitId(Number(e.target.value) || null)} style={{ ...fld, maxWidth: 460 }}>
+            <option value="">اختر وحدة الربط</option>
+            {(unitsQ.data ?? []).map(unit => <option key={unit.id} value={unit.id}>{unit.unitCode} — {unit.unitName} — {unit.warehouseName ?? "بدون مخزن"}</option>)}
+          </select>
+        </div>
+      )}
+      <div style={{ display: "grid", gap: 8 }}>
+        {tests.map(test => (
+          <div key={test.testKey} style={{ background: "#fff", border: `1px solid ${test.completed ? "#bbf7d0" : test.status === "failed" ? "#fecaca" : test.status === "not_eligible" ? "#fde68a" : "#e2e8f0"}`, borderRadius: 9, padding: "10px 12px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+              <span style={{ width: 22, height: 22, borderRadius: "50%", display: "grid", placeItems: "center", background: test.completed ? "#dcfce7" : test.status === "failed" ? "#fee2e2" : test.status === "not_eligible" ? "#fef3c7" : "#f1f5f9", color: statusColor(test.status), fontWeight: 800 }}>{test.completed ? "✓" : test.status === "failed" ? "!" : test.status === "not_eligible" ? "…" : "—"}</span>
+              <strong style={{ flex: 1, fontSize: 12 }}>{test.label}</strong>
+              <span style={{ color: statusColor(test.status), fontSize: 11, fontWeight: 800 }}>{statusText[test.status] ?? test.status}</span>
+              {test.httpStatus != null && <span style={{ fontFamily: "monospace", fontSize: 10, color: "#64748b" }}>HTTP {test.httpStatus}</span>}
+            </div>
+            <div style={{ marginTop: 5, display: "flex", gap: 12, flexWrap: "wrap", fontSize: 10, color: test.fixtureReady ? "#166534" : "#a16207" }}>
+              <span>{test.fixtureReady ? "✓ مستند مطابقة معزول جاهز" : "⚠ المستند التجريبي غير مجهز"}</span>
+              {test.fixtureNumber && <span>رقم الاختبار: <strong>{test.fixtureNumber}</strong></span>}
+            </div>
+            {test.requestId && <div style={{ marginTop: 5, fontSize: 10, color: "#64748b" }}>Request ID: <span style={{ fontFamily: "monospace" }}>{test.requestId}</span></div>}
+            {test.status === "not_eligible" && <div style={{ marginTop: 6, color: "#a16207", fontSize: 10 }}>لا يوجد مستند اختبار مؤهل. استخدم «تجهيز مستندات المطابقة» أولًا.</div>}
+            {test.errors?.length > 0 && <div style={{ marginTop: 6, color: "#b91c1c", fontSize: 10 }}>{test.errors.map((e, i) => <div key={i}>❌ {e.code}: {e.message}</div>)}</div>}
+            {test.warnings?.length > 0 && <div style={{ marginTop: 6, color: "#a16207", fontSize: 10 }}>{test.warnings.map((e, i) => <div key={i}>⚠️ {e.code}: {e.message}</div>)}</div>}
+          </div>
+        ))}
+      </div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
+        <button
+          onClick={() => selectedUnitId && prepareM.mutate({ posUnitId: selectedUnitId, invoiceType })}
+          disabled={!selectedUnitId || prepareM.isPending || runM.isPending}
+          style={{ ...smallBtn, height: 38, padding: "0 16px", background: selectedUnitId && !prepareM.isPending && !runM.isPending ? "#0f766e" : "#cbd5e1", color: "#fff", cursor: selectedUnitId && !prepareM.isPending && !runM.isPending ? "pointer" : "not-allowed" }}
+        >
+          {prepareM.isPending ? "⏳ جارٍ تجهيز المستندات..." : "＋ تجهيز مستندات المطابقة"}
+        </button>
+        <button
+          onClick={() => selectedUnitId && runM.mutate({ posUnitId: selectedUnitId, invoiceType, rerunCompleted: false })}
+          disabled={!selectedUnitId || runM.isPending || prepareM.isPending || incompleteTests === 0}
+          style={{ ...smallBtn, height: 38, padding: "0 16px", background: selectedUnitId && !runM.isPending && !prepareM.isPending && incompleteTests > 0 ? "#1d4ed8" : "#cbd5e1", color: "#fff", cursor: selectedUnitId && !runM.isPending && !prepareM.isPending && incompleteTests > 0 ? "pointer" : "not-allowed" }}
+        >
+          {runM.isPending ? "⏳ جارٍ إنشاء XML وتوقيعه وإرساله..." : `▶ تشغيل الاختبارات الناقصة فقط (${incompleteTests})`}
+        </button>
+        <button
+          onClick={() => selectedUnitId && runM.mutate({ posUnitId: selectedUnitId, invoiceType, rerunCompleted: true })}
+          disabled={!selectedUnitId || runM.isPending || prepareM.isPending}
+          style={{ ...smallBtn, height: 38, padding: "0 16px", background: selectedUnitId && !runM.isPending && !prepareM.isPending ? "#64748b" : "#cbd5e1", color: "#fff", cursor: selectedUnitId && !runM.isPending && !prepareM.isPending ? "pointer" : "not-allowed" }}
+        >
+          إعادة اختبار مكتمل (اختياري)
+        </button>
+      </div>
+      {!selectedUnitId && <div style={{ marginTop: 8, color: "#b91c1c", fontSize: 11 }}>اختر وحدة EGS قبل تشغيل الاختبارات.</div>}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // 11. إرسال الفواتير
 // ══════════════════════════════════════════════════════════════════════════════
 function SendSection() {
   const [page, setPage]         = useState(1);
   const [filterStatus, setFilterStatus] = useState("");
+  const [invoiceType, setInvoiceType] = useState<"standard" | "simplified">("simplified");
+  const [mockOutcome, setMockOutcome] = useState<"accepted" | "accepted_with_warnings" | "rejected" | "delayed" | "uncertain" | "connection_issue" | "connection_loss">("delayed");
   const listQ  = trpc.zatca.getInvoicesList.useQuery({ page, limit: 25, status: filterStatus || undefined });
   const submitM = trpc.zatca.submitInvoice.useMutation({
-    onSuccess: (r) => { toast.success(r.message ?? "تم الإرسال"); listQ.refetch(); },
+    onSuccess: (r) => { r.ok ? toast.success(r.message ?? "تمت المعالجة") : toast.warning(r.message ?? "لم تتم المعالجة"); listQ.refetch(); },
     onError:   (e) => toast.error(e.message),
   });
 
@@ -1297,8 +2370,32 @@ function SendSection() {
     <div>
       <SecTitle icon="📤" title="إرسال الفواتير الإلكترونية" />
 
+      <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8, padding: "10px 12px", marginBottom: 12, fontSize: 11, color: "#92400e" }}>
+         Test data — no actual connection to Fatoora. قاعدة المتابعة: «تم إرسال الطلب» لا تساوي نتيجة رسمية. اختر نتيجة Mock للاختبار فقط.
+      </div>
+      <div style={{ display: "flex", gap: 8, alignItems: "end", flexWrap: "wrap", marginBottom: 12 }}>
+        <div style={{ minWidth: 150 }}>
+          <label style={lbl}>نوع العملية</label>
+          <select style={{ ...fld, height: 28 }} value={invoiceType} onChange={e => setInvoiceType(e.target.value as typeof invoiceType)}>
+            <option value="simplified">Reporting — مبسطة</option>
+            <option value="standard">Clearance — ضريبية عادية</option>
+          </select>
+        </div>
+        <div style={{ minWidth: 190 }}>
+          <label style={lbl}>نتيجة Mock</label>
+          <select style={{ ...fld, height: 28 }} value={mockOutcome} onChange={e => setMockOutcome(e.target.value as typeof mockOutcome)}>
+            <option value="delayed">تم الإرسال — لا رد نهائي</option>
+             <option value="accepted">Mock: قبول تجريبي</option>
+             <option value="accepted_with_warnings">Mock: قبول تجريبي مع تحذيرات</option>
+             <option value="rejected">Mock: رفض تجريبي</option>
+            <option value="uncertain">حالة غير مؤكدة</option>
+            <option value="connection_issue">فشل اتصال قبل الإرسال</option>
+            <option value="connection_loss">انقطاع الرد بعد الإرسال — غير مؤكدة</option>
+          </select>
+        </div>
+      </div>
       <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-        {["", "not_submitted", "pending", "cleared", "rejected", "error"].map(s => (
+        {["", "ready_to_submit", "reporting_pending", "clearance_pending", "submitting", "submitted_pending", "cleared", "reported", "accepted_with_warnings", "rejected", "connection_issue", "retry_pending", "uncertain"].map(s => (
           <button key={s} onClick={() => { setFilterStatus(s); setPage(1); }}
             style={{ height: 26, padding: "0 12px", borderRadius: 12, border: `1px solid ${filterStatus === s ? "#D19C05" : "#e2e8f0"}`, background: filterStatus === s ? "#D19C05" : "#fff", color: filterStatus === s ? "#fff" : "#374151", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
             {s === "" ? "الكل" : (STATUS_MAP[s]?.label ?? s)}
@@ -1327,13 +2424,13 @@ function SendSection() {
                 <td style={{ padding: "6px 10px" }}><StatusBadge status={inv.zatcaStatus} /></td>
                 <td style={{ padding: "6px 10px", textAlign: "center", color: "#6b7280" }}>{inv.zatcaAttemptCount ?? 0}</td>
                 <td style={{ padding: "6px 10px" }}>
-                  {inv.zatcaStatus !== "cleared" && (
-                    <button onClick={() => submitM.mutate({ invoiceId: inv.id, forceResend: (inv.zatcaAttemptCount ?? 0) > 0 })} disabled={submitM.isPending}
+                   {!["cleared", "reported", "accepted_with_warnings", "rejected"].includes(inv.zatcaStatus ?? "") && (
+                     <button onClick={() => submitM.mutate({ invoiceId: inv.id, invoiceType, mockOutcome, forceResend: (inv.zatcaAttemptCount ?? 0) > 0 })} disabled={submitM.isPending}
                       style={{ height: 22, padding: "0 10px", background: "#D19C05", color: "#fff", border: "none", borderRadius: 4, fontSize: 10, fontWeight: 700, cursor: "pointer" }}>
                       {(inv.zatcaAttemptCount ?? 0) > 0 ? "↩ إعادة" : "إرسال"}
                     </button>
                   )}
-                  {inv.zatcaStatus === "cleared" && <span style={{ color: "#16a34a", fontSize: 11 }}>✓ مُخلَّصة</span>}
+                   {["cleared", "reported", "accepted_with_warnings", "rejected"].includes(inv.zatcaStatus ?? "") && <span style={{ color: STATUS_MAP[inv.zatcaStatus ?? ""]?.color ?? "#16a34a", fontSize: 11 }}>✓ {STATUS_MAP[inv.zatcaStatus ?? ""]?.label}</span>}
                 </td>
               </tr>
             ))}
@@ -1347,6 +2444,170 @@ function SendSection() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// متابعة الحالة الرسمية وسجل المعاملة
+// ══════════════════════════════════════════════════════════════════════════════
+function TrackingSection() {
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const listQ = trpc.zatca.getInvoicesList.useQuery({ page: 1, limit: 100 });
+  const detailQ = trpc.zatca.getLifecycle.useQuery(
+    { invoiceId: selectedId! },
+    { enabled: selectedId != null },
+  );
+  const rows = listQ.data?.invoices ?? [];
+  const detail = detailQ.data;
+  const transaction = detail?.transaction;
+
+  return (
+    <div>
+      <SecTitle icon="🧭" title="متابعة حالة Mock — لا توجد حالة رسمية" />
+      <div style={{ display: "grid", gridTemplateColumns: "280px 1fr", gap: 14, minHeight: 420 }}>
+        <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, overflow: "auto", maxHeight: 620 }}>
+          {rows.map(inv => (
+            <button key={inv.id} onClick={() => setSelectedId(inv.id)}
+              style={{ width: "100%", border: "none", borderBottom: "1px solid #f1f5f9", background: selectedId === inv.id ? "#fffbeb" : "#fff", padding: "9px 10px", textAlign: "right", cursor: "pointer" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                <strong style={{ color: "#D19C05", fontSize: 11 }}>{inv.invoiceNumber}</strong>
+                <StatusBadge status={inv.zatcaStatus} />
+              </div>
+              <div style={{ color: "#64748b", fontSize: 10, marginTop: 3 }}>{inv.customerName ?? "—"} · محاولات {inv.zatcaAttemptCount ?? 0}</div>
+            </button>
+          ))}
+          {!rows.length && <div style={{ padding: 24, textAlign: "center", color: "#94a3b8", fontSize: 12 }}>لا توجد فواتير</div>}
+        </div>
+        <div>
+          {!detail && <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 50, textAlign: "center", color: "#94a3b8" }}>اختر فاتورة لعرض دورة الحالة</div>}
+          {detail && (
+            <>
+              <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, padding: 14, marginBottom: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                  <strong style={{ fontSize: 15 }}>فاتورة {detail.invoice.invoiceNumber}</strong>
+                  <StatusBadge status={detail.invoice.zatcaStatus} />
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, fontSize: 10 }}>
+                  {[
+                    ["UUID", detail.invoice.zatcaUuid],
+                    ["ICV", detail.invoice.zatcaInvoiceCounter],
+                    ["نوع العملية", transaction?.submissionType === "clearance" ? "Clearance" : "Reporting"],
+                    ["Correlation ID", transaction?.correlationId],
+                    ["HTTP Status", transaction?.httpStatus],
+                    ["المحاولات", transaction?.attemptCount ?? detail.invoice.zatcaAttemptCount],
+                    ["وقت الإرسال", transaction?.lastAttemptAt ? new Date(transaction.lastAttemptAt).toLocaleString("ar-SA") : "—"],
+                    ["وقت الرد", transaction?.responseDate ? new Date(transaction.responseDate).toLocaleString("ar-SA") : "لم يصل"],
+                    ["حالة Mock", transaction?.authorityStatus],
+                  ].map(([label, value]) => <div key={String(label)} style={{ background: "#f8fafc", padding: 7, borderRadius: 5 }}><div style={{ color: "#64748b" }}>{label}</div><div style={{ fontFamily: "monospace", marginTop: 3, wordBreak: "break-all" }}>{String(value ?? "—")}</div></div>)}
+                </div>
+                {transaction?.lastError && <div style={{ marginTop: 10, background: "#fef2f2", color: "#b91c1c", padding: 8, borderRadius: 5, fontSize: 11 }}>{transaction.lastError}</div>}
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <PayloadCard title="الطلب بعد حذف الأسرار" payload={transaction?.requestPayload} />
+                <PayloadCard title="الرد بعد حذف الأسرار" payload={transaction?.responsePayload} />
+              </div>
+               <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, padding: 12, marginTop: 10 }}>
+                 <strong style={{ fontSize: 12 }}>سجل المحاولات (نفس المعاملة، Mock فقط)</strong>
+                 <div style={{ marginTop: 8, fontSize: 11 }}>
+                   {(detail.attempts ?? []).map(item => (
+                     <div key={item.id} style={{ padding: 7, borderBottom: "1px solid #f1f5f9" }}>
+                       <strong>محاولة #{item.attemptNumber}</strong>
+                       {" · "}Attempt ID: <code>{item.attemptId}</code>
+                       {" · "}Request ID: <code>{item.requestId ?? "—"}</code>
+                       {" · "}HTTP {item.httpStatus ?? "—"}
+                       {" · "}{item.result}
+                       {" · "}{new Date(item.startedAt).toLocaleString("ar-SA")}
+                     </div>
+                   ))}
+                   {!detail.attempts?.length && <div style={{ color: "#94a3b8" }}>لا توجد محاولات مسجلة</div>}
+                 </div>
+                 <strong style={{ display: "block", fontSize: 12, marginTop: 12 }}>سجل الاستجابات والأخطاء</strong>
+                <div style={{ marginTop: 8, fontSize: 11 }}>
+                  {(detail.responses ?? []).map(item => <div key={item.id} style={{ padding: 6, borderBottom: "1px solid #f1f5f9" }}>رد HTTP {item.httpStatus ?? "—"} · {new Date(item.responseTime).toLocaleString("ar-SA")}</div>)}
+                  {(detail.errors ?? []).map(item => <div key={item.id} style={{ padding: 6, color: "#b91c1c", borderBottom: "1px solid #f1f5f9" }}>{item.errorCode}: {item.errorMessage}</div>)}
+                  {!detail.responses?.length && !detail.errors?.length && <div style={{ color: "#94a3b8" }}>لا توجد استجابات أو أخطاء مسجلة</div>}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PayloadCard({ title, payload }: { title: string; payload: unknown }) {
+  return <div style={{ background: "#1e293b", borderRadius: 8, padding: 10, minHeight: 120 }}>
+    <div style={{ color: "#fbbf24", fontSize: 11, fontWeight: 700, marginBottom: 6 }}>{title}</div>
+    <pre style={{ color: "#e2e8f0", whiteSpace: "pre-wrap", wordBreak: "break-word", fontSize: 9, margin: 0, maxHeight: 180, overflow: "auto" }}>{payload ? JSON.stringify(payload, null, 2) : "—"}</pre>
+  </div>;
+}
+
+function UncertainSection() {
+  const utils = trpc.useUtils();
+  const listQ = trpc.zatca.getUncertainInvoices.useQuery({ limit: 100 });
+  const rows = listQ.data ?? [];
+  const [selected, setSelected] = useState<number | null>(null);
+  const matchM = trpc.zatca.matchAuthorityResponse.useMutation({
+    onSuccess: () => { toast.success("تمت مطابقة الحالة"); listQ.refetch(); },
+    onError: e => toast.error(e.message),
+  });
+  const retryM = trpc.zatca.retryInvoice.useMutation({
+    onSuccess: (_result, variables) => {
+      toast.success("تمت جدولة إعادة المحاولة بنفس UUID وCorrelation ID");
+      listQ.refetch();
+      utils.zatca.getInvoicesList.invalidate();
+      const row = rows.find(item => item.invoiceId === variables.invoiceId);
+      if (row) {
+        submitM.mutate({
+          invoiceId: row.invoiceId,
+          invoiceType: row.operation === "clearance" ? "standard" : "simplified",
+          mockOutcome: "delayed",
+          forceResend: true,
+        });
+      }
+    },
+    onError: e => toast.error(e.message),
+  });
+  const submitM = trpc.zatca.submitInvoice.useMutation({
+    onSuccess: (result) => {
+      result.ok
+        ? toast.success("أُعيد الإرسال بنفس المعاملة؛ النتيجة النهائية ما زالت قيد الانتظار")
+        : toast.warning(result.message ?? "لم تتم إعادة المحاولة");
+      listQ.refetch();
+      utils.zatca.getInvoicesList.invalidate();
+    },
+    onError: e => toast.error(e.message),
+  });
+  return (
+    <div>
+      <SecTitle icon="❔" title="الفواتير غير المؤكدة" />
+      <div style={{ background: "#f3e8ff", border: "1px solid #d8b4fe", borderRadius: 8, padding: 10, marginBottom: 12, color: "#6b21a8", fontSize: 11 }}>
+        هذه الفواتير أُرسل طلبها أو انقطع الاتصال قبل تأكيد النتيجة. لا تُنشأ فاتورة بديلة ولا UUID جديد؛ استخدم المطابقة أو إعادة المحاولة الآمنة.
+      </div>
+      <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, overflow: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+          <thead><tr style={{ background: "#f8fafc" }}>{["الفاتورة", "الحالة", "العملية", "UUID", "Correlation", "آخر محاولة", "المحاولات", "إجراء"].map(h => <th key={h} style={{ padding: 8, textAlign: "right" }}>{h}</th>)}</tr></thead>
+          <tbody>
+            {rows.map(row => <tr key={row.invoiceId} style={{ borderTop: "1px solid #f1f5f9", background: selected === row.invoiceId ? "#faf5ff" : "#fff" }}>
+              <td style={{ padding: 8, fontWeight: 700 }}>{row.invoiceNumber}</td>
+              <td style={{ padding: 8 }}><StatusBadge status={row.zatcaStatus} /></td>
+              <td style={{ padding: 8 }}>{row.operation === "clearance" ? "Clearance" : "Reporting"}</td>
+              <td style={{ padding: 8, fontFamily: "monospace", fontSize: 9 }}>{row.zatcaUuid ?? "—"}</td>
+              <td style={{ padding: 8, fontFamily: "monospace", fontSize: 9 }}>{row.correlationId ?? "—"}</td>
+              <td style={{ padding: 8 }}>{row.lastAttemptAt ? new Date(row.lastAttemptAt).toLocaleString("ar-SA") : "—"}</td>
+              <td style={{ padding: 8, textAlign: "center" }}>{row.attemptCount}</td>
+              <td style={{ padding: 8, whiteSpace: "nowrap" }}>
+                <button onClick={() => { setSelected(row.invoiceId); matchM.mutate({ invoiceId: row.invoiceId, correlationId: row.correlationId ?? undefined, outcome: "pending", authorityStatus: "PENDING_RECHECK" }); }} disabled={matchM.isPending} style={{ ...smallBtn, background: "#7c3aed", color: "#fff" }}>مطابقة</button>
+                <button onClick={() => retryM.mutate({ invoiceId: row.invoiceId })} disabled={retryM.isPending || submitM.isPending} style={{ ...smallBtn, background: "#D19C05", color: "#fff", marginRight: 4 }}>إعادة آمنة</button>
+              </td>
+            </tr>)}
+            {!rows.length && <tr><td colSpan={8} style={{ padding: 30, textAlign: "center", color: "#94a3b8" }}>لا توجد فواتير غير مؤكدة</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      {selected && <div style={{ marginTop: 8, fontSize: 11, color: "#64748b" }}>تم تحديد الفاتورة {selected} للمطابقة الداخلية. لا توجد نتيجة هيئة فعلية في Mock؛ استخدم نتيجة Simulation فقط.</div>}
     </div>
   );
 }
@@ -1461,16 +2722,23 @@ function LogsSection({ errorsOnly = false }: { errorsOnly?: boolean }) {
 function DiagSection() {
   const cfgQ   = trpc.zatca.getConfig.useQuery();
   const statsQ = trpc.zatca.getStats.useQuery();
+  const unitsQ = trpc.zatca.listPosUnits.useQuery();
+  const diagnosticUnitId = unitsQ.data?.[0]?.id ?? null;
+  const onboardingQ = trpc.zatca.getSimulationOnboardingStatus.useQuery(
+    { posUnitId: diagnosticUnitId ?? 0 },
+    { enabled: Boolean(diagnosticUnitId) },
+  );
   const testM  = trpc.zatca.testConnection.useMutation();
   const cfg = cfgQ.data;
   const s   = statsQ.data;
 
   const checks = [
     { id: "vat",    label: "صحة الرقم الضريبي",     dot: !!cfg?.vatNumber && /^3\d{13}3$/.test(cfg?.vatNumber ?? "") ? "ok" as const : "error" as const, detail: cfg?.vatNumber || "غير محدد" },
-    { id: "name",   label: "اسم المنشأة",             dot: !!cfg?.businessName ? "ok" as const : "warn" as const, detail: cfg?.businessName || "غير محدد" },
-    { id: "addr",   label: "اكتمال العنوان",          dot: !!(cfg?.streetName && cfg?.city) ? "ok" as const : "warn" as const, detail: cfg?.streetName ? `${cfg.streetName}، ${cfg.city}` : "غير مكتمل" },
-    { id: "csid",   label: "CSID",                   dot: !!cfg?.csid ? "ok" as const : "error" as const, detail: cfg?.csid ? "موجود ✓" : "مفقود" },
-    { id: "cert",   label: "صلاحية الشهادة",          dot: !!(cfg?.certExpiryDate && (s?.certDaysLeft ?? 0) > 0) ? "ok" as const : s?.certDaysLeft !== null && (s?.certDaysLeft ?? 0) > 0 ? "ok" as const : "error" as const, detail: s?.certDaysLeft != null ? `${s!.certDaysLeft} يوم متبقٍ` : "غير محدد" },
+    { id: "name",   label: "اسم المنشأة",             dot: !!cfg?.legalName ? "ok" as const : "warn" as const, detail: cfg?.legalName || "غير محدد" },
+    { id: "addr",   label: "اكتمال العنوان",          dot: !!(cfg?.street && cfg?.city) ? "ok" as const : "warn" as const, detail: cfg?.street ? `${cfg.street}، ${cfg.city}` : "غير مكتمل" },
+    { id: "compliance-csid", label: "Compliance CSID", dot: onboardingQ.data?.complianceCsidPresent ? "ok" as const : "error" as const, detail: onboardingQ.data?.complianceCsidPresent ? "موجود للمطابقة ✓" : "مفقود" },
+    { id: "operational-csid", label: "CSID التشغيلي", dot: onboardingQ.data?.operationalCsidPresent ? "ok" as const : "warn" as const, detail: onboardingQ.data?.operationalCsidPresent ? "موجود للتشغيل ✓" : "غير مطلوب حتى نجاح المطابقة" },
+    { id: "cert",   label: "صلاحية الشهادة (Compliance/تشغيلية)", dot: !!(cfg?.certExpiryDate && (s?.certDaysLeft ?? 0) > 0) ? "ok" as const : s?.certDaysLeft !== null && (s?.certDaysLeft ?? 0) > 0 ? "ok" as const : "error" as const, detail: s?.certDaysLeft != null ? `${s!.certDaysLeft} يوم متبقٍ` : "غير محدد" },
     { id: "env",    label: "تهيئة البيئة",            dot: !!cfg?.apiBaseUrl ? "ok" as const : "error" as const, detail: cfg?.environment === "production" ? "إنتاج ✓" : "اختبار" },
     { id: "enabled",label: "تفعيل المنظومة",          dot: !!cfg?.enabled ? "ok" as const : "warn" as const, detail: cfg?.enabled ? "مُفعَّلة ✓" : "غير مُفعَّلة" },
     { id: "conn",   label: "آخر اختبار اتصال",       dot: (cfg as any)?.lastConnectionStatus === "success" ? "ok" as const : "none" as const, detail: cfg?.lastConnectionTest ? new Date(cfg.lastConnectionTest).toLocaleString("ar-SA") : "لم يُختبر" },
@@ -1489,7 +2757,7 @@ function DiagSection() {
         </div>
         <div>
           <div style={{ fontWeight: 800, fontSize: 14, color: "#1e293b" }}>
-            {score >= 80 ? "✅ النظام جاهز" : score >= 60 ? "⚠️ تحتاج مراجعة" : "❌ تحتاج إعداد"}
+            {score >= 80 ? "✅ الفحوص الداخلية مكتملة" : score >= 60 ? "⚠️ تحتاج مراجعة" : "❌ تحتاج إعداد"}
           </div>
           <div style={{ fontSize: 12, color: "#6b7280" }}>{passed} من {checks.length} فحص ناجح</div>
         </div>
@@ -1653,18 +2921,20 @@ function ReportsSection() {
   const s = statsQ.data;
 
   const reportCards = [
-    { title: "الفواتير المُخلَّصة",  value: s?.cleared ?? 0,     total: s?.totalInvoices ?? 0, color: "#16a34a", icon: "✅" },
-    { title: "الفواتير في الانتظار", value: s?.pending ?? 0,     total: s?.totalInvoices ?? 0, color: "#d97706", icon: "⏳" },
-    { title: "الفواتير المرفوضة",   value: s?.rejected ?? 0,    total: s?.totalInvoices ?? 0, color: "#dc2626", icon: "❌" },
-    { title: "الفواتير ذات الأخطاء", value: s?.errors ?? 0,      total: s?.totalInvoices ?? 0, color: "#7c3aed", icon: "⚠️" },
-    { title: "غير مُرسَلة",          value: s?.notSubmitted ?? 0, total: s?.totalInvoices ?? 0, color: "#6b7280", icon: "📭" },
+    { title: "جاهزة للإرسال",       value: s?.readyToSubmit ?? s?.notSubmitted ?? 0, total: s?.totalInvoices ?? 0, color: "#475569", icon: "📭" },
+    { title: "Mock: تخليص تجريبي",   value: s?.cleared ?? 0,     total: s?.totalInvoices ?? 0, color: "#16a34a", icon: "✅" },
+    { title: "Mock: إبلاغ تجريبي",   value: s?.reported ?? 0,    total: s?.totalInvoices ?? 0, color: "#0ea5e9", icon: "📨" },
+    { title: "بانتظار النتيجة",      value: (s?.submittedPending ?? 0) + (s?.submitting ?? 0), total: s?.totalInvoices ?? 0, color: "#d97706", icon: "⏳" },
+    { title: "Mock: قبول تجريبي مع تحذيرات", value: s?.acceptedWithWarnings ?? 0, total: s?.totalInvoices ?? 0, color: "#ca8a04", icon: "⚠️" },
+    { title: "Mock: رفض تجريبي",      value: s?.rejected ?? 0,    total: s?.totalInvoices ?? 0, color: "#dc2626", icon: "❌" },
+    { title: "مشاكل/غير مؤكدة",      value: (s?.connectionIssue ?? 0) + (s?.retryPending ?? 0) + (s?.uncertain ?? 0), total: s?.totalInvoices ?? 0, color: "#9333ea", icon: "❔" },
   ];
 
   return (
     <div>
       <SecTitle icon="📊" title="التقارير والإحصائيات" />
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, marginBottom: 18 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 18 }}>
         {reportCards.map(c => {
           const pct = s?.totalInvoices ? Math.round((c.value / s.totalInvoices) * 100) : 0;
           return (
@@ -1694,7 +2964,7 @@ function ReportsSection() {
                   .map((seg, i) => <div key={i} style={{ flex: seg.v, background: seg.c, minWidth: seg.v > 0 ? 4 : 0 }} />)}
               </div>
               <div style={{ display: "flex", gap: 12, marginTop: 6, fontSize: 10, color: "#6b7280", flexWrap: "wrap" }}>
-                {[["#16a34a","مُخلَّصة"],["#d97706","انتظار"],["#dc2626","مرفوضة"],["#7c3aed","أخطاء"],["#e2e8f0","لم تُرسَل"]].map(([c,l]) => (
+                {[["#16a34a","تخليص Mock تجريبي"],["#d97706","انتظار"],["#dc2626","رفض Mock تجريبي"],["#7c3aed","أخطاء"],["#e2e8f0","لم تُرسَل"]].map(([c,l]) => (
                   <span key={l} style={{ display: "flex", gap: 4, alignItems: "center" }}>
                     <span style={{ width: 8, height: 8, borderRadius: 2, background: c, flexShrink: 0 }} />{l}
                   </span>
@@ -1733,20 +3003,953 @@ function ReportsSection() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// الواجهة النهائية: التفعيل والربط
+// ══════════════════════════════════════════════════════════════════════════════
+type ActivationWizardProps = {
+  cfg: any;
+  units: any[];
+  environment: LinkingEnvironment;
+  onOpenCompanyInfo?: () => void;
+  onOpenTechnical?: () => void;
+  onFinishedLinking: () => void;
+  includeCompanyStep?: boolean;
+};
+
+function ActivationWizard({
+  cfg,
+  units,
+  environment,
+  onOpenCompanyInfo,
+  onOpenTechnical,
+  onFinishedLinking,
+  includeCompanyStep = true,
+}: ActivationWizardProps) {
+  const utils = trpc.useUtils();
+  const [activeStep, setActiveStep] = useState(includeCompanyStep ? 1 : 2);
+  const [warehouseId, setWarehouseId] = useState("");
+  const [unitName, setUnitName] = useState("");
+  const [invoiceType, setInvoiceType] = useState<"simplified" | "standard" | "both">("both");
+  const [selectedUnitId, setSelectedUnitId] = useState<number | null>(
+    includeCompanyStep ? (units[0]?.id ?? null) : null,
+  );
+  const [creatingUnit, setCreatingUnit] = useState(false);
+  const [createdUnit, setCreatedUnit] = useState<any>(null);
+
+  const readinessQ = trpc.zatca.getReadiness.useQuery({
+    warehouseId: warehouseId ? Number(warehouseId) : undefined,
+    invoiceType,
+  });
+  const simulationUnitId = selectedUnitId ?? null;
+  const simulationStatusQ = trpc.zatca.getSimulationOnboardingStatus.useQuery(
+    { posUnitId: simulationUnitId ?? 0 },
+    { enabled: Boolean(simulationUnitId) && environment === "simulation" },
+  );
+  const saveReadinessM = trpc.zatca.saveReadinessSettings.useMutation();
+  const createUnitM = trpc.zatca.createPosUnit.useMutation();
+
+  const readiness = readinessQ.data;
+  const availableUnits = createdUnit ? [...units.filter(unit => unit.id !== createdUnit.id), createdUnit] : units;
+  const selectedWarehouseNumber = warehouseId ? Number(warehouseId) : null;
+  const selectedUnit = availableUnits.find(unit =>
+    unit.id === selectedUnitId
+    && (selectedWarehouseNumber == null || unit.warehouseId === selectedWarehouseNumber),
+  )
+    ?? (includeCompanyStep && readiness?.linkingUnitId
+      ? units.find(unit => unit.id === readiness.linkingUnitId)
+      : undefined);
+  const selectedWarehouseUnitId = selectedUnit?.warehouseId === selectedWarehouseNumber
+    ? selectedUnit.id
+    : null;
+  const companyFields: Array<[string, string]> = [
+    ["الاسم القانوني", String(cfg?.legalName ?? "")],
+    ["الرقم الضريبي", String(cfg?.vatNumber ?? "")],
+    ["السجل التجاري", String(cfg?.commercialReg ?? "")],
+    ["الدولة", String(cfg?.country ?? "")],
+    ["المدينة", String(cfg?.city ?? "")],
+    ["الحي", String(cfg?.district ?? "")],
+    ["الشارع", String(cfg?.street ?? "")],
+    ["رقم المبنى", String(cfg?.buildingNumber ?? "")],
+    ["الرقم الإضافي", String(cfg?.additionalNumber ?? "")],
+    ["الرمز البريدي", String(cfg?.postalCode ?? "")],
+  ];
+  const missingCompanyFields = companyFields.filter(([, value]) => !value.trim()).map(([label]) => label);
+  const companyComplete = missingCompanyFields.length === 0;
+  const unitJournals = selectedUnit?.journals ?? (
+    selectedUnit?.linkedJournalIds?.map((id: number) => ({ journalId: id })) ?? []
+  );
+  const requiredJournalTypes = ["sales_invoice", "sales_return", "credit_note", "debit_note"];
+  const linkedTypes = new Set(unitJournals.map((journal: any) => journal.docType));
+  const unitComplete = Boolean(
+    selectedUnit
+    && selectedUnit.warehouseId === selectedWarehouseNumber
+    && requiredJournalTypes.every(type => unitJournals.some((journal: any) =>
+      journal.docType === type
+      && journal.journalId != null
+      && journal.journalCode?.trim()
+      && journal.journalName?.trim()
+      && journal.warehouseId === selectedWarehouseNumber,
+    )),
+  );
+  const invoiceTypeSaved = readiness?.savedSettings?.invoiceType === invoiceType
+    && (!selectedUnitId || readiness.savedSettings?.zatcaPosUnitId === selectedUnitId);
+  const simulationComplete = Boolean(simulationStatusQ.data?.signingMaterialsReady);
+  const testsComplete = simulationComplete && Boolean(readiness?.complianceTestCompleted);
+  const operationalComplete = simulationComplete && Boolean(simulationStatusQ.data?.operationalReady);
+  const environmentStatus = selectedUnit?.environmentStatuses?.[environment] ?? null;
+  const productionComplete = Boolean(
+    environment === "production"
+      && environmentStatus?.registrationStatus === "operational"
+      && environmentStatus?.operationalCsidPresent,
+  );
+  const environmentComplete = environment === "simulation" ? simulationComplete : productionComplete;
+  const allSteps = [
+    { id: 1, icon: "🏢", title: "بيانات المنشأة", detail: "بيانات القراءة فقط من معلومات المؤسسة", done: companyComplete },
+    { id: 2, icon: "🧩", title: "وحدة الربط والدفاتر", detail: "الوحدة والدفاتر الأربعة لنفس المخزن/الفرع", done: unitComplete },
+    { id: 3, icon: "🧾", title: "نوع الفواتير", detail: "مبسطة أو قياسية أو كلاهما", done: invoiceTypeSaved },
+    { id: 4, icon: "🌐", title: environment === "simulation" ? "تهيئة المحاكاة" : "تهيئة الربط الفعلي", detail: environment === "simulation" ? "OTP ثم EC/CSR ثم شهادة Compliance" : "OTP إنتاجي واعتمادات Production مستقلة", done: environmentComplete },
+    { id: 5, icon: "📋", title: "اختبارات المطابقة", detail: environment === "simulation" ? "بعد الحصول على Compliance CSID" : "اختبارات المطابقة الخاصة بالإنتاج", done: environment === "production" ? productionComplete : testsComplete },
+    { id: 6, icon: "🔑", title: "CSID التشغيلي", detail: "بعد نجاح اختبارات المطابقة", done: environment === "production" ? productionComplete : operationalComplete },
+    { id: 7, icon: "✅", title: "اكتمال الربط", detail: ENVIRONMENT_COPY[environment].shortTitle, done: environment === "production" ? productionComplete : operationalComplete },
+  ];
+  const steps = includeCompanyStep ? allSteps : allSteps.filter(step => step.id !== 1);
+  const firstIncomplete = environment === "production"
+    ? 7
+    : steps.find(step => !step.done)?.id ?? 7;
+  const linkingComplete = environment === "production" ? productionComplete : operationalComplete;
+  const completed = steps.filter(step => step.done).length;
+  const progress = Math.round((completed / steps.length) * 100);
+
+  useEffect(() => {
+    if (includeCompanyStep && readiness?.savedSettings && !warehouseId) {
+      setWarehouseId(String(readiness.savedSettings.warehouseId));
+      setInvoiceType((readiness.savedSettings.invoiceType as typeof invoiceType) || "both");
+      setSelectedUnitId(readiness.savedSettings.zatcaPosUnitId ?? units[0]?.id ?? null);
+    }
+  }, [readiness?.savedSettings, units, warehouseId]);
+
+  type ReadinessJournal = {
+    docType: string;
+    label: string;
+    found: boolean;
+    linked: boolean;
+    linkedUnitId: number | null;
+    id: number | null;
+    code: string | null;
+    name: string | null;
+    warehouseId: number | null;
+    valid: boolean;
+  };
+  const readinessMatchesWarehouse = Boolean(
+    warehouseId
+    && readiness?.selectedWarehouseId === Number(warehouseId)
+    && !readinessQ.isFetching,
+  );
+  const selectedWarehouseJournals: ReadinessJournal[] = (
+    (readinessMatchesWarehouse ? (readiness?.journals ?? []) : []) as Array<Record<string, any>>
+  ).map(entry => {
+    const nestedJournal = (entry.journal ?? {}) as Record<string, any>;
+    const id = entry.journalId ?? nestedJournal.id ?? null;
+    const code = entry.journalCode ?? nestedJournal.code ?? null;
+    const name = entry.journalName ?? nestedJournal.name ?? null;
+    const journalWarehouseId = entry.journalWarehouseId ?? nestedJournal.warehouseId ?? null;
+    const belongsToSelectedWarehouse = Boolean(
+      warehouseId && journalWarehouseId === Number(warehouseId),
+    );
+    const linkedUnitId = entry.linkedUnitId ?? nestedJournal.zatcaPosUnitId ?? null;
+    const belongsToSelectedUnit = Boolean(
+      linkedUnitId == null || linkedUnitId === selectedWarehouseUnitId,
+    );
+    return {
+      docType: entry.docType,
+      label: entry.label ?? journalTypeLabel(entry.docType),
+      found: Boolean(entry.found),
+      linked: Boolean(entry.linked),
+      linkedUnitId,
+      id,
+      code,
+      name,
+      warehouseId: journalWarehouseId,
+      valid: Boolean(
+        entry.found
+        && id != null
+        && code?.trim()
+        && name?.trim()
+        && belongsToSelectedWarehouse
+        && belongsToSelectedUnit,
+      ),
+    };
+  });
+  const salesJournal = selectedWarehouseJournals.find(
+    journal => journal.docType === "sales_invoice" && journal.valid,
+  );
+  const missingJournalTypes = requiredJournalTypes.filter(type =>
+    !selectedWarehouseJournals.some(journal => journal.docType === type && journal.valid),
+  );
+  const conflictingJournalTypes = requiredJournalTypes.filter(type =>
+    selectedWarehouseJournals.some(
+      journal => journal.docType === type
+        && journal.linkedUnitId != null
+        && journal.linkedUnitId !== selectedWarehouseUnitId,
+    ),
+  );
+  const canCreateUnit = Boolean(
+    warehouseId
+    && salesJournal
+    && unitName.trim()
+    && missingJournalTypes.length === 0
+    && conflictingJournalTypes.length === 0
+    && selectedWarehouseJournals.every(journal => journal.valid),
+  );
+
+  const goTo = (step: number) => {
+    if (environment !== "production" && step > firstIncomplete) {
+      toast.warning("أكمل متطلبات المرحلة الحالية أولًا");
+      return;
+    }
+    setActiveStep(step);
+  };
+
+  const saveStep = async () => {
+    try {
+      if (activeStep === 1) {
+        if (!companyComplete) {
+          toast.error(`البيانات الناقصة: ${missingCompanyFields.join("، ")}`);
+          return;
+        }
+        setActiveStep(2);
+        return;
+      }
+      if (activeStep === 2) {
+        if (unitComplete) {
+          setActiveStep(3);
+          return;
+        }
+        if (!canCreateUnit || !salesJournal) {
+          toast.error(
+            missingJournalTypes.length
+              ? `الدفاتر الناقصة: ${missingJournalTypes.map(journalTypeLabel).join("، ")}`
+              : "اختر المخزن/الفرع وأكمل اسم ورمز وحدة الربط",
+          );
+          return;
+        }
+        setCreatingUnit(true);
+        const created = await createUnitM.mutateAsync({
+          journalId: salesJournal.id as number,
+          unitName: unitName.trim(),
+        });
+        const [refreshedUnits] = await Promise.all([
+          utils.zatca.listPosUnits.fetch(),
+          utils.zatca.listPosUnits.invalidate(),
+          utils.zatca.listLinkingJournalOptions.invalidate(),
+          readinessQ.refetch(),
+        ]);
+        const savedUnit = refreshedUnits.find(unit => unit.id === created.id) ?? created;
+        setCreatedUnit(savedUnit);
+        setSelectedUnitId(savedUnit.id);
+        toast.success("تم إنشاء الوحدة وربط الدفاتر الأربعة معًا");
+        setActiveStep(3);
+        return;
+      }
+      if (activeStep === 3) {
+        if (!warehouseId || !selectedUnitId) {
+          toast.error("اختر وحدة ربط قبل حفظ نوع الفواتير");
+          return;
+        }
+        await saveReadinessM.mutateAsync({
+          warehouseId: Number(warehouseId),
+          invoiceType,
+          zatcaPosUnitId: selectedUnitId,
+        });
+        await readinessQ.refetch();
+        toast.success("تم حفظ نوع الفواتير");
+        setActiveStep(4);
+        return;
+      }
+      if (activeStep === 4) {
+        if (environment === "production") {
+          toast.info("تم فتح مسار Production مستقل. لا يتم إرسال OTP أو حفظ اعتماد إنتاجي من هذه النسخة قبل اعتماد بوابة Production الآمنة.");
+          setActiveStep(5);
+          return;
+        }
+        if (!simulationComplete) {
+          toast.error("أدخل OTP وأنشئ EC/CSR واحصل على Compliance CSID أولًا");
+          return;
+        }
+        setActiveStep(5);
+        return;
+      }
+      if (activeStep === 5) {
+        if (environment === "production") {
+          toast.info("اختبارات المطابقة الخاصة بالإنتاج ستتاح بعد تهيئة اعتماد Production المستقل.");
+          setActiveStep(6);
+          return;
+        }
+        if (!testsComplete) {
+          toast.error("لا يمكن المتابعة قبل نجاح اختبارات المطابقة المطلوبة");
+          return;
+        }
+        setActiveStep(6);
+        return;
+      }
+      if (activeStep === 6) {
+        if (environment === "production") {
+          toast.info("CSID التشغيلي للإنتاج سيُطلب من مسار Production بعد تهيئة الاعتماد.");
+          setActiveStep(7);
+          return;
+        }
+        if (!operationalComplete) {
+          toast.error("اطلب CSID التشغيلي بعد نجاح اختبارات المطابقة أولًا");
+          return;
+        }
+        setActiveStep(7);
+        return;
+      }
+      if (activeStep === 7) {
+        if (!linkingComplete) {
+          if (environment === "production") {
+            toast.info("مسار Production مفتوح للمراجعة، لكن التفعيل الفعلي محمي حتى اعتماد بوابة Production.");
+          } else {
+            toast.info("اكتملت المحاكاة. اختر الربط الفعلي من شاشة اختيار البيئة للانتقال إلى Production.");
+          }
+          return;
+        }
+        onFinishedLinking();
+      }
+    } catch (error: any) {
+      toast.error(error?.message ?? "تعذر حفظ المرحلة");
+    } finally {
+      setCreatingUnit(false);
+    }
+  };
+
+  const renderStep = () => {
+    if (activeStep === 1) {
+      return (
+        <div>
+          <SecTitle icon="🏢" title="بيانات المنشأة" />
+          <div style={{ background: companyComplete ? "#f0fdf4" : "#fff7ed", border: `1px solid ${companyComplete ? "#bbf7d0" : "#fed7aa"}`, color: companyComplete ? "#166534" : "#9a3412", borderRadius: 10, padding: 13, marginBottom: 14, fontSize: 12, lineHeight: 1.8 }}>
+            <strong>{companyComplete ? "بيانات المنشأة مكتملة وجاهزة للربط" : "بيانات المنشأة تحتاج إلى استكمال"}</strong>
+            {!companyComplete && <div>الحقول الناقصة: {missingCompanyFields.join("، ")}</div>}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
+            {companyFields.map(([label, value]) => (
+              <div key={label} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, padding: "9px 11px" }}>
+                <div style={{ color: "#64748b", fontSize: 10, marginBottom: 3 }}>{label}</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: value.trim() ? "#1e293b" : "#9a3412" }}>{value.trim() || "غير مكتمل"}</div>
+              </div>
+            ))}
+          </div>
+          {!companyComplete && onOpenCompanyInfo && (
+            <button onClick={onOpenCompanyInfo} style={{ ...smallBtn, marginTop: 12, background: "#fff7ed", color: "#9a3412", border: "1px solid #fdba74" }}>🏢 فتح معلومات المؤسسة</button>
+          )}
+        </div>
+      );
+    }
+    if (activeStep === 2) {
+      return (
+        <div>
+          <SecTitle icon="🧩" title="وحدة الربط والدفاتر" />
+          <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1e40af", borderRadius: 9, padding: 11, marginBottom: 14, fontSize: 11, lineHeight: 1.7 }}>
+            المخزن هو نفسه الفرع في OneSoft. اختر موقعًا واحدًا، ثم راجع الدفاتر الأربعة التابعة له قبل الحفظ.
+          </div>
+          {unitComplete ? (
+            <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 10, padding: 14, color: "#166534", fontSize: 12 }}>
+              <strong>وحدة الربط مكتملة</strong>
+              <div style={{ marginTop: 5 }}>{selectedUnit?.unitCode} — {selectedUnit?.unitName}</div>
+              <div>الدفاتر المرتبطة: {unitJournals.map((journal: any) => journal.journalCode).join("، ")}</div>
+            </div>
+          ) : (
+            <>
+              <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr", gap: 8, alignItems: "end", marginBottom: 12 }}>
+                <div>
+                  <label style={lbl}>المخزن/الفرع *</label>
+                  <select style={fld} value={warehouseId} onChange={event => {
+                    const value = event.target.value;
+                    const next = (readiness?.locations ?? []).find(location => location.id === Number(value));
+                    const existingUnit = availableUnits.find(unit => unit.warehouseId === Number(value));
+                    setWarehouseId(value);
+                    setSelectedUnitId(existingUnit?.id ?? null);
+                    setUnitName(existingUnit?.unitName ?? (next ? `وحدة ربط — ${next.label}` : ""));
+                  }}>
+                    <option value="">اختر المخزن/الفرع</option>
+                    {(readiness?.locations ?? []).map(location => <option key={location.id} value={location.id}>{location.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={lbl}>رمز الوحدة</label>
+                  <div style={{ ...fld, background: "#f8fafc", color: "#64748b", display: "flex", alignItems: "center" }}>
+                    يُولّد تلقائيًا عند إنشاء وحدة جديدة
+                  </div>
+                </div>
+                <div>
+                  <label style={lbl}>اسم الوحدة *</label>
+                  <input style={fld} value={unitName} onChange={event => setUnitName(event.target.value)} placeholder="كاشير 1" />
+                </div>
+              </div>
+              <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 9, padding: 12 }}>
+                <div style={{ fontWeight: 800, fontSize: 12, marginBottom: 8 }}>مراجعة الدفاتر الأربعة</div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 7 }}>
+                  {requiredJournalTypes.map(type => {
+                    const journal = selectedWarehouseJournals.find(item => item.docType === type);
+                    const journalIsValid = Boolean(journal?.valid);
+                    const journalSummary = journal
+                      ? `${journal.code ?? "رقم غير متاح"} — ${journal.name ?? "اسم غير متاح"} — ${journalTypeLabel(type)} — ID: ${journal.id ?? "غير متاح"}`
+                      : null;
+                    return (
+                      <div key={type} style={{ background: journalIsValid ? "#f0fdf4" : "#fff7ed", border: `1px solid ${journalIsValid ? "#bbf7d0" : "#fed7aa"}`, color: journalIsValid ? "#166534" : "#9a3412", borderRadius: 7, padding: "8px 10px", fontSize: 11 }}>
+                        {journalIsValid ? "✓" : "!"} {journalTypeLabel(type)}
+                        <div style={{ color: "#64748b", fontSize: 10, marginTop: 3 }}>
+                          {journalIsValid
+                            ? journalSummary
+                            : journal?.linkedUnitId != null && journal.linkedUnitId !== selectedWarehouseUnitId
+                              ? "مرتبط بوحدة أخرى — استكمل الوحدة الحالية من إدارة الدفاتر"
+                              : journal
+                                ? "بيانات الدفتر غير مكتملة أو لا تطابق المخزن المختار"
+                                : "غير موجود في هذا المخزن"}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {missingJournalTypes.length > 0 && warehouseId && (
+                  <div style={{ marginTop: 9, color: "#9a3412", fontSize: 11 }}>
+                    الدفاتر الناقصة أو غير الصالحة: {missingJournalTypes.map(type => `دفتر ${journalTypeLabel(type)} غير موجود`).join("، ")}
+                  </div>
+                )}
+                {conflictingJournalTypes.length > 0 && (
+                  <div style={{ marginTop: 7, color: "#9a3412", fontSize: 11 }}>
+                    يوجد تعارض في: {conflictingJournalTypes.map(journalTypeLabel).join("، ")}. لا يمكن إنشاء وحدة مكررة.
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      );
+    }
+    if (activeStep === 3) {
+      return (
+        <div>
+          <SecTitle icon="🧾" title="نوع الفواتير" />
+          <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 9, padding: 11, marginBottom: 14, fontSize: 11, lineHeight: 1.8 }}>
+            <strong>{selectedUnit?.unitName ?? "وحدة الربط"}</strong>
+            <div>المخزن/الفرع: {selectedUnit ? locationLabel(selectedUnit) : "—"}</div>
+            <div>الدفاتر المرتبطة: {unitJournals.length} من 4</div>
+          </div>
+          <div style={{ display: "grid", gap: 8 }}>
+            {[
+              ["simplified", "فواتير مبسطة", "مبيعات الأفراد ونقاط البيع."],
+              ["standard", "فواتير عادية/قياسية", "مبيعات المنشآت."],
+              ["both", "كلاهما", "عند البيع للأفراد والمنشآت."],
+            ].map(([value, title, detail]) => (
+              <label key={value} style={{ display: "flex", alignItems: "center", gap: 9, border: `1px solid ${invoiceType === value ? "#D19C05" : "#e2e8f0"}`, background: invoiceType === value ? "#fffbeb" : "#fff", borderRadius: 9, padding: 11, cursor: "pointer" }}>
+                <input type="radio" checked={invoiceType === value} onChange={() => setInvoiceType(value as typeof invoiceType)} />
+                <span><strong style={{ display: "block", fontSize: 12 }}>{title}</strong><span style={{ color: "#64748b", fontSize: 11 }}>{detail}</span></span>
+              </label>
+            ))}
+          </div>
+        </div>
+      );
+    }
+    if (activeStep === 4) {
+      if (environment === "production") {
+        return (
+          <div>
+            <SecTitle icon="🚀" title="تهيئة الربط الفعلي — Production" />
+            <div style={{ background: "#f0fdf4", border: "1px solid #86efac", color: "#166534", borderRadius: 9, padding: 13, marginBottom: 13, fontSize: 11, lineHeight: 1.8 }}>
+              <strong>هذا مسار مستقل عن Fatoora Simulation.</strong>
+              <div>سيتم استخدام بيانات المنشأة الحقيقية وOTP صادر من منصة فاتورة الفعلية عند إتاحة بوابة Production.</div>
+              <div style={{ marginTop: 5 }}>لا يتم نسخ شهادة أو CSID أو Secret أو مفتاح من المحاكاة إلى الإنتاج.</div>
+            </div>
+            <div style={{ background: "#fff7ed", border: "1px solid #fdba74", color: "#9a3412", borderRadius: 9, padding: 12, fontSize: 11, lineHeight: 1.8 }}>
+              بدء الربط الفعلي يتطلب تأكيدًا صريحًا من المسؤول. هذه النسخة تفتح المعالج وتعرض الحالة فقط، ولا ترسل OTP أو تحفظ اعتمادًا إنتاجيًا.
+            </div>
+          </div>
+        );
+      }
+      return <OtpSimulationSection initialPosUnitId={selectedUnitId} />;
+    }
+    if (activeStep === 5) {
+      if (environment === "production") {
+        return (
+          <div>
+            <SecTitle icon="📋" title="اختبارات المطابقة — Production" />
+            <div style={{ background: "#fff7ed", border: "1px solid #fdba74", color: "#9a3412", borderRadius: 9, padding: 13, fontSize: 11, lineHeight: 1.8 }}>
+              اختبارات Production منفصلة عن نتائج المحاكاة. ستظهر هنا بعد تهيئة اعتماد Production، ولن تستخدم نتائج المحاكاة كبديل.
+            </div>
+          </div>
+        );
+      }
+      return (
+        <ComplianceTestsSection
+          posUnitId={selectedUnitId}
+          invoiceType={invoiceType}
+          warehouseId={selectedWarehouseNumber}
+        />
+      );
+    }
+    if (activeStep === 6) {
+      if (environment === "production") {
+        return (
+          <div>
+            <SecTitle icon="🔑" title="CSID التشغيلي — Production" />
+            <div style={{ background: "#fff7ed", border: "1px solid #fdba74", color: "#9a3412", borderRadius: 9, padding: 13, fontSize: 11, lineHeight: 1.8 }}>
+              لا يتم طلب CSID التشغيلي للإنتاج من اعتماد المحاكاة. سيُنشأ من مسار Production المستقل بعد نجاح اختبارات Production.
+            </div>
+          </div>
+        );
+      }
+      return (
+        <div>
+          <SecTitle icon="🔑" title="طلب CSID التشغيلي" />
+          <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 9, padding: 11, marginBottom: 13, color: "#1e40af", fontSize: 11, lineHeight: 1.7 }}>
+            لا يُطلب CSID التشغيلي إلا بعد نجاح اختبارات المطابقة الرسمية. يستخدم الخادم Compliance CSID المحفوظ داخليًا.
+          </div>
+          <OtpSimulationSection initialPosUnitId={selectedUnitId} allowOperational />
+        </div>
+      );
+    }
+    return (
+      <div>
+        <SecTitle icon={environment === "production" ? "✅" : "🚀"} title={environment === "production" ? "اكتمال الربط الفعلي" : "اكتمال الاختبار التجريبي"} />
+        <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: 14, fontSize: 11, lineHeight: 1.9 }}>
+          <div><strong>الوحدة:</strong> {selectedUnit?.unitName ?? "—"}</div>
+          <div><strong>المخزن/الفرع:</strong> {selectedUnit ? locationLabel(selectedUnit) : "—"}</div>
+          <div><strong>الدفاتر:</strong> {unitJournals.length} من 4</div>
+          <div><strong>البيئة:</strong> {ENVIRONMENT_COPY[environment].shortTitle}</div>
+          <div><strong>مواد التوقيع:</strong> {environment === "simulation" ? (simulationComplete ? "الشهادة والمفتاح متطابقان" : "الشهادة أو تطابق المفتاح غير مكتمل") : (environmentStatus?.certificatePresent ? "شهادة Production موجودة" : "لم تُهيأ شهادة Production")}</div>
+          <div><strong>الحالة:</strong> {environmentStatus?.registrationStatus === "operational" ? "مفعّلة" : "غير مفعّلة"}</div>
+        </div>
+        <div style={{ background: "#fff7ed", border: "1px solid #fdba74", borderRadius: 9, padding: 12, marginTop: 12, color: "#9a3412", fontSize: 11, lineHeight: 1.8 }}>
+          {environment === "production"
+            ? "لن تُرسل فواتير حقيقية قبل تهيئة اعتماد Production المستقل واجتياز بوابات الأمان والمطابقة."
+            : "اكتملت المحاكاة بشكل مستقل. لا يعني ذلك تفعيل الإنتاج؛ اختر الربط الفعلي لبدء مسار Production مستقل."}
+        </div>
+        <button
+          disabled={!linkingComplete}
+          onClick={saveStep}
+          style={{ ...smallBtn, height: 32, marginTop: 12, background: linkingComplete ? "#16a34a" : "#cbd5e1", color: "#fff", cursor: linkingComplete ? "pointer" : "not-allowed" }}
+        >
+          {environment === "production" ? "تأكيد اكتمال الربط الفعلي" : "إنهاء الاختبار التجريبي"}
+        </button>
+        {onOpenTechnical && <button onClick={onOpenTechnical} style={{ ...smallBtn, marginTop: 12, background: "#f1f5f9", color: "#334155", border: "1px solid #cbd5e1" }}>مراجعة إعدادات الربط</button>}
+      </div>
+    );
+  };
+
+  return (
+    <div>
+       <div style={{ background: `linear-gradient(135deg,${ENVIRONMENT_COPY[environment].color},${environment === "production" ? "#166534" : "#1d4ed8"})`, color: "#fff", borderRadius: 14, padding: "18px 20px", marginBottom: 14 }}>
+        <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+          <div style={{ fontSize: 28 }}>🔗</div>
+           <div style={{ flex: 1 }}><div style={{ fontSize: 17, fontWeight: 800 }}>معالج التفعيل والربط</div><div style={{ color: "#e0f2fe", fontSize: 11, marginTop: 3 }}>{ENVIRONMENT_COPY[environment].shortTitle} — محتوى المرحلة الحالية فقط.</div></div>
+          <div style={{ textAlign: "center" }}><div style={{ fontSize: 23, fontWeight: 800, color: "#f7d47b" }}>{progress}%</div><div style={{ color: "#dbeafe", fontSize: 10 }}>{completed} من {steps.length} مراحل</div></div>
+        </div>
+        <div style={{ height: 5, background: "rgba(255,255,255,.18)", borderRadius: 5, marginTop: 15 }}><div style={{ height: "100%", width: `${progress}%`, background: "#f2c75c", borderRadius: 5 }} /></div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${steps.length}, minmax(120px, 1fr))`, gap: 7, marginBottom: 14, overflowX: "auto" }}>
+        {steps.map(step => (
+          <button key={step.id} onClick={() => goTo(step.id)} style={{ minHeight: 92, textAlign: "right", background: activeStep === step.id ? "#fffbeb" : "#fff", border: `1px solid ${activeStep === step.id ? "#D19C05" : "#e2e8f0"}`, borderTop: `3px solid ${step.done ? "#16a34a" : activeStep === step.id ? "#D19C05" : "#cbd5e1"}`, borderRadius: 9, padding: "8px 8px", cursor: step.id <= firstIncomplete ? "pointer" : "not-allowed", opacity: step.id <= firstIncomplete ? 1 : .55 }}>
+            <div style={{ display: "flex", justifyContent: "space-between" }}><span>{step.icon}</span><span style={{ fontSize: 10, color: step.done ? "#16a34a" : "#64748b" }}>{step.done ? "✓" : step.id}</span></div>
+            <strong style={{ display: "block", fontSize: 10, color: "#1e293b", marginTop: 7 }}>{step.title}</strong>
+            <span style={{ display: "block", fontSize: 9, lineHeight: 1.4, color: "#64748b", marginTop: 3 }}>{step.detail}</span>
+          </button>
+        ))}
+      </div>
+      {renderStep()}
+      <div style={{ display: "flex", gap: 8, marginTop: 18, paddingTop: 13, borderTop: "1px solid #e2e8f0" }}>
+        <button disabled={activeStep === (includeCompanyStep ? 1 : 2)} onClick={() => setActiveStep(step => Math.max(includeCompanyStep ? 1 : 2, step - 1))} style={{ ...smallBtn, height: 32, background: "#f1f5f9", color: "#475569", opacity: activeStep === (includeCompanyStep ? 1 : 2) ? .5 : 1 }}>السابق</button>
+         <button disabled={creatingUnit || saveReadinessM.isPending || (environment !== "production" && activeStep > firstIncomplete)} onClick={saveStep} style={{ ...smallBtn, height: 32, padding: "0 18px", background: ENVIRONMENT_COPY[environment].color, color: "#fff", opacity: creatingUnit || saveReadinessM.isPending || (environment !== "production" && activeStep > firstIncomplete) ? .55 : 1 }}>
+          {creatingUnit ? "جارٍ حفظ الوحدة..." : activeStep === 2 ? "حفظ الوحدة ومتابعة" : "حفظ ومتابعة"}
+        </button>
+         <button disabled={activeStep === 7 || activeStep >= firstIncomplete} onClick={() => setActiveStep(step => Math.min(7, step + 1))} style={{ ...smallBtn, height: 32, marginRight: "auto", background: "#f1f5f9", color: "#475569", opacity: activeStep === 7 || activeStep >= firstIncomplete ? .5 : 1 }}>التالي →</button>
+      </div>
+    </div>
+  );
+}
+
+function LinkingUnitsManagement({
+  cfg,
+  units,
+  environment,
+  onContinue,
+  onChangeEnvironment,
+}: {
+  cfg: any;
+  units: any[];
+  environment: LinkingEnvironment;
+  onContinue: () => void;
+  onChangeEnvironment: () => void;
+}) {
+  const [addingUnit, setAddingUnit] = useState(false);
+  if (addingUnit) {
+    return (
+      <ActivationWizard
+        cfg={cfg}
+        units={units}
+        environment={environment}
+        includeCompanyStep={false}
+        onFinishedLinking={() => setAddingUnit(false)}
+      />
+    );
+  }
+  return (
+    <div>
+      <div style={{ background: "linear-gradient(135deg,#1e4f7a,#2f6b96)", color: "#fff", borderRadius: 14, padding: "18px 20px", marginBottom: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ fontSize: 28 }}>🧩</div>
+          <div style={{ flex: 1 }}><div style={{ fontSize: 17, fontWeight: 800 }}>إدارة وحدات الربط</div><div style={{ color: "#dbeafe", fontSize: 11, marginTop: 3 }}>أدر الوحدات الحالية وأكمل دفاتر أي وحدة ناقصة دون إنشاء وحدة مكررة.</div></div>
+          <button onClick={() => setAddingUnit(true)} style={{ ...smallBtn, height: 32, background: "#f2c75c", color: "#1e293b", fontWeight: 800 }}>＋ إضافة وحدة ربط جديدة</button>
+          <button onClick={onContinue} style={{ ...smallBtn, height: 32, background: "#f2c75c", color: "#1e293b", fontWeight: 800 }}>متابعة معالج التفعيل</button>
+           <button onClick={onChangeEnvironment} style={{ ...smallBtn, height: 32, background: "rgba(255,255,255,.12)", color: "#fff", border: "1px solid rgba(255,255,255,.35)" }}>تغيير البيئة</button>
+        </div>
+      </div>
+      <LinkingUnitsSection onActivate={onContinue} />
+    </div>
+  );
+}
+
+function EnvironmentSelection({
+  units,
+  onSelect,
+  isLoading = false,
+  hasError = false,
+}: {
+  units?: any[];
+  onSelect: (environment: LinkingEnvironment) => void;
+  isLoading?: boolean;
+  hasError?: boolean;
+}) {
+  const loadedUnits = units ?? [];
+  const getSimulationState = (unit: any) => {
+    if (unit.simulationComplete === true) return true;
+    const simulation = unit.environmentStatuses?.simulation;
+    const tests = unit.environmentCompliance?.simulation ?? [];
+    const completedTests = tests.filter((test: any) => (
+      ["passed", "passed_with_warnings", "completed_previously"].includes(
+        String(test.status ?? "").toLowerCase(),
+      )
+    ));
+    return Boolean(
+      simulation
+      && String(simulation.registrationStatus ?? "").toLowerCase() === "operational"
+      && Boolean(simulation.complianceCsidPresent)
+      && Boolean(simulation.operationalCsidPresent)
+      && Boolean(simulation.certificatePresent)
+      && tests.length >= 6
+      && completedTests.length === tests.length,
+    );
+  };
+  const simulationComplete = loadedUnits.some(getSimulationState);
+  const productionReady = loadedUnits.some(unit => (
+    unit.environmentStatuses?.production?.registrationStatus === "operational"
+    || unit.environmentStatuses?.production?.certificatePresent
+  ));
+
+  return (
+    <div>
+      <SecTitle icon="🔗" title="اختيار نوع التفعيل" />
+      <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: "11px 14px", marginBottom: 14, color: "#475569", fontSize: 12, lineHeight: 1.8 }}>
+        اختر بيئة الربط قبل الدخول إلى المعالج. يمكن بدء الربط الفعلي مباشرة دون اجتياز الاختبار التجريبي، وتبقى بيانات كل بيئة مستقلة.
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1.1fr)", gap: 14, alignItems: "stretch" }}>
+        <div style={{ background: "#fff", border: "2px solid #86efac", borderRadius: 14, padding: 18, boxShadow: "0 8px 22px rgba(21,128,61,.10)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: 10, marginBottom: 10 }}>
+            <div>
+              <div style={{ fontSize: 22, marginBottom: 5 }}>🚀</div>
+              <div dir="rtl" style={{ fontWeight: 900, fontSize: 16, color: "#166534", lineHeight: 1.45 }}>
+                <div>الربط الفعلي — منصة فاتورة</div>
+                <div dir="ltr" style={{ fontSize: 12, marginTop: 2, fontWeight: 700 }}>Production</div>
+              </div>
+            </div>
+            <span style={{ background: "#dcfce7", color: "#166534", border: "1px solid #86efac", borderRadius: 999, padding: "4px 9px", fontSize: 10, fontWeight: 800, whiteSpace: "nowrap" }}>إنتاج فعلي</span>
+          </div>
+          <div style={{ color: "#475569", fontSize: 12, lineHeight: 1.8, marginBottom: 11 }}>{ENVIRONMENT_COPY.production.description}</div>
+          <div style={{ background: "#fff7ed", border: "1px solid #fdba74", color: "#9a3412", borderRadius: 8, padding: "9px 10px", fontSize: 11, lineHeight: 1.75, marginBottom: 13 }}>
+            سيتم استخدام بيانات المنشأة الحقيقية وOTP صادر من منصة فاتورة الفعلية، وبعد اكتمال التهيئة تصبح الوحدة جاهزة لإرسال الفواتير الحقيقية.
+          </div>
+          <div style={{ fontSize: 10, color: productionReady ? "#166534" : "#64748b", marginBottom: 12 }}>
+            {productionReady ? "✓ توجد بيانات ربط فعلي محفوظة لهذه الوحدة" : "○ لا توجد بيانات ربط فعلي بعد"}
+          </div>
+          <button onClick={() => onSelect("production")} style={{ width: "100%", height: 38, background: "#15803d", color: "#fff", border: "none", borderRadius: 8, fontWeight: 800, fontSize: 12, cursor: "pointer" }}>
+            بدء الربط الفعلي
+          </button>
+        </div>
+
+        <div style={{ background: "#fff", border: "1px solid #93c5fd", borderRadius: 14, padding: 18 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: 10, marginBottom: 10 }}>
+            <div>
+              <div style={{ fontSize: 22, marginBottom: 5 }}>🧪</div>
+              <div dir="rtl" style={{ fontWeight: 900, fontSize: 16, color: "#1d4ed8", lineHeight: 1.45 }}>
+                <div>الاختبار التجريبي — منصة محاكاة فاتورة</div>
+                <div dir="ltr" style={{ fontSize: 12, marginTop: 2, fontWeight: 700 }}>Fatoora Simulation</div>
+              </div>
+            </div>
+            <span style={{ background: "#dbeafe", color: "#1d4ed8", border: "1px solid #93c5fd", borderRadius: 999, padding: "4px 9px", fontSize: 10, fontWeight: 800, whiteSpace: "nowrap" }}>اختياري — للاختبار والدعم الفني</span>
+          </div>
+          <div style={{ color: "#475569", fontSize: 12, lineHeight: 1.8, marginBottom: 10 }}>{ENVIRONMENT_COPY.simulation.description}</div>
+          <ul style={{ margin: "0 0 12px", paddingRight: 18, color: "#475569", fontSize: 11, lineHeight: 1.85 }}>
+            <li>لا يتم إرسال فواتير حقيقية.</li>
+            <li>لا يتم تفعيل الوحدة في الإنتاج الفعلي.</li>
+            <li>تحتاج إلى OTP صادر من منصة Fatoora Simulation.</li>
+            <li>الشهادات وCSID الناتجة تخص بيئة المحاكاة فقط.</li>
+            <li>يمكن تجاوز هذا الاختيار والدخول مباشرة إلى الربط الفعلي.</li>
+          </ul>
+          <div style={{ fontSize: 10, color: simulationComplete ? "#166534" : "#64748b", marginBottom: 12 }}>
+            {isLoading
+              ? "جارٍ تحميل حالة الربط..."
+              : hasError
+                ? "تعذر قراءة حالة الربط"
+                : simulationComplete
+              ? "✓ مكتمل — الوحدة مهيأة في Fatoora Simulation"
+              : "○ لم يبدأ الاختبار التجريبي بعد"}
+          </div>
+          <button onClick={() => onSelect("simulation")} style={{ width: "100%", height: 38, background: "#2563eb", color: "#fff", border: "none", borderRadius: 8, fontWeight: 800, fontSize: 12, cursor: "pointer" }}>
+            {isLoading || hasError ? "إعادة المحاولة" : simulationComplete ? "إدارة الربط التجريبي" : "بدء الاختبار التجريبي"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ActivationSection({
+  onOpenCompanyInfo,
+  onOpenTechnical,
+}: {
+  onOpenCompanyInfo?: () => void;
+  onOpenTechnical?: () => void;
+}) {
+  const cfgQ = trpc.zatca.getConfig.useQuery();
+  const unitsQ = trpc.zatca.listPosUnits.useQuery(undefined, {
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+  });
+  const [wizardMode, setWizardMode] = useState<boolean | null>(null);
+  const [environment, setEnvironment] = useState<LinkingEnvironment | null>(null);
+  const cfg = cfgQ.data;
+  const units = unitsQ.data;
+  useEffect(() => {
+    if (wizardMode === null && !unitsQ.isLoading && !unitsQ.error && units) {
+      setWizardMode(units.length === 0);
+    }
+  }, [wizardMode, unitsQ.isLoading, unitsQ.error, units]);
+  if (cfgQ.isLoading) return <Skeleton height={280} />;
+  if (environment === null) {
+    return (
+      <EnvironmentSelection
+        units={units}
+        isLoading={unitsQ.isLoading}
+        hasError={Boolean(unitsQ.error)}
+        onSelect={nextEnvironment => {
+          if (unitsQ.isLoading || unitsQ.error) {
+            void unitsQ.refetch();
+            return;
+          }
+          if (!units) return;
+          setEnvironment(nextEnvironment);
+          setWizardMode(units.length === 0);
+        }}
+      />
+    );
+  }
+  if (wizardMode === null || unitsQ.isLoading || !units) return <Skeleton height={280} />;
+  if (!wizardMode) {
+    return (
+      <LinkingUnitsManagement
+        cfg={cfg}
+        units={units}
+        environment={environment}
+        onContinue={() => setWizardMode(true)}
+        onChangeEnvironment={() => {
+          setWizardMode(false);
+          setEnvironment(null);
+        }}
+      />
+    );
+  }
+  return (
+    <ActivationWizard
+      cfg={cfg}
+      units={units}
+      environment={environment}
+      onOpenCompanyInfo={onOpenCompanyInfo}
+      onOpenTechnical={onOpenTechnical}
+      onFinishedLinking={() => {
+        setWizardMode(false);
+        setEnvironment(null);
+      }}
+    />
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// الواجهة النهائية: التقارير والمتابعة
+// ══════════════════════════════════════════════════════════════════════════════
+function FollowupSection({ onOpenTechnical }: { onOpenTechnical?: () => void }) {
+  const statsQ = trpc.zatca.getStats.useQuery();
+  const unitsQ = trpc.zatca.listPosUnits.useQuery();
+  const journalsQ = trpc.zatca.listLinkingJournalOptions.useQuery();
+  const [status, setStatus] = useState("");
+  const [invoiceType, setInvoiceType] = useState<"" | "standard" | "simplified">("");
+  const [warehouseId, setWarehouseId] = useState("");
+  const [journalId, setJournalId] = useState("");
+  const [posUnitId, setPosUnitId] = useState("");
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const listQ = trpc.zatca.getInvoicesList.useQuery({
+    page: 1,
+    limit: 100,
+    status: status || undefined,
+    zatcaInvoiceType: invoiceType || undefined,
+    warehouseId: warehouseId ? Number(warehouseId) : undefined,
+    journalId: journalId ? Number(journalId) : undefined,
+    posUnitId: posUnitId ? Number(posUnitId) : undefined,
+  });
+  const detailQ = trpc.zatca.getLifecycle.useQuery({ invoiceId: selectedId! }, { enabled: selectedId != null });
+  const retryM = trpc.zatca.retryInvoice.useMutation({
+    onSuccess: () => { toast.success("تمت جدولة إعادة الإرسال بنفس المعاملة"); listQ.refetch(); detailQ.refetch(); },
+    onError: error => toast.error(error.message),
+  });
+  const stats = statsQ.data;
+  const rows = listQ.data?.invoices ?? [];
+  const journals = journalsQ.data ?? [];
+  const locations = Array.from(new Map(journals.filter(item => item.warehouseId != null).map(item => [item.warehouseId, item])).values());
+  const selected = detailQ.data;
+  const transaction = selected?.transaction;
+  const selectedRow = rows.find(row => row.id === selectedId);
+  const summary: Array<[string, number, string, string]> = [
+    ["جاهزة للإرسال", stats?.readyToSubmit ?? 0, "#64748b", "📭"],
+    ["مقبولة", (stats?.cleared ?? 0) + (stats?.reported ?? 0), "#16a34a", "✅"],
+    ["مقبولة مع تحذيرات", stats?.acceptedWithWarnings ?? 0, "#ca8a04", "⚠️"],
+    ["مرفوضة", stats?.rejected ?? 0, "#dc2626", "⛔"],
+    ["معلقة", (stats?.pending ?? 0) + (stats?.submittedPending ?? 0) + (stats?.submitting ?? 0), "#d97706", "⏳"],
+    ["غير مؤكدة", (stats?.uncertain ?? 0) + (stats?.connectionIssue ?? 0) + (stats?.retryPending ?? 0), "#9333ea", "❔"],
+    ["لم تُرسل", stats?.notSubmitted ?? 0, "#475569", "📄"],
+  ];
+  const retryableStates = ["submitted_pending", "connection_issue", "retry_pending", "uncertain", "pending", "submitting"];
+  const canResend = Boolean(selectedRow && transaction && retryableStates.includes(selectedRow.zatcaStatus ?? ""));
+  const downloadDiagnostic = () => {
+    if (!selected) return;
+    const blob = new Blob([JSON.stringify(selected, null, 2)], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `zatca-diagnostic-${selected.invoice.invoiceNumber}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div>
+      <div style={{ background: "linear-gradient(135deg,#334155,#475569)", color: "#fff", borderRadius: 14, padding: "20px 22px", marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <div style={{ width: 50, height: 50, borderRadius: 13, background: "rgba(255,255,255,.12)", display: "grid", placeItems: "center", fontSize: 26 }}>📊</div>
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 800 }}>التقارير والمتابعة</div>
+            <div style={{ color: "#e2e8f0", fontSize: 12, marginTop: 4 }}>تابع دورة كل فاتورة، راجع التنبيهات، وأعد الإرسال عند السماح.</div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(105px, 1fr))", gap: 8, marginBottom: 16, overflowX: "auto" }}>
+        {summary.map(([label, value, color, icon]) => (
+          <button key={String(label)} onClick={() => setStatus(label === "جاهزة للإرسال" ? "ready_to_submit" : label === "مقبولة" ? "cleared" : label === "مرفوضة" ? "rejected" : label === "غير مؤكدة" ? "uncertain" : "")} style={{ background: "#fff", border: `1px solid ${color}44`, borderTop: `3px solid ${color}`, borderRadius: 9, padding: "10px 7px", textAlign: "center", cursor: "pointer" }}>
+            <div style={{ fontSize: 18 }}>{icon}</div>
+            <div style={{ color, fontSize: 20, fontWeight: 800, marginTop: 3 }}>{value}</div>
+            <div style={{ color: "#475569", fontSize: 10, marginTop: 3 }}>{label}</div>
+          </button>
+        ))}
+      </div>
+
+      <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: 12, marginBottom: 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 9 }}>
+          <strong style={{ fontSize: 12, color: "#1e293b" }}>الفواتير الإلكترونية</strong>
+          <button onClick={() => listQ.refetch()} style={{ ...smallBtn, background: "#f1f5f9", color: "#475569", border: "1px solid #cbd5e1" }}>🔄 تحديث</button>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(120px, 1fr))", gap: 7 }}>
+          <select style={fld} value={status} onChange={e => setStatus(e.target.value)}><option value="">كل الحالات</option>{Object.entries(STATUS_MAP).map(([key, item]) => <option key={key} value={key}>{item.label}</option>)}</select>
+          <select style={fld} value={invoiceType} onChange={e => setInvoiceType(e.target.value as typeof invoiceType)}><option value="">كل أنواع الفواتير</option><option value="simplified">مبسطة — Reporting</option><option value="standard">قياسية — Clearance</option></select>
+          <select style={fld} value={warehouseId} onChange={e => setWarehouseId(e.target.value)}><option value="">كل الفروع والمخازن</option>{locations.map(item => <option key={String(item.warehouseId)} value={String(item.warehouseId)}>{locationLabel(item)}</option>)}</select>
+          <select style={fld} value={posUnitId} onChange={e => setPosUnitId(e.target.value)}><option value="">كل نقاط البيع</option>{(unitsQ.data ?? []).map(unit => <option key={unit.id} value={unit.id}>{unit.unitName}</option>)}</select>
+          <select style={fld} value={journalId} onChange={e => setJournalId(e.target.value)}><option value="">كل الدفاتر</option>{journals.map(item => <option key={item.id} value={item.id}>{item.code} — {item.name}</option>)}</select>
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: selected ? "minmax(0, 1fr) 350px" : "1fr", gap: 12, alignItems: "start" }}>
+        <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, overflow: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+            <thead><tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>{["الفاتورة", "التاريخ", "الفرع / الوحدة", "النوع", "الإجمالي", "الحالة", "الإجراء"].map(head => <th key={head} style={{ padding: "8px 9px", textAlign: "right", color: "#475569", whiteSpace: "nowrap" }}>{head}</th>)}</tr></thead>
+            <tbody>
+              {rows.map((row, index) => {
+                const final = ["cleared", "reported", "accepted_with_warnings", "rejected"].includes(row.zatcaStatus ?? "");
+                return <tr key={row.id} onClick={() => setSelectedId(row.id)} style={{ cursor: "pointer", background: selectedId === row.id ? "#fffbeb" : index % 2 ? "#fafafa" : "#fff", borderBottom: "1px solid #f1f5f9" }}>
+                  <td style={{ padding: "8px 9px", fontWeight: 800, color: "#1e4f7a" }}>{row.invoiceNumber}</td>
+                  <td style={{ padding: "8px 9px", color: "#64748b", whiteSpace: "nowrap" }}>{row.invoiceDate ? new Date(row.invoiceDate).toLocaleDateString("ar-SA") : "—"}</td>
+                  <td style={{ padding: "8px 9px" }}><div>{row.branchName ?? row.warehouseName ?? "—"}</div><div style={{ color: "#94a3b8", fontSize: 9 }}>{row.posUnitId ? `وحدة ${row.posUnitId}` : "غير مرتبطة"}</div></td>
+                  <td style={{ padding: "8px 9px" }}>{row.zatcaInvoiceType === "standard" ? "قياسية" : "مبسطة"}</td>
+                  <td style={{ padding: "8px 9px", direction: "ltr", textAlign: "left" }}>{Number(row.total ?? 0).toFixed(2)} SAR</td>
+                  <td style={{ padding: "8px 9px" }}><StatusBadge status={row.zatcaStatus} /></td>
+                  <td style={{ padding: "8px 9px", whiteSpace: "nowrap" }}>{retryableStates.includes(row.zatcaStatus ?? "") && <button onClick={event => { event.stopPropagation(); retryM.mutate({ invoiceId: row.id }); }} disabled={retryM.isPending} style={{ ...smallBtn, background: "#1e4f7a", color: "#fff" }}>إعادة إرسال</button>}</td>
+                </tr>;
+              })}
+              {!rows.length && <tr><td colSpan={7} style={{ padding: 34, textAlign: "center", color: "#94a3b8" }}>لا توجد فواتير بهذه الفلاتر</td></tr>}
+            </tbody>
+          </table>
+        </div>
+
+        {selected && (
+          <aside style={{ background: "#fff", border: "1px solid #cbd5e1", borderRadius: 10, padding: 13, position: "sticky", top: 0, maxHeight: "calc(100vh - 180px)", overflowY: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: 10 }}>
+              <div><strong style={{ display: "block", fontSize: 14 }}>فاتورة {selected.invoice.invoiceNumber}</strong><span style={{ fontSize: 10, color: "#64748b" }}>{selectedRow?.customerName ?? "—"}</span></div>
+              <button onClick={() => setSelectedId(null)} style={{ border: "none", background: "transparent", color: "#64748b", cursor: "pointer", fontSize: 16 }}>×</button>
+            </div>
+            <StatusBadge status={selected.invoice.zatcaStatus} />
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginTop: 10 }}>
+              {[["UUID", selected.invoice.zatcaUuid], ["Correlation ID", transaction?.correlationId], ["نوع العملية", transaction?.submissionType === "clearance" ? "Clearance" : "Reporting"], ["رد الهيئة", transaction?.authorityStatus], ["المحاولات", transaction?.attemptCount ?? selected.invoice.zatcaAttemptCount], ["آخر رد", transaction?.responseDate ? new Date(transaction.responseDate).toLocaleString("ar-SA") : "لم يصل"]].map(([label, value]) => <div key={String(label)} style={{ background: "#f8fafc", borderRadius: 6, padding: 7 }}><div style={{ color: "#64748b", fontSize: 9 }}>{label}</div><div style={{ color: "#1e293b", fontSize: 10, fontFamily: "monospace", wordBreak: "break-all", marginTop: 3 }}>{String(value ?? "—")}</div></div>)}
+            </div>
+            {(transaction?.lastError || selected.invoice.zatcaRejectionReason) && <div style={{ background: "#fef2f2", color: "#991b1b", borderRadius: 6, padding: 8, marginTop: 8, fontSize: 10 }}>{transaction?.lastError ?? selected.invoice.zatcaRejectionReason}</div>}
+            <details style={{ marginTop: 9 }}><summary style={{ cursor: "pointer", fontWeight: 700, fontSize: 11 }}>XML وQR</summary><div style={{ marginTop: 7 }}><div style={{ color: "#64748b", fontSize: 9 }}>QR</div><code style={{ display: "block", background: "#f8fafc", padding: 6, fontSize: 9, wordBreak: "break-all" }}>{selected.invoice.zatcaQrCode ?? "غير متوفر"}</code><div style={{ color: "#64748b", fontSize: 9, marginTop: 7 }}>XML</div><pre style={{ maxHeight: 150, overflow: "auto", background: "#1e293b", color: "#e2e8f0", padding: 7, fontSize: 8, whiteSpace: "pre-wrap" }}>{selected.invoice.zatcaXml ?? "غير متوفر"}</pre></div></details>
+            <details style={{ marginTop: 9 }}><summary style={{ cursor: "pointer", fontWeight: 700, fontSize: 11 }}>سجل المحاولات والأخطاء</summary><div style={{ marginTop: 6, fontSize: 10 }}>{(selected.attempts ?? []).map(item => <div key={item.id} style={{ padding: "5px 0", borderBottom: "1px solid #f1f5f9" }}>محاولة #{item.attemptNumber} · {item.result} · {new Date(item.startedAt).toLocaleString("ar-SA")}</div>)}{(selected.errors ?? []).map(item => <div key={item.id} style={{ padding: "5px 0", color: "#b91c1c" }}>{item.errorCode}: {item.errorMessage}</div>)}{!selected.attempts?.length && !selected.errors?.length && <span style={{ color: "#94a3b8" }}>لا يوجد سجل إضافي</span>}</div></details>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 12 }}>
+              {canResend && <button onClick={() => retryM.mutate({ invoiceId: selected.invoice.id })} disabled={retryM.isPending} style={{ ...smallBtn, height: 30, background: "#D19C05", color: "#fff" }}>↩ إعادة الإرسال</button>}
+              <button onClick={downloadDiagnostic} style={{ ...smallBtn, height: 30, background: "#f1f5f9", color: "#334155", border: "1px solid #cbd5e1" }}>📥 تصدير التشخيص</button>
+              {onOpenTechnical && <button onClick={onOpenTechnical} style={{ ...smallBtn, height: 30, background: "#f1f5f9", color: "#334155", border: "1px solid #cbd5e1" }}>⚙️ أدوات متقدمة</button>}
+            </div>
+          </aside>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // المكوّن الرئيسي
 // ══════════════════════════════════════════════════════════════════════════════
-export default function ZatcaCenterPage() {
-  const [active, setActive]      = useState<Section>("dashboard");
+export default function ZatcaCenterPage({
+  onOpenCompanyInfo,
+  initialSection,
+}: {
+  onOpenCompanyInfo?: () => void;
+  initialSection?: Section;
+} = {}) {
+  const [active, setActive]      = useState<Section>(initialSection && initialSection !== "dashboard" ? initialSection : "activation");
   const [showWizard, setShowWizard] = useState(false);
+  const [technicalOpen, setTechnicalOpen] = useState(false);
 
   const cfgQ   = trpc.zatca.getConfig.useQuery();
   const statsQ = trpc.zatca.getStats.useQuery();
+  const canOpenTechnical = Boolean(cfgQ.data?.isAdmin);
 
   const navigateTo = (sec: Section) => setActive(sec);
 
   function renderSection() {
     switch (active) {
+      case "activation": return <ActivationSection onOpenCompanyInfo={onOpenCompanyInfo} onOpenTechnical={canOpenTechnical ? () => { setTechnicalOpen(true); setActive("compliance"); } : undefined} />;
+      case "followup":   return <FollowupSection onOpenTechnical={canOpenTechnical ? () => { setTechnicalOpen(true); setActive("compliance"); } : undefined} />;
       case "dashboard": return <DashboardSection onStartSetup={() => setShowWizard(true)} onNavigate={navigateTo} />;
+      case "readiness": return <ReadinessSection onNavigate={navigateTo} onOpenCompanyInfo={onOpenCompanyInfo} />;
+      case "units":     return <LinkingUnitsSection onActivate={() => setActive("otp-sim")} />;
+      case "otp-sim":   return <OtpSimulationSection />;
       case "env":       return <EnvSection />;
       case "devices":   return <DevicesSection />;
       case "certs":     return <CertsSection />;
@@ -1756,11 +3959,23 @@ export default function ZatcaCenterPage() {
       case "register":  return <RegisterSection />;
       case "csid":      return <CsidSection />;
       case "test":      return <TestSection />;
+      case "compliance": return <ComplianceTestsSection />;
       case "send":      return <SendSection />;
+      case "tracking":  return <TrackingSection />;
+      case "uncertain": return <UncertainSection />;
       case "oplogs":    return <LogsSection errorsOnly={false} />;
       case "errlogs":   return <LogsSection errorsOnly={true} />;
       case "diag":      return <DiagSection />;
       case "reports":   return <ReportsSection />;
+      case "support":   return (
+        <div>
+          <SecTitle icon="🛟" title="الدعم الفني" />
+          <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: 18, color: "#475569", fontSize: 12, lineHeight: 1.9 }}>
+            <strong style={{ color: "#1e293b" }}>هل تحتاج إلى مساعدة؟</strong>
+            <p style={{ margin: "6px 0 0" }}>راجع الحالات غير المؤكدة والمشاكل والتنبيهات أولًا. لا يتم تشغيل OTP أو الاتصال الفعلي من هذا المركز.</p>
+          </div>
+        </div>
+      );
       default:          return null;
     }
   }
@@ -1779,27 +3994,40 @@ export default function ZatcaCenterPage() {
       )}
 
       {/* الشريط الجانبي */}
-      <div style={{ width: 210, background: "#fff", borderLeft: "1px solid #e2e8f0", display: "flex", flexDirection: "column", flexShrink: 0 }}>
+      <div style={{ width: 188, background: "#fff", borderLeft: "1px solid #e2e8f0", display: "flex", flexDirection: "column", flexShrink: 0 }}>
         {/* رأس الشريط */}
         <div style={{ padding: "14px 16px", borderBottom: "1px solid #e2e8f0", background: "linear-gradient(135deg,#1e293b,#334155)" }}>
-          <div style={{ fontSize: 14, fontWeight: 800, color: "#D19C05" }}>🏛️ مركز ZATCA</div>
+          <div style={{ fontSize: 13, fontWeight: 800, color: "#D19C05" }}>🏛️ مركز الفوترة الإلكترونية – ZATCA</div>
           <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 2 }}>هيئة الزكاة والضريبة والجمارك</div>
         </div>
 
         {/* زر معالج الإعداد */}
-        <div style={{ padding: "10px 12px", borderBottom: "1px solid #e2e8f0" }}>
+        {canOpenTechnical && <div style={{ padding: "10px 12px", borderBottom: "1px solid #e2e8f0" }}>
           <button onClick={() => setShowWizard(true)}
             style={{ width: "100%", height: 34, background: "#D19C05", color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", gap: 8, justifyContent: "center" }}>
             ▶ معالج الإعداد
           </button>
-        </div>
+        </div>}
 
-        {/* قائمة الأقسام */}
+        {/* قائمة الأقسام الأساسية والتفاصيل الفنية */}
         <div style={{ flex: 1, overflowY: "auto", padding: "6px 0" }}>
-          {SECTIONS.map(sec => (
+          {PRIMARY_SECTIONS.map(sec => (
             <button key={sec.id} onClick={() => setActive(sec.id)}
-              style={{ width: "100%", textAlign: "right", padding: "9px 16px", border: "none", background: active === sec.id ? "#fef3c7" : "transparent", borderRight: `3px solid ${active === sec.id ? "#D19C05" : "transparent"}`, cursor: "pointer", display: "flex", gap: 8, alignItems: "center", fontSize: 12, fontWeight: active === sec.id ? 700 : 500, color: active === sec.id ? "#D19C05" : "#374151", transition: "all 0.1s" }}>
+              style={{ width: "100%", textAlign: "right", padding: "8px 12px", border: "none", background: active === sec.id ? "#fef3c7" : "transparent", borderRight: `3px solid ${active === sec.id ? "#D19C05" : "transparent"}`, cursor: "pointer", display: "flex", gap: 8, alignItems: "center", fontSize: 11, fontWeight: active === sec.id ? 700 : 500, color: active === sec.id ? "#D19C05" : "#374151", transition: "all 0.1s" }}>
               <span style={{ fontSize: 16 }}>{sec.icon}</span>
+              <span>{sec.label}</span>
+            </button>
+          ))}
+          {canOpenTechnical && <button onClick={() => setTechnicalOpen(value => !value)}
+            style={{ width: "100%", textAlign: "right", padding: "9px 12px", marginTop: 4, border: "none", borderTop: "1px solid #e2e8f0", background: technicalOpen ? "#f8fafc" : "transparent", cursor: "pointer", display: "flex", gap: 8, alignItems: "center", fontSize: 11, fontWeight: 700, color: "#475569" }}>
+            <span style={{ fontSize: 15 }}>⚙️</span>
+             <span style={{ flex: 1 }}>خيارات متقدمة</span>
+            <span>{technicalOpen ? "⌃" : "⌄"}</span>
+          </button>}
+          {canOpenTechnical && technicalOpen && TECHNICAL_SECTIONS.map(sec => (
+            <button key={sec.id} onClick={() => setActive(sec.id)}
+              style={{ width: "100%", textAlign: "right", padding: "7px 24px", border: "none", background: active === sec.id ? "#fef3c7" : "transparent", borderRight: `3px solid ${active === sec.id ? "#D19C05" : "transparent"}`, cursor: "pointer", display: "flex", gap: 7, alignItems: "center", fontSize: 10, fontWeight: active === sec.id ? 700 : 500, color: active === sec.id ? "#D19C05" : "#64748b" }}>
+              <span>{sec.icon}</span>
               <span>{sec.label}</span>
             </button>
           ))}
@@ -1808,6 +4036,9 @@ export default function ZatcaCenterPage() {
 
       {/* المحتوى الرئيسي */}
       <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
+        <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1e40af", borderRadius: 8, padding: "9px 12px", marginBottom: 12, fontSize: 11, fontWeight: 700 }}>
+          الاختبار التجريبي في منصة محاكاة فاتورة اختياري، ويمكن بدء الربط الفعلي مباشرة. تحتفظ كل بيئة ببياناتها واعتماداتها بشكل مستقل.
+        </div>
         {renderSection()}
       </div>
     </div>

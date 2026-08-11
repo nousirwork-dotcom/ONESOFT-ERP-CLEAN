@@ -58,9 +58,9 @@ function useCopy() {
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────
-function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+function Card({ children, className = "", id }: { children: React.ReactNode; className?: string; id?: string }) {
   return (
-    <div className={`bg-white rounded-2xl border border-[#C9A84C]/30 shadow-sm ${className}`}>
+    <div id={id} className={`bg-white rounded-2xl border border-[#C9A84C]/30 shadow-sm ${className}`}>
       {children}
     </div>
   );
@@ -293,7 +293,7 @@ export default function LicenseActivationPage() {
     : isDateTamper ? "يوجد خطأ في إعدادات التاريخ والوقت. يرجى مراجعة إعدادات الجهاز."
     : null;
 
-  const deviceId = p?.device_id || devInfo?.device_id;
+  const deviceId = devInfo?.device_id;
 
   // ─── Render ────────────────────────────────────────────────────────────
   return (

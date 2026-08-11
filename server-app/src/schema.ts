@@ -4,7 +4,7 @@ import { relations, sql } from 'drizzle-orm';
 // ─── Enums ────────────────────────────────────────────────────────────────────
 export const userRoleEnum = pgEnum('user_role', ['superadmin', 'admin', 'cashier', 'accountant', 'warehouse_manager', 'viewer']);
 export const orgStatusEnum = pgEnum('org_status', ['active', 'suspended', 'trial', 'expired']);
-export const invoiceTypeEnum = pgEnum('invoice_type', ['sale', 'return', 'quote', 'order']);
+export const invoiceTypeEnum = pgEnum('invoice_type', ['sale', 'return', 'quote', 'order', 'credit_note', 'debit_note']);
 export const invoiceStatusEnum = pgEnum('invoice_status', ['draft', 'confirmed', 'cancelled', 'paid']);
 export const paymentMethodEnum = pgEnum('payment_method', ['cash', 'bank', 'credit', 'check', 'other']);
 export const voucherTypeEnum = pgEnum('voucher_type', ['receipt', 'payment']);
@@ -29,6 +29,10 @@ export const organizations = pgTable('organizations', {
   maxUsers: integer('max_users').notNull().default(5),
   zatcaConfig: jsonb('zatca_config'),
   themeSettings: jsonb('theme_settings'),
+  foundationSnapshotHash: varchar('foundation_snapshot_hash', { length: 64 }),
+  foundationAppliedAt: timestamp('foundation_applied_at'),
+  foundationStatus: varchar('foundation_status', { length: 30 }).notNull().default('pending'),
+  foundationLastError: text('foundation_last_error'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
@@ -224,6 +228,28 @@ export const productGroups = pgTable('product_groups', {
   foundationTemplateVersion:   varchar('foundation_template_version', { length: 20 }),
 });
 
+// ─── Tax Definitions ──────────────────────────────────────────────────────────
+// Tax definitions are reusable master data. Invoice items keep a taxId snapshot
+// alongside taxPercent so changing a definition never rewrites old invoices.
+export const taxDefinitions = pgTable('tax_definitions', {
+  id: serial('id').primaryKey(),
+  orgId: integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  name: varchar('name', { length: 255 }).notNull(),
+  code: varchar('code', { length: 50 }).notNull(),
+  category: varchar('category', { length: 30 }).notNull().default('tax'),
+  applicationScope: varchar('application_scope', { length: 40 }).notNull().default('products_sales'),
+  valueType: varchar('value_type', { length: 20 }).notNull().default('percentage'),
+  value: decimal('value', { precision: 18, scale: 4 }).notNull().default('0'),
+  isActive: boolean('is_active').notNull().default(true),
+  isSystem: boolean('is_system').notNull().default(false),
+  notes: text('notes'),
+  effectiveFrom: timestamp('effective_from'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (t) => ({
+  orgCodeUnique: uniqueIndex('tax_definitions_org_code_uidx').on(t.orgId, t.code),
+}));
+
 // ─── Products ─────────────────────────────────────────────────────────────────
 export const products = pgTable('products', {
   id: serial('id').primaryKey(),
@@ -235,6 +261,7 @@ export const products = pgTable('products', {
   groupId: integer('group_id').references(() => productGroups.id, { onDelete: 'set null' }),
   unitId: integer('unit_id').references(() => units.id, { onDelete: 'set null' }),
   unit: varchar('unit', { length: 100 }),
+  taxId: integer('tax_id').references(() => taxDefinitions.id, { onDelete: 'set null' }),
   salePrice: decimal('sale_price', { precision: 18, scale: 4 }).default('0'),
   purchasePrice: decimal('purchase_price', { precision: 18, scale: 4 }).default('0'),
   taxRate: decimal('tax_rate', { precision: 5, scale: 2 }).default('0'),
@@ -370,6 +397,8 @@ export const salesInvoices = pgTable('sales_invoices', {
   isPosted: boolean('is_posted').notNull().default(false),
   postedAt: timestamp('posted_at'),
   postedJournalEntryId: integer('posted_journal_entry_id'),
+  generatedStockVoucherId: integer('generated_stock_voucher_id'),
+  generatedStockJournalEntryId: integer('generated_stock_journal_entry_id'),
   costPosted: boolean('cost_posted').notNull().default(false),
   costPostedJournalEntryId: integer('cost_posted_journal_entry_id'),
   zatcaUuid: varchar('zatca_uuid', { length: 100 }),
@@ -377,13 +406,22 @@ export const salesInvoices = pgTable('sales_invoices', {
   zatcaQrCode: text('zatca_qr_code'),
   zatcaXml: text('zatca_xml'),
   zatcaStatus: varchar('zatca_status', { length: 30 }).default('not_submitted'),
+  // لقطة ثابتة لتصنيف ZATCA (لا تُستنتج من شاشة الإرسال عند إنشاء الإشعار)
+  zatcaInvoiceType: varchar('zatca_invoice_type', { length: 20 }).notNull().default('simplified'),
   zatcaClearedAt: timestamp('zatca_cleared_at'),
   zatcaResponse: jsonb('zatca_response'),
   zatcaInvoiceCounter: integer('zatca_invoice_counter'),
   zatcaPih: varchar('zatca_pih', { length: 256 }),
+  // Immutable electronic issuance timestamp. The commercial invoiceDate stays
+  // editable according to ERP rules; this value is assigned only by the
+  // TrustedClock at the first ZATCA issuance.
+  zatcaIssueTimestamp: timestamp('zatca_issue_timestamp'),
   zatcaSubmittedAt: timestamp('zatca_submitted_at'),
   zatcaAttemptCount: integer('zatca_attempt_count').notNull().default(0),
   zatcaRejectionReason: text('zatca_rejection_reason'),
+  // لقطة هوية المنشأة وقت الإصدار؛ تمنع إعادة طباعة فاتورة قديمة ببيانات حالية.
+  sellerLegalName: varchar('seller_legal_name', { length: 255 }),
+  sellerTaxNumber: varchar('seller_tax_number', { length: 50 }),
   basedOnType: varchar('based_on_type', { length: 20 }),
   basedOnNumber: varchar('based_on_number', { length: 50 }),
   sourceDocumentId: integer('source_document_id'), // FK للفاتورة المصدر — يُتحقق منه لأمان الفرع
@@ -400,6 +438,7 @@ export const salesInvoiceItems = pgTable('sales_invoice_items', {
   invoiceId: integer('invoice_id').notNull().references(() => salesInvoices.id, { onDelete: 'cascade' }),
   orgId: integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   productId: integer('product_id').references(() => products.id, { onDelete: 'set null' }),
+  taxId: integer('tax_id').references(() => taxDefinitions.id, { onDelete: 'set null' }),
   productCode: varchar('product_code', { length: 100 }),
   productName: varchar('product_name', { length: 500 }).notNull(),
   unit: varchar('unit', { length: 100 }),
@@ -440,6 +479,8 @@ export const purchaseInvoices = pgTable('purchase_invoices', {
   paymentMethod: varchar('payment_method', { length: 20 }).default('cash'),
   status: invoiceStatusEnum('status').notNull().default('draft'),
   notes: text('notes'),
+  basedOnType: varchar('based_on_type', { length: 20 }),
+  basedOnNumber: varchar('based_on_number', { length: 50 }),
   userId: integer('user_id').references(() => users.id, { onDelete: 'set null' }),
   docTypeId: integer('doc_type_id'),
   isPosted: boolean('is_posted').notNull().default(false),
@@ -459,6 +500,7 @@ export const purchaseInvoiceItems = pgTable('purchase_invoice_items', {
   invoiceId: integer('invoice_id').notNull().references(() => purchaseInvoices.id, { onDelete: 'cascade' }),
   orgId: integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   productId: integer('product_id').references(() => products.id, { onDelete: 'set null' }),
+  taxId: integer('tax_id').references(() => taxDefinitions.id, { onDelete: 'set null' }),
   productCode: varchar('product_code', { length: 100 }),
   productName: varchar('product_name', { length: 500 }).notNull(),
   unit: varchar('unit', { length: 100 }),
@@ -728,6 +770,39 @@ export const messages = pgTable('messages', {
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
+// ─── ZATCA POS Linking Units (وحدات ربط نقاط البيع الإلكترونية) ───────────────
+// هذا كيان ربط إلكتروني فقط؛ لا يمثل شاشة نقطة بيع تشغيلية جديدة.
+// المخزن هو مصدر الفرع الوحيد، والدفاتر الحالية هي مصدر صلاحيات الاستخدام.
+export const zatcaPosUnits = pgTable('zatca_pos_units', {
+  id:          serial('id').primaryKey(),
+  orgId:       integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  warehouseId: integer('warehouse_id').notNull().references(() => warehouses.id, { onDelete: 'restrict' }),
+  unitCode:    varchar('unit_code', { length: 50 }).notNull(),
+  unitName:    varchar('unit_name', { length: 255 }).notNull(),
+  // Immutable technical identity for units created under the POS identity policy.
+  // Nullable intentionally: existing units keep their historical identity.
+  commonName:       varchar('common_name', { length: 255 }),
+  egsSerialNumber:  varchar('egs_serial_number', { length: 255 }),
+  // Legacy compatibility projection only. The source of truth for whether a
+  // unit is linked is document_journals.zatca_pos_unit_id; lifecycle guards
+  // use the journal relationship plus oneSoftStatus/device lifecycle.
+  status:      varchar('status', { length: 30 }).notNull().default('unlinked'),
+  oneSoftStatus: varchar('onesoft_status', { length: 30 }).notNull().default('active'),
+  lifecycleUpdatedAt: timestamp('lifecycle_updated_at'),
+  lifecycleUpdatedBy: integer('lifecycle_updated_by').references(() => users.id, { onDelete: 'set null' }),
+  lifecycleReason: text('lifecycle_reason'),
+  isActive:    boolean('is_active').notNull().default(true),
+  isDeleted:   boolean('is_deleted').notNull().default(false),
+  createdAt:   timestamp('created_at').notNull().defaultNow(),
+  updatedAt:   timestamp('updated_at').notNull().defaultNow(),
+  createdBy:   integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy:   integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
+}, (t) => ({
+  orgCodeActiveUidx: uniqueIndex('zatca_pos_units_org_code_active_uidx')
+    .on(t.orgId, t.unitCode)
+    .where(sql`${t.isActive} = true AND ${t.isDeleted} = false`),
+}));
+
 // ─── Document Journals (دفاتر المستندات) ─────────────────────────────────────
 // كل دفتر هو وحدة تشغيلية مستقلة: ترقيم + مخزن + فرع + حسابات + صلاحيات
 export const documentJournals = pgTable('document_journals', {
@@ -758,6 +833,8 @@ export const documentJournals = pgTable('document_journals', {
   draftCurrentSeq:   integer('draft_current_seq').notNull().default(0),
   // ── الربط بالكيان (المخزن = الفرع في مسار المستندات) ─────────────────────────
   warehouseId:   integer('warehouse_id').references(() => warehouses.id, { onDelete: 'set null' }),
+  // ── الربط الإلكتروني فقط — لا ينشئ نقطة بيع تشغيلية موازية ────────────────
+  zatcaPosUnitId: integer('zatca_pos_unit_id').references(() => zatcaPosUnits.id, { onDelete: 'set null' }),
   // ── الحسابات الافتراضية ───────────────────────────────────────────────────
   salesAccountId:   integer('sales_account_id').references(() => chartOfAccounts.id, { onDelete: 'set null' }),
   cashAccountId:    integer('cash_account_id').references(() => chartOfAccounts.id, { onDelete: 'set null' }),
@@ -798,7 +875,11 @@ export const documentJournals = pgTable('document_journals', {
   sortOrder:            integer('sort_order').notNull().default(0),
   createdAt:            timestamp('created_at').notNull().defaultNow(),
   updatedAt:            timestamp('updated_at').notNull().defaultNow(),
-});
+}, (t) => ({
+  zatcaDocTypeActiveUidx: uniqueIndex('document_journals_zatca_unit_doc_type_uidx')
+    .on(t.orgId, t.zatcaPosUnitId, t.docType)
+    .where(sql`${t.zatcaPosUnitId} IS NOT NULL AND ${t.isActive} = true`),
+}));
 
 export type DocumentJournal = typeof documentJournals.$inferSelect;
 
@@ -858,6 +939,20 @@ export const documentTypes = pgTable('document_types', {
   foundationTemplateVersion:   varchar('foundation_template_version', { length: 20 }),
   createdAt:            timestamp('created_at').notNull().defaultNow(),
   updatedAt:            timestamp('updated_at').notNull().defaultNow(),
+});
+
+// ─── ZATCA readiness draft (persistent organization-scoped setup) ────────────
+// This is configuration metadata only. It never stores OTPs, CSIDs, secrets,
+// certificates, or private keys.
+export const zatcaReadinessSettings = pgTable('zatca_readiness_settings', {
+  id: serial('id').primaryKey(),
+  orgId: integer('org_id').notNull().unique().references(() => organizations.id, { onDelete: 'cascade' }),
+  warehouseId: integer('warehouse_id').references(() => warehouses.id, { onDelete: 'set null' }),
+  invoiceType: varchar('invoice_type', { length: 20 }).notNull().default('both'),
+  zatcaPosUnitId: integer('zatca_pos_unit_id').references(() => zatcaPosUnits.id, { onDelete: 'set null' }),
+  updatedBy: integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
 
 export type DocumentType = typeof documentTypes.$inferSelect;
@@ -1125,6 +1220,52 @@ export const zatcaLogs = pgTable('zatca_logs', {
   createdAt:       timestamp('created_at').notNull().defaultNow(),
 });
 
+// ─── ZATCA Trusted Clock state ───────────────────────────────────────────────
+// One independent clock/chain state per POS/EGS unit. Existing invoices are
+// intentionally not backfilled into this table.
+export const zatcaClockStates = pgTable('zatca_clock_states', {
+  id:                    serial('id').primaryKey(),
+  orgId:                 integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  posUnitId:             integer('pos_unit_id').notNull().references(() => zatcaPosUnits.id, { onDelete: 'cascade' }),
+  lastTrustedTime:       timestamp('last_trusted_time'),
+  lastTrustedTimeSource: varchar('last_trusted_time_source', { length: 30 }),
+  lastTrustedTimeCheckedAt: timestamp('last_trusted_time_checked_at'),
+  clockStatus:           varchar('clock_status', { length: 20 }).notNull().default('stale'),
+  lastObservedWallTime:  timestamp('last_observed_wall_time'),
+  lastIssuedAt:          timestamp('last_issued_at'),
+  lastIssueDate:         varchar('last_issue_date', { length: 10 }),
+  lastIssueTime:         varchar('last_issue_time', { length: 8 }),
+  lastInvoiceCounter:    integer('last_invoice_counter'),
+  lastInvoiceHash:       varchar('last_invoice_hash', { length: 256 }),
+  lastInvoiceUuid:       varchar('last_invoice_uuid', { length: 100 }),
+  lastPih:               varchar('last_pih', { length: 256 }),
+  createdAt:             timestamp('created_at').notNull().defaultNow(),
+  updatedAt:             timestamp('updated_at').notNull().defaultNow(),
+}, (t) => ({
+  orgPosUnitUnique: uniqueIndex('zatca_clock_states_org_pos_unit_uidx').on(t.orgId, t.posUnitId),
+}));
+
+export const zatcaClockEvents = pgTable('zatca_clock_events', {
+  id:                    serial('id').primaryKey(),
+  orgId:                 integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  posUnitId:             integer('pos_unit_id').notNull().references(() => zatcaPosUnits.id, { onDelete: 'cascade' }),
+  invoiceId:             integer('invoice_id').references(() => salesInvoices.id, { onDelete: 'set null' }),
+  userId:                integer('user_id').references(() => users.id, { onDelete: 'set null' }),
+  eventType:             varchar('event_type', { length: 40 }).notNull(),
+  clockStatus:           varchar('clock_status', { length: 20 }).notNull(),
+  detectedSystemTime:    timestamp('detected_system_time'),
+  trustedTime:           timestamp('trusted_time'),
+  lastIssuedAt:          timestamp('last_issued_at'),
+  reason:                text('reason'),
+  metadata:              jsonb('metadata'),
+  detectedAt:            timestamp('detected_at').notNull().defaultNow(),
+});
+
+export const zatcaClockPolicy = pgTable('zatca_clock_policy', {
+  id:          integer('id').primaryKey().default(1),
+  activatedAt: timestamp('activated_at').notNull().defaultNow(),
+});
+
 // ══════════════════════════════════════════════════════════════════════════════
 // ZATCA Database Architecture (0012) — 14 جدولاً
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1153,6 +1294,7 @@ export const zatcaEnvironments = pgTable('zatca_environments', {
 export const zatcaDevices = pgTable('zatca_devices', {
   id:                   serial('id').primaryKey(),
   orgId:                integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  posUnitId:            integer('pos_unit_id').references(() => zatcaPosUnits.id, { onDelete: 'set null' }),
   deviceName:           varchar('device_name', { length: 255 }).notNull(),
   deviceUuid:           uuid('device_uuid').notNull().defaultRandom(),
   serialNumber:         varchar('serial_number', { length: 100 }),
@@ -1160,6 +1302,11 @@ export const zatcaDevices = pgTable('zatca_devices', {
   environmentId:        integer('environment_id').references(() => zatcaEnvironments.id, { onDelete: 'set null' }),
   userId:               integer('user_id').references(() => users.id, { onDelete: 'set null' }),
   registrationStatus:   varchar('registration_status', { length: 30 }).notNull().default('pending'),
+  lifecycleStatus:      varchar('lifecycle_status', { length: 40 }).notNull().default('active'),
+  lifecycleUpdatedAt:   timestamp('lifecycle_updated_at'),
+  lifecycleUpdatedBy:   integer('lifecycle_updated_by').references(() => users.id, { onDelete: 'set null' }),
+  cancellationConfirmedAt: timestamp('cancellation_confirmed_at'),
+  cancellationNote:     text('cancellation_note'),
   lastRegistrationDate: timestamp('last_registration_date'),
   lastConnectionDate:   timestamp('last_connection_date'),
   currentCsidId:        integer('current_csid_id'),           // FK دوري — مُعرَّف في SQL فقط
@@ -1169,6 +1316,28 @@ export const zatcaDevices = pgTable('zatca_devices', {
   updatedAt:            timestamp('updated_at').notNull().defaultNow(),
   createdBy:            integer('created_by').references(() => users.id, { onDelete: 'set null' }),
   updatedBy:            integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
+}, (t) => ({
+   activePosUnitEnvironmentUidx: uniqueIndex('zatca_devices_active_pos_unit_env_uidx')
+     .on(t.orgId, t.posUnitId, t.environmentId)
+     .where(sql`${t.posUnitId} IS NOT NULL AND ${t.environmentId} IS NOT NULL AND ${t.isActive} = true AND ${t.isDeleted} = false`),
+}));
+
+// ─── ZATCA Unit lifecycle audit ───────────────────────────────────────────────
+// Records OneSoft pause/resume/archive actions and the user's confirmation that
+// an environment was cancelled externally in Fatoora. No secret is stored here.
+export const zatcaUnitLifecycleEvents = pgTable('zatca_unit_lifecycle_events', {
+  id:             serial('id').primaryKey(),
+  orgId:          integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  posUnitId:      integer('pos_unit_id').notNull().references(() => zatcaPosUnits.id, { onDelete: 'cascade' }),
+  deviceId:       integer('device_id').references(() => zatcaDevices.id, { onDelete: 'set null' }),
+  environmentId:  integer('environment_id').references(() => zatcaEnvironments.id, { onDelete: 'set null' }),
+  action:         varchar('action', { length: 50 }).notNull(),
+  previousStatus: varchar('previous_status', { length: 50 }),
+  nextStatus:     varchar('next_status', { length: 50 }),
+  reason:         text('reason'),
+  actorUserId:    integer('actor_user_id').references(() => users.id, { onDelete: 'set null' }),
+  actorUsername:  varchar('actor_username', { length: 100 }),
+  createdAt:      timestamp('created_at').notNull().defaultNow(),
 });
 
 // ─── 3. ZATCA Certificates ────────────────────────────────────────────────────
@@ -1179,7 +1348,8 @@ export const zatcaCertificates = pgTable('zatca_certificates', {
   csr:                  text('csr'),
   publicCertificate:    text('public_certificate'),
   privateKeyEncrypted:  text('private_key_encrypted'),        // مشفَّر AES-256-GCM
-  secretKeyEncrypted:   text('secret_key_encrypted'),         // مشفَّر AES-256-GCM
+  secretKeyEncrypted:   text('secret_key_encrypted'),         // السر التشغيلي المشفّر AES-256-GCM
+  complianceSecretEncrypted: text('compliance_secret_encrypted'), // سر Compliance المشفّر
   certificateVersion:   varchar('certificate_version', { length: 20 }),
   startDate:            timestamp('start_date'),
   expiryDate:           timestamp('expiry_date'),
@@ -1248,6 +1418,101 @@ export const zatcaCsrRequests = pgTable('zatca_csr_requests', {
   updatedBy:   integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
 });
 
+// ─── 6b. ZATCA Compliance Matching Tests ─────────────────────────────────────
+// Results of official Compliance tests are separate from operational invoice
+// transactions and from local XML/transport diagnostics.
+export const zatcaComplianceTests = pgTable('zatca_compliance_tests', {
+  id:                serial('id').primaryKey(),
+  orgId:             integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  posUnitId:         integer('pos_unit_id').notNull().references(() => zatcaPosUnits.id, { onDelete: 'cascade' }),
+  deviceId:          integer('device_id').references(() => zatcaDevices.id, { onDelete: 'set null' }),
+  invoiceId:         integer('invoice_id').references(() => salesInvoices.id, { onDelete: 'set null' }),
+  // Kept as an isolated reference to the fixture table; the SQL migration
+  // adds the database FK without creating a module-initialization cycle here.
+  fixtureId:         integer('fixture_id'),
+  testKey:           varchar('test_key', { length: 60 }).notNull(),
+  invoiceType:       varchar('invoice_type', { length: 20 }).notNull(),
+  documentType:      varchar('document_type', { length: 30 }).notNull(),
+  status:            varchar('status', { length: 30 }).notNull().default('not_started'),
+  httpStatus:        integer('http_status'),
+  requestId:         varchar('request_id', { length: 160 }),
+  invoiceUuid:       varchar('invoice_uuid', { length: 100 }),
+  invoiceHash:       varchar('invoice_hash', { length: 256 }),
+  xmlBeforeSigning:  text('xml_before_signing'),
+  xmlAfterSigning:   text('xml_after_signing'),
+  responsePayload:   jsonb('response_payload'),
+  warnings:          jsonb('warnings'),
+  errors:            jsonb('errors'),
+  attemptedAt:       timestamp('attempted_at'),
+  completedAt:       timestamp('completed_at'),
+  isActive:          boolean('is_active').notNull().default(true),
+  isDeleted:         boolean('is_deleted').notNull().default(false),
+  createdAt:         timestamp('created_at').notNull().defaultNow(),
+  updatedAt:         timestamp('updated_at').notNull().defaultNow(),
+  createdBy:         integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy:         integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
+}, (t) => ({
+  activeTestKeyUidx: uniqueIndex('zatca_compliance_tests_active_key_uidx')
+    .on(t.orgId, t.posUnitId, t.testKey)
+    .where(sql`${t.isActive} = true AND ${t.isDeleted} = false`),
+}));
+
+// ─── 6c. Isolated ZATCA compliance fixtures ───────────────────────────────────
+// These documents exist only for official Simulation compliance tests. They
+// never enter sales posting, inventory, numbering journals, or commercial
+// invoice lists.
+export const zatcaComplianceFixtures = pgTable('zatca_compliance_fixtures', {
+  id:                serial('id').primaryKey(),
+  orgId:             integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  posUnitId:         integer('pos_unit_id').notNull().references(() => zatcaPosUnits.id, { onDelete: 'cascade' }),
+  sourceFixtureId:   integer('source_fixture_id'),
+  invoiceType:       varchar('invoice_type', { length: 20 }).notNull(),
+  documentType:      varchar('document_type', { length: 30 }).notNull(),
+  invoiceNumber:     varchar('invoice_number', { length: 100 }).notNull(),
+  invoiceDate:       timestamp('invoice_date').notNull(),
+  customerName:      varchar('customer_name', { length: 500 }),
+  customerTaxNumber: varchar('customer_tax_number', { length: 100 }),
+  customerAddress:   jsonb('customer_address').$type<{
+    street: string;
+    building: string;
+    district: string;
+    city: string;
+    postalCode: string;
+    countryCode: string;
+  } | null>(),
+  subtotal:          decimal('subtotal', { precision: 18, scale: 4 }).notNull().default('100'),
+  discountAmount:    decimal('discount_amount', { precision: 18, scale: 4 }).notNull().default('0'),
+  taxAmount:         decimal('tax_amount', { precision: 18, scale: 4 }).notNull().default('15'),
+  total:             decimal('total', { precision: 18, scale: 4 }).notNull().default('115'),
+  notes:             text('notes'),
+  zatcaUuid:         varchar('zatca_uuid', { length: 100 }).notNull(),
+  isActive:          boolean('is_active').notNull().default(true),
+  isDeleted:         boolean('is_deleted').notNull().default(false),
+  createdAt:         timestamp('created_at').notNull().defaultNow(),
+  updatedAt:         timestamp('updated_at').notNull().defaultNow(),
+  createdBy:         integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy:         integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
+}, (t) => ({
+  activeFixtureKeyUidx: uniqueIndex('zatca_compliance_fixtures_active_key_uidx')
+    .on(t.orgId, t.posUnitId, t.invoiceType, t.documentType)
+    .where(sql`${t.isActive} = true AND ${t.isDeleted} = false`),
+}));
+
+export const zatcaComplianceFixtureItems = pgTable('zatca_compliance_fixture_items', {
+  id:             serial('id').primaryKey(),
+  fixtureId:      integer('fixture_id').notNull().references(() => zatcaComplianceFixtures.id, { onDelete: 'cascade' }),
+  productName:    varchar('product_name', { length: 500 }).notNull(),
+  quantity:       decimal('quantity', { precision: 18, scale: 4 }).notNull().default('1'),
+  unit:           varchar('unit', { length: 100 }).notNull().default('C62'),
+  unitPrice:      decimal('unit_price', { precision: 18, scale: 4 }).notNull().default('100'),
+  total:          decimal('total', { precision: 18, scale: 4 }).notNull().default('115'),
+  taxAmount:      decimal('tax_amount', { precision: 18, scale: 4 }).notNull().default('15'),
+  taxPercent:     decimal('tax_percent', { precision: 5, scale: 2 }).notNull().default('15'),
+  discountAmount: decimal('discount_amount', { precision: 18, scale: 4 }).notNull().default('0'),
+  sortOrder:      integer('sort_order').notNull().default(0),
+  createdAt:      timestamp('created_at').notNull().defaultNow(),
+});
+
 // ─── 7. ZATCA Invoice Transactions ───────────────────────────────────────────
 export const zatcaInvoiceTransactions = pgTable('zatca_invoice_transactions', {
   id:              serial('id').primaryKey(),
@@ -1262,9 +1527,24 @@ export const zatcaInvoiceTransactions = pgTable('zatca_invoice_transactions', {
   submissionType:  varchar('submission_type', { length: 30 }).notNull().default('clearance'),
   submissionDate:  timestamp('submission_date').notNull().defaultNow(),
   invoiceStatus:   varchar('invoice_status', { length: 30 }).notNull().default('pending'),
+  invoiceCounter:  integer('invoice_counter'),
+  issuanceTimestamp: timestamp('issuance_timestamp'),
+  correlationId:   varchar('correlation_id', { length: 120 }),
   httpStatus:      integer('http_status'),
   responseCode:    varchar('response_code', { length: 50 }),
   responseMessage: text('response_message'),
+  authorityStatus: varchar('authority_status', { length: 80 }),
+  warnings:        jsonb('warnings'),
+  errors:          jsonb('errors'),
+  requestPayload:  jsonb('request_payload'),
+  responsePayload: jsonb('response_payload'),
+  responseDate:    timestamp('response_date'),
+  lastAttemptAt:   timestamp('last_attempt_at'),
+  nextRetryAt:     timestamp('next_retry_at'),
+  uncertainAt:     timestamp('uncertain_at'),
+  idempotencyKey:  varchar('idempotency_key', { length: 160 }),
+  lastError:       text('last_error'),
+  attemptCount:    integer('attempt_count').notNull().default(0),
   executionTimeMs: integer('execution_time_ms'),
   isActive:        boolean('is_active').notNull().default(true),
   isDeleted:       boolean('is_deleted').notNull().default(false),
@@ -1272,7 +1552,67 @@ export const zatcaInvoiceTransactions = pgTable('zatca_invoice_transactions', {
   updatedAt:       timestamp('updated_at').notNull().defaultNow(),
   createdBy:       integer('created_by').references(() => users.id, { onDelete: 'set null' }),
   updatedBy:       integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
-});
+ }, (t) => [
+   uniqueIndex('idx_zatca_trx_invoice_active')
+     .on(t.orgId, t.invoiceId)
+     .where(sql`${t.invoiceId} IS NOT NULL AND ${t.isActive} = true AND ${t.isDeleted} = false`),
+ ]);
+
+// ─── 7b. ZATCA Submission Attempts ────────────────────────────────────────────
+// سجل مستقل لكل محاولة؛ لا ينشئ معاملة فاتورة جديدة.
+export const zatcaSubmissionAttempts = pgTable('zatca_submission_attempts', {
+  id:              serial('id').primaryKey(),
+  orgId:           integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  transactionId:   integer('transaction_id').notNull().references(() => zatcaInvoiceTransactions.id, { onDelete: 'cascade' }),
+  attemptNumber:   integer('attempt_number').notNull(),
+  attemptId:       uuid('attempt_id').notNull().defaultRandom(),
+  startedAt:       timestamp('started_at').notNull().defaultNow(),
+  finishedAt:      timestamp('finished_at'),
+  requestId:       varchar('request_id', { length: 120 }),
+  httpStatus:      integer('http_status'),
+  requestPayload:  jsonb('request_payload'),
+  responsePayload: jsonb('response_payload'),
+  result:          varchar('result', { length: 40 }).notNull().default('started'),
+  errorMessage:    text('error_message'),
+  createdAt:       timestamp('created_at').notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('zatca_submission_attempt_transaction_number_uidx')
+    .on(t.transactionId, t.attemptNumber),
+  uniqueIndex('zatca_submission_attempt_attempt_id_uidx')
+    .on(t.attemptId),
+]);
+
+// ─── 7c. ZATCA Durable Queue ──────────────────────────────────────────────────
+// Durable queue: Mock/Sandbox only until the official Simulation sender owns
+// retries; Simulation rows are rejected by the legacy Mock worker.
+export const zatcaSubmissionQueue = pgTable('zatca_submission_queue', {
+  id:              serial('id').primaryKey(),
+  orgId:           integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  transactionId:   integer('transaction_id').notNull().references(() => zatcaInvoiceTransactions.id, { onDelete: 'cascade' }),
+  posUnitId:       integer('pos_unit_id').references(() => zatcaPosUnits.id, { onDelete: 'set null' }),
+  deviceId:        integer('device_id').references(() => zatcaDevices.id, { onDelete: 'set null' }),
+  queueKey:        varchar('queue_key', { length: 160 }).notNull(),
+  operation:       varchar('operation', { length: 20 }).notNull(),
+  uuid:             uuid('uuid'),
+  invoiceCounter:  integer('invoice_counter'),
+  idempotencyKey:  varchar('idempotency_key', { length: 160 }),
+  mockOutcome:     varchar('mock_outcome', { length: 40 }).notNull().default('accepted'),
+  state:            varchar('state', { length: 20 }).notNull().default('queued'),
+  availableAt:     timestamp('available_at').notNull().defaultNow(),
+  lockedAt:        timestamp('locked_at'),
+  lockedBy:        varchar('locked_by', { length: 120 }),
+  attemptId:       uuid('attempt_id'),
+  lastError:       text('last_error'),
+  createdAt:       timestamp('created_at').notNull().defaultNow(),
+  updatedAt:       timestamp('updated_at').notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('zatca_submission_queue_transaction_uidx')
+    .on(t.transactionId),
+  index('zatca_submission_queue_due_idx')
+    .on(t.state, t.availableAt),
+  index('zatca_submission_queue_unit_idx')
+    .on(t.queueKey, t.state),
+]);
 
 // ─── 8. ZATCA Request Log ─────────────────────────────────────────────────────
 export const zatcaRequestLog = pgTable('zatca_request_log', {
@@ -1918,13 +2258,15 @@ export type Voucher = typeof vouchers.$inferSelect;
 export type ReceiptVoucher = typeof receiptVouchers.$inferSelect;
 export type PaymentVoucher = typeof paymentVouchers.$inferSelect;
 
-// ZATCA Architecture Types (0012)
+// ZATCA Architecture Types (0012 + 0060)
+export type ZatcaPosUnit            = typeof zatcaPosUnits.$inferSelect;
 export type ZatcaEnvironment         = typeof zatcaEnvironments.$inferSelect;
 export type ZatcaDevice              = typeof zatcaDevices.$inferSelect;
 export type ZatcaCertificate         = typeof zatcaCertificates.$inferSelect;
 export type ZatcaCsid                = typeof zatcaCsid.$inferSelect;
 export type ZatcaKey                 = typeof zatcaKeys.$inferSelect;
 export type ZatcaCsrRequest          = typeof zatcaCsrRequests.$inferSelect;
+export type ZatcaComplianceTest      = typeof zatcaComplianceTests.$inferSelect;
 export type ZatcaInvoiceTransaction  = typeof zatcaInvoiceTransactions.$inferSelect;
 export type ZatcaRequestLog          = typeof zatcaRequestLog.$inferSelect;
 export type ZatcaResponseLog         = typeof zatcaResponseLog.$inferSelect;

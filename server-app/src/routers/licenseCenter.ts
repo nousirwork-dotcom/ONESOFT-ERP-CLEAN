@@ -48,6 +48,15 @@ function genActivationCode() {
   return `${seg()}-${seg()}-${seg()}-${seg()}`;
 }
 
+function trialExpiryDate(startDate: string): string {
+  const date = new Date(`${startDate}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: 'تاريخ بداية التجربة غير صالح' });
+  }
+  date.setUTCMonth(date.getUTCMonth() + 3);
+  return date.toISOString().slice(0, 10);
+}
+
 type OpType =
   | 'create_client' | 'create_license' | 'activate' | 'suspend'
   | 'resume' | 'renew' | 'revoke_device' | 'generate_key' | 'generate_activation_code'
@@ -143,9 +152,12 @@ export const licenseCenterRouter = router({
     .input(clientFields.merge(licenseFields))
     .mutation(async ({ input }) => {
       const orgId = genOrgId();
-      const { packageName, licenseType, startDate, expiryDate, maxUsers, maxBranches,
+       const { packageName, licenseType, startDate, expiryDate, maxUsers, maxBranches,
               maxPos, maxDevices, maxWeb, webAllowed, desktopAllowed, offlineAllowed,
               syncAllowed, enabledModules, notes: licNotes, ...clientData } = input;
+       const effectiveExpiryDate = licenseType === 'trial'
+         ? trialExpiryDate(startDate)
+         : expiryDate;
       const cleanEmail = clientData.email || undefined;
       const cleanContactEmail = clientData.contactEmail || undefined;
 
@@ -159,7 +171,7 @@ export const licenseCenterRouter = router({
       const licenseId = genLicenseId();
       const [lic] = await db.insert(lcLicenses).values({
         licenseId, clientId: c.id, packageName, licenseType, status: 'active',
-        startDate, expiryDate, maxUsers, maxBranches, maxPos, maxDevices, maxWeb,
+         startDate, expiryDate: effectiveExpiryDate, maxUsers, maxBranches, maxPos, maxDevices, maxWeb,
         webAllowed, desktopAllowed, offlineAllowed, syncAllowed, enabledModules,
         notes: licNotes, issuedBy: 'OneSoft ERP',
       }).returning();
@@ -228,19 +240,35 @@ export const licenseCenterRouter = router({
 
   createLicense: ownerOnlyProcedure
     .input(licenseFields.extend({ clientId: z.number() }))
-    .mutation(async ({ input }) => {
+     .mutation(async ({ input }) => {
       const licenseId = genLicenseId();
-      const [lic] = await db.insert(lcLicenses).values({ ...input, licenseId }).returning();
+       const values = {
+         ...input,
+         expiryDate: input.licenseType === 'trial'
+           ? trialExpiryDate(input.startDate)
+           : input.expiryDate,
+         licenseId,
+       };
+       const [lic] = await db.insert(lcLicenses).values(values).returning();
       await logOp(input.clientId, lic.id, 'create_license', `إنشاء ترخيص جديد: ${licenseId}`);
       return lic;
     }),
 
   updateLicense: ownerOnlyProcedure
     .input(licenseFields.partial().extend({ licenseId: z.number() }))
-    .mutation(async ({ input }) => {
+     .mutation(async ({ input }) => {
       const { licenseId, ...data } = input;
+       const existing = await db.query.lcLicenses.findFirst({
+         where: eq(lcLicenses.id, licenseId),
+       });
+       if (!existing) throw new TRPCError({ code: 'NOT_FOUND', message: 'الترخيص غير موجود' });
+       const effectiveStartDate = data.startDate ?? existing.startDate;
+       const effectiveType = data.licenseType ?? existing.licenseType;
+       const normalizedData = effectiveType === 'trial'
+         ? { ...data, startDate: effectiveStartDate, expiryDate: trialExpiryDate(effectiveStartDate) }
+         : data;
       const [lic] = await db.update(lcLicenses)
-        .set({ ...data, updatedAt: new Date() })
+         .set({ ...normalizedData, updatedAt: new Date() })
         .where(eq(lcLicenses.id, licenseId))
         .returning();
       await logOp(lic.clientId, lic.id, 'update_license', `تعديل الترخيص: ${lic.licenseId}`);

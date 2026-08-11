@@ -86,9 +86,11 @@ export function registerServicesIpc(ipc: IpcMain, win: BrowserWindow | null) {
         };
       }
 
-      // استخدم adminUser للتحقق (onesoft_app غير موجود بعد في مرحلة الإعداد)
-      const verifyUser = db.adminUser ?? db.user;
-      const verifyPass = db.adminPassword ?? db.password;
+      // Runtime verification must never fall back to legacy administrator
+      // credentials stored in config. Database provisioning receives those
+      // credentials transiently through the installer IPC only.
+      const verifyUser = db.user;
+      const verifyPass = db.password;
       emit({ level: 'info', message: `اختبار الاتصال بـ ${db.host}:${db.port} كـ "${verifyUser}"...`, timestamp: new Date().toISOString() });
 
       const pool = new Pool({

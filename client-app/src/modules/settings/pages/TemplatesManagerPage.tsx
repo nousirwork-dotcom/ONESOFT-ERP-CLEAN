@@ -379,7 +379,7 @@ export default function TemplatesManagerPage() {
     if (existing) {
       updateMut.mutate({ id: existing.id, layoutJson: jsonStr, code: existing.code, nameAr: existing.nameAr, docType: selectedType, sortOrder: existing.sortOrder });
     } else {
-      createMut.mutate({ code: `UI-${selectedType.toUpperCase().slice(0, 6)}`, nameAr: `قالب واجهة — ${currentTypeMeta?.label}`, docType: selectedType, paperSize: "A4", orientation: "portrait", isDefault: false, isActive: true, layoutJson: jsonStr, sortOrder: 99 });
+      createMut.mutate({ code: `UI-${selectedType.toUpperCase().slice(0, 6)}`, nameAr: `قالب واجهة — ${currentTypeMeta?.label}`, docType: selectedType, paperSize: "A4", orientation: "portrait", isDefault: false, layoutJson: jsonStr, sortOrder: 99 });
     }
     setUiDirty(false);
   };
@@ -495,7 +495,7 @@ export default function TemplatesManagerPage() {
                   </Button>
                   {editId !== null && (
                     <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px] gap-1 text-indigo-600 hover:bg-indigo-50"
-                      onClick={() => cloneMut.mutate({ id: editId })}>
+                      onClick={() => cloneMut.mutate({ id: editId, newCode: `${form.code}-COPY`, newNameAr: `${form.nameAr} (نسخة)` })}>
                       <Copy className="w-3.5 h-3.5" />نسخ
                     </Button>
                   )}
@@ -602,7 +602,7 @@ export default function TemplatesManagerPage() {
                                 {hasDesign && (<><span className="text-slate-300">·</span><span className="text-[10px] text-purple-600">{elCount} عنصر</span></>)}
                               </div>
                             </div>
-                            <button onClick={e => { e.stopPropagation(); cloneMut.mutate({ id: t.id }); }}
+                            <button onClick={e => { e.stopPropagation(); cloneMut.mutate({ id: t.id, newCode: `${t.code}-COPY`, newNameAr: `${t.nameAr} (نسخة)` }); }}
                               className="w-7 h-7 flex items-center justify-center rounded-md text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 opacity-0 group-hover:opacity-100 transition-all">
                               <Copy className="w-3.5 h-3.5" />
                             </button>

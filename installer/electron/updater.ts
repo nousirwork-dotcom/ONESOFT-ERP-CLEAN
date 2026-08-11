@@ -29,8 +29,11 @@ import * as https          from 'https';
 import * as fs             from 'fs';
 import * as path           from 'path';
 import * as crypto         from 'crypto';
-import { spawn }           from 'child_process';
+import { spawn, spawnSync } from 'child_process';
 import type { BrowserWindow } from 'electron';
+import { ConfigManager } from '../core/config/ConfigManager.js';
+import { MigrationCredentialStore } from '../core/security/MigrationCredentialStore.js';
+import { chooseUpgradeLaunchMode } from '../core/upgrade/UpgradeLaunchPolicy.js';
 
 // ─── روابط Manifest حسب قناة التحديث ─────────────────────────────────────────
 // GitHub raw content — يعمل مباشرة بدون خادم خارجي
@@ -181,6 +184,30 @@ function fetchJson(url: string): Promise<unknown> {
 let downloadedFilePath: string | null = null;
 let _activeRequest:     import('http').ClientRequest | null = null;
 let _downloadAborted    = false;
+
+function hasLegacyAdminCredential(): boolean {
+  if (!ConfigManager.exists()) return false;
+  try {
+    const database = ConfigManager.load().database;
+    const configuredAdminUser = database.adminUser?.trim();
+    const configuredAdminPassword = database.adminPassword?.trim();
+    if (configuredAdminUser && configuredAdminPassword) return true;
+
+    // Older installations stored the PostgreSQL administrator as the active
+    // database user. Treat that pair as a valid bootstrap capability only
+    // while the runtime role has not yet been provisioned.
+    return database.user !== 'onesoft_app' && Boolean(database.user?.trim() && database.password);
+  } catch {
+    return false;
+  }
+}
+
+export function getUpgradeLaunchMode(): 'silent' | 'interactive' {
+  return chooseUpgradeLaunchMode({
+    migrationCredentialValid: MigrationCredentialStore.load() !== null,
+    legacyAdminCredentialValid: hasLegacyAdminCredential(),
+  });
+}
 
 /** إلغاء التحميل الجاري — يُطلق من update:cancel-download */
 function abortActiveDownload(): void {
@@ -367,24 +394,19 @@ export function setupUpdater(mainWindow: BrowserWindow): void {
     send('update:log',    { event: 'update-available', currentVersion, latestVersion: manifest.latestVersion, source });
   }
 
-  // ─── IPC: بدء التحميل ─────────────────────────────────────────────────────
-  ipcMain.handle('update:start-download', async () => {
-    if (!pendingManifest) return { ok: false, error: 'No pending manifest — شغّل فحص التحديثات أولاً' };
-
-    const { downloadUrl, latestVersion, sha512 } = pendingManifest;
-
+  async function downloadPendingUpdate(manifest: UpdateManifest): Promise<{ ok: boolean; error?: string }> {
+    const { downloadUrl, latestVersion, sha512 } = manifest;
     try { enforceHttps(downloadUrl, 'downloadUrl'); }
     catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       log('ERROR', msg);
       send('update:error', { message: msg });
-      send('update:log',   { event: 'update-error', error: msg });
+      send('update:log', { event: 'update-error', error: msg });
       return { ok: false, error: msg };
     }
 
     log('INFO', `update-download-started  url=${downloadUrl}  version=${latestVersion}`);
     send('update:log', { event: 'update-download-started', version: latestVersion });
-
     const tmpPath = path.join(app.getPath('temp'), `OneSoftSetup-${latestVersion}.exe`);
     downloadedFilePath = tmpPath;
 
@@ -394,66 +416,83 @@ export function setupUpdater(mainWindow: BrowserWindow): void {
         send('update:progress', progress);
         send('update:log', { event: 'download-progress', ...progress });
       });
-
-      // ─── SHA512 ──────────────────────────────────────────────────────────
       if (sha512) {
         log('INFO', `verifying SHA512 for ${tmpPath}`);
         send('update:log', { event: 'update-verifying-checksum', version: latestVersion });
-        try {
-          await verifySha512(tmpPath, sha512);
-          log('INFO', 'SHA512 verified ✓');
-          send('update:log', { event: 'update-checksum-ok', version: latestVersion });
-        } catch (hashErr) {
-          try { fs.unlinkSync(tmpPath); } catch {}
-          downloadedFilePath = null;
-          const msg = hashErr instanceof Error ? hashErr.message : String(hashErr);
-          log('ERROR', `SHA512 failed — ${msg}`);
-          send('update:log',   { event: 'update-checksum-failed', error: msg });
-          send('update:error', { message: `فشل التحقق من سلامة الملف (SHA512):\n${msg}` });
-          return { ok: false, error: msg };
-        }
+        await verifySha512(tmpPath, sha512);
+        log('INFO', 'SHA512 verified ✓');
+        send('update:log', { event: 'update-checksum-ok', version: latestVersion });
       } else {
         log('WARN', 'sha512 غير موجود في manifest — تخطي التحقق');
         send('update:log', { event: 'update-checksum-skipped', reason: 'no sha512 in manifest' });
       }
-
       log('INFO', `update-downloaded  path=${tmpPath}`);
       send('update:downloaded', { version: latestVersion, path: tmpPath });
-      send('update:log',        { event: 'update-downloaded', version: latestVersion });
+      send('update:log', { event: 'update-downloaded', version: latestVersion });
       return { ok: true };
-
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       log('ERROR', `download failed — ${msg}`);
       try { if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath); } catch {}
       downloadedFilePath = null;
-      send('update:log',   { event: 'update-error', error: msg });
+      send('update:log', { event: 'update-error', error: msg });
       send('update:error', { message: msg });
       return { ok: false, error: msg };
     }
-  });
+  }
 
-  // ─── IPC: تثبيت التحديث ───────────────────────────────────────────────────
-  ipcMain.handle('update:install-now', () => {
+  function installDownloadedUpdate(): { ok: boolean; error?: string } {
     if (!downloadedFilePath || !fs.existsSync(downloadedFilePath)) {
       log('WARN', 'update:install-now — file not found');
       return { ok: false, error: 'الملف غير موجود — حاول التحميل مجدداً' };
     }
+    // Decide whether the downloaded NSIS installer may run silently before
+    // stopping the current application/services. A first Legacy bootstrap
+    // needs the interactive wizard; otherwise the old app would stop and
+    // leave the customer with a silent, non-actionable failure.
+    const launchMode = getUpgradeLaunchMode();
+    const installerArgs = launchMode === 'silent' ? ['/S'] : [];
+    log('INFO', `update-installer-launch-mode  mode=${launchMode}`);
+    send('update:log', {
+      event: 'update-installer-launch-mode',
+      mode: launchMode,
+      reason: launchMode === 'interactive'
+        ? 'migration-credential-and-legacy-admin-credential-unavailable'
+        : 'protected-migration-capability-available',
+    });
     log('INFO', `update-installing  path=${downloadedFilePath}`);
     send('update:log', { event: 'update-installing', path: downloadedFilePath });
-
-    /**
-     * سلامة البيانات أثناء التحديث:
-     * - المثبّت NSIS مبني بـ electron-builder بوضع "نسبي" (perMachine/perUser)
-     * - لا يحذف: قاعدة البيانات، الترخيص، config.enc، device.prefs.enc
-     * - المجلدات المحمية تلقائياً: ProgramData\OneSoft\*, AppData\Roaming\OneSoft\*
-     * - الملفات التي قد تُستبدل: ملفات البرنامج في Program Files فقط
-     * - /S = silent install (بدون نوافذ) — لا يحذف بيانات المستخدم
-     */
-    const child = spawn(downloadedFilePath, ['/S'], { detached: true, stdio: 'ignore', shell: false });
+    if (process.platform === 'win32') {
+      // NSIS may invoke the previous uninstaller during an update. That
+      // uninstaller belongs to the old installation, so stopping services
+      // here is the only version-independent way to release Node handles
+      // before replacement. The target installer runs the shared Upgrade Core
+      // after its files are copied and starts services only after that gate.
+      for (const service of ['OneSoft-Client', 'OneSoft-Updater', 'OneSoft-Server']) {
+        try {
+          spawnSync('sc.exe', ['stop', service], {
+            windowsHide: true,
+            stdio: 'ignore',
+            timeout: 30_000,
+          });
+        } catch {}
+      }
+    }
+    const child = spawn(downloadedFilePath, installerArgs, { detached: true, stdio: 'ignore', shell: false });
     child.unref();
     setTimeout(() => app.quit(), 500);
     return { ok: true };
+  }
+
+  // ─── IPC: بدء التحميل ─────────────────────────────────────────────────────
+  ipcMain.handle('update:start-download', async () => {
+    if (!pendingManifest) return { ok: false, error: 'No pending manifest — شغّل فحص التحديثات أولاً' };
+    return downloadPendingUpdate(pendingManifest);
+  });
+
+  // ─── IPC: تثبيت التحديث ───────────────────────────────────────────────────
+  ipcMain.handle('update:install-now', () => {
+    return installDownloadedUpdate();
   });
 
   // ─── IPC: إلغاء التحميل الجاري ──────────────────────────────────────────────
@@ -549,8 +588,37 @@ export function setupUpdater(mainWindow: BrowserWindow): void {
         send('update:log', { event: 'auto-update-disabled-silent-check' });
         await doCheck({ source: 'auto', silentUnlessMandatory: true });
       }
+
+      // CI-only acceptance hook. It deliberately reuses the public updater
+      // path (manifest check, HTTPS download, SHA512 verification, then the
+      // NSIS installer) so Windows acceptance never bypasses updater behavior.
+      // It is impossible to activate outside CI.
+      if (
+        process.env['CI'] === 'true' &&
+        process.env['ONESOFT_ACCEPTANCE_AUTO_UPDATE'] === '1' &&
+        pendingManifest &&
+        semverLt(currentVersion, pendingManifest.latestVersion)
+      ) {
+        log('INFO', 'acceptance-auto-update-start');
+        send('update:log', { event: 'acceptance-auto-update-start', version: pendingManifest.latestVersion });
+        const download = await downloadPendingUpdate(pendingManifest);
+        if (!download.ok) throw new Error(download.error ?? 'acceptance update download failed');
+        const install = installDownloadedUpdate();
+        if (!install.ok) throw new Error(install.error ?? 'acceptance update install failed');
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
+      const acceptanceMode =
+        process.env['CI'] === 'true' &&
+        process.env['ONESOFT_ACCEPTANCE_AUTO_UPDATE'] === '1';
+      if (acceptanceMode) {
+        // Acceptance is a hard gate. A failed manifest/download/checksum or
+        // installer launch must never be converted into a false-positive run.
+        log('ERROR', `acceptance-auto-update-failed — ${msg}`);
+        send('update:log', { event: 'acceptance-auto-update-failed', error: msg });
+        app.exit(1);
+        return;
+      }
       // فشل الفحص عند بدء التشغيل (غالباً انقطاع إنترنت) — لوج فقط، لا شاشة خطأ
       log('WARN', `auto check failed (non-critical, silent) — ${msg}`);
       send('update:log', { event: 'update-check-failed-silent', error: msg });

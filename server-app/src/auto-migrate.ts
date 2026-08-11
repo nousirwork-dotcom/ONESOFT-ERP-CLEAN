@@ -5,7 +5,6 @@ import { fileURLToPath } from 'url';
 import { REQUIRED_SCHEMA_VERSION } from './schema-version.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
 /**
  * autoMigrate — يطبّق ملفات SQL من drizzle/ مباشرة عبر pg، بدون أي اعتماد
  * على pnpm أو drizzle-kit أو المُثبِّت (installer).
@@ -20,7 +19,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  * عمداً — أي تعديل في أحدهما (خصوصاً خطوة ختم _schema_version) يجب أن
  * يُطبَّق على الآخر أيضاً.
  */
-export async function autoMigrate(pool: Pool): Promise<{ ok: boolean; error?: string }> {
+export async function autoMigrate(pool: Pool): Promise<{ ok: boolean; error?: string; failedMigration?: string }> {
   // drizzle/ يُشحن بجانب dist/index.mjs — أي: server-app/drizzle
   const drizzleDir = path.join(__dirname, '..', 'drizzle');
 
@@ -95,11 +94,16 @@ export async function autoMigrate(pool: Pool): Promise<{ ok: boolean; error?: st
     );
     const currentTag = versionRow.rows[0]?.version ?? null;
     const currentIndex = currentTag ? entries.findIndex((entry) => entry.tag === currentTag) : -1;
-
+    const ledgerCountResult = await client.query<{ count: string }>(
+      'SELECT COUNT(*)::text AS count FROM __drizzle_migrations',
+    );
+    const ledgerWasEmpty = Number(ledgerCountResult.rows[0]?.count ?? 0) === 0;
     // Legacy installations may have been stamped before the migration ledger
     // existed. Reconstruct only the already-completed prefix; never mark
-    // migrations beyond the stamped version as applied.
-    if (currentIndex >= 0) {
+    // migrations beyond the stamped version as applied. Once the ledger has
+    // any entries, it is the source of truth: a version stamp must never make
+    // an unrecorded SQL file get skipped.
+    if (ledgerWasEmpty && currentIndex >= 0) {
       for (const entry of entries.slice(0, currentIndex + 1)) {
         await client.query(
           'INSERT INTO __drizzle_migrations (tag) VALUES ($1) ON CONFLICT (tag) DO NOTHING',
@@ -109,10 +113,9 @@ export async function autoMigrate(pool: Pool): Promise<{ ok: boolean; error?: st
     }
 
     // ── 3. تطبيق كل migration لم تُطبَّق بعد ────────────────────────────────
-    for (const [index, entry] of entries.entries()) {
+    for (const entry of entries) {
       const sqlFile = path.join(drizzleDir, `${entry.tag}.sql`);
       if (!fs.existsSync(sqlFile)) continue;
-      if (index <= currentIndex) continue;
 
       const { rowCount } = await client.query(
         'SELECT 1 FROM __drizzle_migrations WHERE tag = $1',
@@ -130,7 +133,7 @@ export async function autoMigrate(pool: Pool): Promise<{ ok: boolean; error?: st
       } catch (err) {
         await client.query('ROLLBACK');
         const msg = err instanceof Error ? err.message : String(err);
-        return { ok: false, error: `فشل تطبيق ${entry.tag}: ${msg}` };
+        return { ok: false, error: `فشل تطبيق ${entry.tag}: ${msg}`, failedMigration: entry.tag };
       }
     }
 

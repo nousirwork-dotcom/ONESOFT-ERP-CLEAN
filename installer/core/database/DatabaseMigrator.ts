@@ -6,6 +6,7 @@ import type {
 import { execFileSync } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
+import { PostgreSQLToolsResolver } from './PostgreSQLToolsResolver.js';
 
 type Emit = (e: ProgressEvent) => void;
 
@@ -93,7 +94,7 @@ export class DatabaseMigrator {
     includeData: boolean,
     emit: Emit,
   ): Promise<{ tablesTransferred: number; rowsTransferred: number }> {
-    const pgDump = this._findPgTool('pg_dump');
+    const pgDump = new PostgreSQLToolsResolver().resolveAll().pgDump;
     const env = { ...process.env, PGPASSWORD: db.password };
 
     const args = [
@@ -121,7 +122,7 @@ export class DatabaseMigrator {
     dumpPath: string,
     emit: Emit,
   ): Promise<void> {
-    const psql = this._findPgTool('psql');
+    const psql = new PostgreSQLToolsResolver().resolveAll().psql;
 
     const { Pool } = await import('pg');
     const pool = new Pool({
@@ -176,14 +177,6 @@ export class DatabaseMigrator {
     }
   }
 
-  private _findPgTool(tool: 'pg_dump' | 'psql'): string {
-    const versions = ['16', '15', '14', '13'];
-    for (const ver of versions) {
-      const p = `C:\\Program Files\\PostgreSQL\\${ver}\\bin\\${tool}.exe`;
-      if (fs.existsSync(p)) return p;
-    }
-    return tool;
-  }
 }
 
 function now() { return new Date().toISOString(); }

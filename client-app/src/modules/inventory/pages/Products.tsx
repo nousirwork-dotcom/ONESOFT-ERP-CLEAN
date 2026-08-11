@@ -16,6 +16,7 @@ import { trpc } from "@/shared/lib/trpc";
 import * as XLSX from "xlsx";
 import {
   Archive,
+  AlertTriangle,
   Download,
   Edit,
   FileUp,
@@ -33,6 +34,10 @@ import { useState, useMemo, useEffect, useRef, useCallback, forwardRef } from "r
 import { useUnsavedChangesGuard } from "@/core/hooks/useUnsavedChangesGuard";
 import { UnsavedChangesDialog } from "@/shared/components/UnsavedChangesDialog";
 import { useWorkspaceEl } from "@/core/contexts/WorkspaceContext";
+import { useModalAttention } from "@/modules/settings/pages/useModalAttention";
+import { UnifiedBottomToolbar } from "@/components/unified-toolbar/UnifiedBottomToolbar";
+import type { ToolbarActionMap, ToolbarToolItem } from "@/components/unified-toolbar/toolbar.types";
+import { TASKBAR_H } from "@/shared/components/WindowTaskbar";
 import { toast } from "sonner";
 
 // =============================================
@@ -72,8 +77,8 @@ export type ProductForm = {
   itemSize: string;
   // ضريبة
   taxType: string;
-  prevTaxType: string;
   taxable: boolean;
+  taxId: string;
   vatRate: string;
   // حقول قديمة
   nameEn: string;
@@ -133,7 +138,7 @@ const emptyForm: ProductForm = {
   category1: "", category2: "", category3: "",
   unitsJson: "", catsJson: "",
   distinguishNo: "", weight: "", size: "", colorCode: "", itemSize: "",
-  taxType: "", prevTaxType: "", taxable: true, vatRate: "15",
+  taxType: "", taxable: true, taxId: "", vatRate: "15",
   nameEn: "", brand: "", model: "", description: "",
   purchaseUnit: "", saleUnit: "", minStock: "0", maxStock: "0", reorderPoint: "0",
   trackBatch: false, trackSerial: false, hasBOM: false,
@@ -181,8 +186,8 @@ export function productToForm(p: any): ProductForm {
     colorCode: p?.colorCode ?? "",
     itemSize: p?.itemSize ?? "",
     taxType: p?.taxType ?? "",
-    prevTaxType: p?.prevTaxType ?? "",
     taxable: p?.taxable ?? true,
+    taxId: p?.taxId ? String(p.taxId) : "",
     vatRate: p?.vatRate ?? p?.taxRate ?? "15",
     nameEn: p?.nameEn ?? "",
     brand: p?.brand ?? "",
@@ -245,8 +250,8 @@ function CField({
   className?: string;
 }) {
   return (
-    <div className={`flex flex-col gap-0.5 ${className}`}>
-      <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
+    <div className={`product-form-field flex flex-col gap-0.5 ${className}`}>
+      <label className="product-field-label text-xs font-medium text-slate-600 dark:text-slate-400">
         {label}{required && <span className="text-red-500 mr-0.5">*</span>}
       </label>
       {children}
@@ -296,6 +301,7 @@ export function ProductCard({
   setForm,
   categories,
   groups,
+  activeTaxes = [],
   productId,
   skuRef,
   nameRef,
@@ -306,6 +312,7 @@ export function ProductCard({
   setForm: React.Dispatch<React.SetStateAction<ProductForm>>;
   categories: Array<{ id: number; name: string }> | undefined;
   groups: Array<{ id: number; groupCode?: string | null; name: string; groupType?: string | null; parentId?: number | null; autoNumbering?: boolean | null; codeDigits?: number | null }> | undefined;
+  activeTaxes?: Array<{ id: number; name: string; code: string; category: string; applicationScope: string; valueType: string; value: string }>;
   productId?: number | null;
   skuRef?: React.RefObject<HTMLInputElement | null>;
   nameRef?: React.RefObject<HTMLInputElement | null>;
@@ -315,6 +322,9 @@ export function ProductCard({
   const [activeTab, setActiveTab] = useState<string>("main");
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const isEdit = !!productId;
+  const supportedTaxes = activeTaxes.filter(
+    tax => tax.valueType === "percentage" && tax.category === "tax" && tax.applicationScope === "products_sales",
+  );
 
   // ── Imperative auto-code generation on group select ──────────────────────
   const trpcUtils = trpc.useUtils();
@@ -477,14 +487,42 @@ export function ProductCard({
     syncExtRows(extRows.filter((_, i) => i !== idx));
   };
 
-  const { data: stockData, isLoading: loadingStock } = trpc.products.stockByWarehouse.useQuery(
-    { productId: productId! },
+  const { data: stockRows = [], isLoading: loadingStock } = trpc.reports.stockByWarehouse.useQuery(
+    undefined,
     { enabled: isEdit && activeTab === "qty" }
   );
-  const { data: costsData, isLoading: loadingCosts } = trpc.products.costHistory.useQuery(
-    { productId: productId! },
-    { enabled: isEdit && activeTab === "costs" }
-  );
+  const stockData = useMemo(() => {
+    const rows = (stockRows as Array<{
+      productId: number;
+      warehouseId: number | null;
+      warehouseName: string;
+      totalQuantity: string | number;
+      costPrice: string | number;
+    }>).filter((row) => row.productId === productId);
+    const total = rows.reduce((sum, row) => sum + Number(row.totalQuantity ?? 0), 0);
+    const avgCost = total
+      ? rows.reduce((sum, row) => sum + Number(row.totalQuantity ?? 0) * Number(row.costPrice ?? 0), 0) / total
+      : 0;
+    return {
+      total,
+      avgCost,
+      rows: rows.map((row) => ({
+        warehouseId: row.warehouseId ?? row.warehouseName,
+        warehouseName: row.warehouseName,
+        quantity: row.totalQuantity,
+      })),
+    };
+  }, [productId, stockRows]);
+  let costsData: {
+    lastVoucherDate?: Date | string;
+    lastSupplierName?: string;
+    lastCost?: string | number;
+    prevCost?: string | number;
+    avgCost?: string | number;
+    lastOrderCost?: string | number;
+    standardCost?: string | number;
+  } | undefined;
+  const loadingCosts = false;
   const set = (key: keyof ProductForm, val: string | boolean) => {
     if (!readOnly) setForm({ ...form, [key]: val });
   };
@@ -501,19 +539,30 @@ export function ProductCard({
   const groupName = groups?.find(g => g.id === Number(form.groupId))?.name;
 
   return (
-    <div className="flex flex-col h-full" dir="rtl">
-      {/* شريط التبويبات — مربعات منفصلة بحدود */}
-      <div className="flex flex-wrap gap-1 px-2 py-1 bg-white dark:bg-slate-800 border-b border-[#BEBEBE] dark:border-slate-600 flex-shrink-0">
+    <div className="product-card-classic flex flex-col h-full" dir="rtl">
+      {/* شريط التبويبات — نفس ألوان نافذة دفاتر المستندات */}
+      <div
+        className="product-tabs flex flex-wrap flex-shrink-0 overflow-x-auto"
+        style={{ background: "#F2F0EC", borderBottom: "1px solid #D8D3C8", paddingRight: 7 }}
+      >
         {tabs.map((tab) => (
           <button
             key={tab.id}
             type="button"
             onClick={() => setActiveTab(tab.id)}
-            className={`px-3 py-2 text-xs font-bold border rounded transition-colors whitespace-nowrap
-              ${activeTab === tab.id
-                ? "bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-400 border-[#BEBEBE] dark:border-blue-500 shadow-sm"
-                : "bg-[#F5F0E8] dark:bg-slate-700 text-[#555] dark:text-slate-300 border-[#BEBEBE] dark:border-slate-600 hover:bg-white dark:hover:bg-slate-600 hover:border-[#BEBEBE]"
-              }`}
+            className="product-tab-button whitespace-nowrap transition-colors"
+            style={{
+              padding: "6px 12px 5px",
+              fontSize: 10,
+              fontWeight: activeTab === tab.id ? 700 : 500,
+              background: activeTab === tab.id ? "#F2F0EC" : "transparent",
+              color: activeTab === tab.id ? "#315f88" : "#62676c",
+              border: "none",
+              borderLeft: "1px solid #D8D3C8",
+              borderBottom: activeTab === tab.id ? "2px solid #F2F0EC" : "2px solid transparent",
+              marginBottom: -1,
+              cursor: "pointer",
+            }}
           >
             {tab.label}
           </button>
@@ -522,7 +571,7 @@ export function ProductCard({
 
       <fieldset
         disabled={readOnly}
-        className="flex-1 min-h-0 overflow-auto min-w-0 border-0 p-0 m-0"
+        className="product-card-body flex-1 min-h-0 overflow-auto min-w-0 border-0 p-0 m-0"
       >
 
       {/* شريط المعلومات الثابت */}
@@ -659,7 +708,7 @@ export function ProductCard({
       </div>
 
       {/* محتوى التبويبات */}
-      <div className="flex-1 overflow-y-auto p-4">
+        <div className="product-card-content flex-1 overflow-y-auto p-4">
 
         {/* ===== التبويب 1: النافذة الرئيسية ===== */}
         {activeTab === "main" && (
@@ -896,18 +945,34 @@ export function ProductCard({
             <div className="flex">
               <div className="flex-1 border-l border-slate-300 dark:border-slate-600 flex">
                 <div className="w-36 shrink-0 bg-[#F0EDE8] dark:bg-slate-800 px-2 flex items-center border-l border-[#BEBEBE] dark:border-slate-700">
-                  <span className="text-xs text-slate-600 dark:text-slate-400">نوع الضريبة السابقة</span>
-                </div>
-                <div className="flex-1 px-1 py-0.5">
-                  <CInput value={form.prevTaxType} onChange={(v) => set("prevTaxType", v)} placeholder="" className="w-full" />
-                </div>
-              </div>
-              <div className="w-72 shrink-0 flex">
-                <div className="w-28 shrink-0 bg-[#F0EDE8] dark:bg-slate-800 px-2 flex items-center border-l border-[#BEBEBE] dark:border-slate-700">
                   <span className="text-xs text-slate-600 dark:text-slate-400">نوع الضريبة</span>
                 </div>
                 <div className="flex-1 px-1 py-0.5">
-                  <CInput value={form.vatRate} onChange={(v) => set("vatRate", v)} type="number" placeholder="15" className="w-full" />
+                  <Select
+                    value={form.taxId || "none"}
+                    onValueChange={(value) => {
+                      const selectedTax = supportedTaxes.find(tax => String(tax.id) === value);
+                      setForm(current => ({
+                        ...current,
+                        taxId: value === "none" ? "" : value,
+                        vatRate: selectedTax?.valueType === "percentage"
+                          ? String(selectedTax.value)
+                          : current.vatRate,
+                      }));
+                    }}
+                  >
+                    <SelectTrigger className="h-7 text-xs">
+                      <SelectValue placeholder="اختر ضريبة فعّالة" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">بدون ضريبة</SelectItem>
+                      {supportedTaxes.map(tax => (
+                        <SelectItem key={tax.id} value={String(tax.id)}>
+                          {tax.name} ({tax.code}) — {tax.valueType === "percentage" ? `${tax.value}%` : tax.value}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </div>
@@ -1139,6 +1204,13 @@ export function ProductCard({
         {/* ===== التبويب 4: التكاليف ===== */}
         {activeTab === "costs" && (
           <div className="space-y-3">
+            <div className="flex items-start gap-2 rounded border border-amber-300/60 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700/50 dark:bg-amber-950/20 dark:text-amber-300">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <p>
+                سجل تاريخ التكلفة التفصيلي غير متاح حاليًا؛ لا توجد عملية خادم معتمدة لهذا التقرير في هذا الإصدار.
+                القيم التالية هي حقول الصنف المحفوظة فقط وليست سجل مشتريات تاريخيًا.
+              </p>
+            </div>
             {/* رأس: الموردين + آخر مشتريات */}
             <div className="border border-slate-200 dark:border-slate-700 rounded">
               <div className="bg-[#EBE7DF] dark:bg-slate-800 px-3 py-1.5 border-b border-[#CFCFCF] dark:border-slate-700 flex items-center justify-between">
@@ -1391,6 +1463,11 @@ export default function Products() {
   const [fieldErrors, setFieldErrors] = useState<{ sku?: boolean; name?: boolean }>({});
   const skuRef = useRef<HTMLInputElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
+  const productWindowRef = useRef<HTMLDivElement>(null);
+  const { contentRef: attentionRef, attractAttention } = useModalAttention({
+    message: "يرجى إكمال أو إلغاء نافذة الصنف الحالية أولاً",
+  });
+  const [isShaking, setIsShaking] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   const skipFormRef = useRef(false);
   const [sortField, setSortField] = useState<string>("name");
@@ -1424,29 +1501,36 @@ export default function Products() {
     } else {
       preMaxRef.current = { x: winPos.x, y: winPos.y, w: winSize.w, h: winSize.h };
       const ww = workspaceEl?.offsetWidth ?? 900;
-      const wh = workspaceEl?.offsetHeight ?? 600;
+      const wh = Math.max(0, (workspaceEl?.clientHeight ?? 600) - TASKBAR_H);
       setWinPos({ x: 0, y: 0 });
       setWinSize({ w: ww, h: wh });
       setIsMaximized(true);
     }
   };
 
-  // توسيط النافذة عند أول فتح (إذا لم يكن هناك موضع محفوظ)
-  const hasCentered = useRef(false);
+  // فتح النافذة أعلى اليمين داخل مساحة العمل. Rnd يستخدم x من اليسار،
+  // لذلك نحسب موضعًا مكافئًا لـ right: 18px بدل التوسيط.
+  const hasPositioned = useRef(false);
   useEffect(() => {
-    if (isOpen && workspaceEl && !hasCentered.current) {
-      const saved = localStorage.getItem("pdlg-pos");
-      if (!saved) {
-        const ww = workspaceEl.offsetWidth;
-        const wh = workspaceEl.offsetHeight;
-        setWinPos({
-          x: Math.max(20, Math.floor((ww - winSize.w) / 2)),
-          y: Math.max(10, Math.floor((wh - winSize.h) / 4)),
-        });
-      }
-      hasCentered.current = true;
+    if (!isOpen) {
+      hasPositioned.current = false;
+      return;
     }
-  }, [isOpen, workspaceEl]);
+    if (workspaceEl && !hasPositioned.current) {
+      const ww = workspaceEl.offsetWidth;
+      const wh = Math.max(0, workspaceEl.clientHeight - TASKBAR_H);
+      const boundedW = Math.min(winSize.w, Math.max(640, ww - 36));
+      const boundedH = Math.min(winSize.h, Math.max(420, wh - 36));
+      const x = Math.max(18, Math.floor(ww - boundedW - 18));
+      const y = 18;
+
+      if (boundedW !== winSize.w || boundedH !== winSize.h) {
+        setWinSize({ w: boundedW, h: boundedH });
+      }
+      setWinPos({ x, y });
+      hasPositioned.current = true;
+    }
+  }, [isOpen, workspaceEl, winSize.w, winSize.h]);
 
   const [toolsOpen, setToolsOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -1470,6 +1554,13 @@ export default function Products() {
 
   const { data: categories } = trpc.categories.list.useQuery(undefined, { staleTime: 60000 });
   const { data: groups } = trpc.productGroups.list.useQuery(undefined, { staleTime: 60000 });
+  const { data: activeTaxes = [] } = trpc.taxDefinitions.list.useQuery(
+    { activeOnly: true },
+    { staleTime: 60000 },
+  );
+  const supportedTaxes = activeTaxes.filter(
+    tax => tax.valueType === "percentage" && tax.category === "tax" && tax.applicationScope === "products_sales",
+  );
 
   const leafGroups = useMemo(() => {
     const all = groups ?? [];
@@ -1600,6 +1691,14 @@ export default function Products() {
   const { confirmOpen, requestClose, confirmSave, confirmDiscard, confirmCancel } =
     useUnsavedChangesGuard({ isDirty });
 
+  const handleProductBackdropMouseDown = useCallback(() => {
+    if (isShaking) return;
+    setIsShaking(true);
+    window.setTimeout(() => setIsShaking(false), 400);
+    attractAttention();
+    productWindowRef.current?.focus();
+  }, [attractAttention, isShaking]);
+
   // Track dirty when user edits form fields (skip right after load/navigate)
   useEffect(() => {
     if (skipFormRef.current) { skipFormRef.current = false; return; }
@@ -1621,7 +1720,7 @@ export default function Products() {
     skipFormRef.current = true;
     setIsDirty(false);
     setEditId(p.id);
-    setForm({
+    setForm(({
       name: p.name ?? "",
       name2: p.name2 ?? "",
       sku: p.code ?? p.sku ?? "",
@@ -1650,6 +1749,7 @@ export default function Products() {
       canBuy: p.canBuy ?? true,
       canReturn: p.canReturn ?? true,
       taxable: p.taxable ?? false,
+      taxId: p.taxId ? String(p.taxId) : "",
       taxRate: p.taxRate ?? "15",
       allowNegative: p.allowNegative ?? false,
       isActive: p.isActive ?? true,
@@ -1684,14 +1784,14 @@ export default function Products() {
       lastSupplier1: p.lastSupplier1 ?? "",
       lastSupplier2: p.lastSupplier2 ?? "",
       defaultOrderQty: p.defaultOrderQty ?? "0",
-    });
+    } as unknown as ProductForm));
   }, []);
 
   const openEdit = useCallback((p: any) => {
     skipFormRef.current = true;
     setIsDirty(false);
     setEditId(p.id);
-    setForm({
+    setForm(({
       name: p.name ?? "",
       name2: p.name2 ?? "",
       sku: p.code ?? p.sku ?? "",
@@ -1717,8 +1817,8 @@ export default function Products() {
       colorCode: p.colorCode ?? "",
       itemSize: p.itemSize ?? "",
       taxType: p.taxType ?? "",
-      prevTaxType: p.prevTaxType ?? "",
       taxable: p.taxable ?? true,
+      taxId: p.taxId ? String(p.taxId) : "",
       vatRate: p.vatRate ?? "15",
       nameEn: p.nameEn ?? "",
       brand: p.brand ?? "",
@@ -1763,7 +1863,7 @@ export default function Products() {
       recordPolicy: p.recordPolicy ?? "flexible",
       foundationKey: p.foundationKey ?? "",
       includeInFoundation: p.includeInFoundation ?? false,
-    });
+    } as unknown as ProductForm));
     setFieldErrors({});
     setIsOpen(true);
   }, []);
@@ -1815,7 +1915,7 @@ export default function Products() {
       salePrice5:    form.salePrice5 || undefined,
       wholesalePrice: form.wholesalePrice || undefined,
       vatRate:       form.vatRate || "15",
-      taxRate:       form.taxRate || undefined,
+      taxId:         form.taxId ? Number(form.taxId) : null,
       taxable:       form.taxable,
       taxType:       form.taxType.trim() || undefined,
       minStock:      Number(form.minStock) || 0,
@@ -1829,9 +1929,9 @@ export default function Products() {
     console.log("[handleSubmit] data:", data);
 
     if (editId) {
-      await updateProduct.mutateAsync({ id: editId, ...data });
+      await updateProduct.mutateAsync({ id: editId, ...data } as any);
     } else {
-      await createProduct.mutateAsync(data);
+      await createProduct.mutateAsync(data as any);
     }
     setIsDirty(false);
   };
@@ -1864,10 +1964,90 @@ export default function Products() {
   }, [products, groupFilter, sortField, sortDir]);
 
   const currentNavIdx = editId ? sortedProducts.findIndex((p: any) => p.id === editId) : -1;
-  const navFirst  = () => requestClose(() => { if (sortedProducts.length) navigateTo(sortedProducts[0]); });
-  const navLast   = () => requestClose(() => { if (sortedProducts.length) navigateTo(sortedProducts[sortedProducts.length - 1]); });
-  const navPrev   = () => requestClose(() => { if (currentNavIdx > 0) navigateTo(sortedProducts[currentNavIdx - 1]); });
-  const navNext   = () => requestClose(() => { if (currentNavIdx < sortedProducts.length - 1) navigateTo(sortedProducts[currentNavIdx + 1]); });
+  const navFirst = () => {
+    requestClose(() => { if (sortedProducts.length) navigateTo(sortedProducts[0]); });
+  };
+  const navLast = () => {
+    requestClose(() => { if (sortedProducts.length) navigateTo(sortedProducts[sortedProducts.length - 1]); });
+  };
+  const navPrev = () => {
+    requestClose(() => { if (currentNavIdx > 0) navigateTo(sortedProducts[currentNavIdx - 1]); });
+  };
+  const navNext = () => {
+    requestClose(() => { if (currentNavIdx < sortedProducts.length - 1) navigateTo(sortedProducts[currentNavIdx + 1]); });
+  };
+
+  const toolbarTools = useMemo<ToolbarToolItem[]>(() => [
+    { id: "activity", label: "نشاط المستخدمين", onClick: () => { toast.info("نشاط المستخدمين"); } },
+    { id: "suspend", label: "توقيف الاستخدام", onClick: () => { toast.info("توقيف الاستخدام"); } },
+    { id: "permissions", label: "قصر المطالعة على", separatorBefore: true, onClick: () => { toast.info("قصر المطالعة على"); } },
+  ], []);
+
+  const toolbarActions = useMemo<ToolbarActionMap>(() => ({
+    save: {
+      supported: true,
+      loading: createProduct.isPending || updateProduct.isPending,
+      onClick: () => { void handleSubmit().catch(() => {}); },
+    },
+    draft: { supported: false, disabledReason: "الأصناف لا تُحفظ كمسودات" },
+    new: { supported: true, onClick: () => { requestClose(openCreate); } },
+    duplicate: {
+      supported: true,
+      stateEnabled: !!editId,
+      disabledReason: "افتح صنفًا محفوظًا أولًا لعمل نسخة",
+      onClick: () => {
+        if (!editId) return;
+        setEditId(null);
+        setForm(current => ({ ...current, sku: "", barcode: "", barcode2: "", barcode3: "" }));
+        setIsDirty(true);
+        toast.info("تم إنشاء نسخة — عدّل الرقم واحفظ");
+      },
+    },
+    tools: { supported: true, stateEnabled: true },
+    edit: {
+      supported: true,
+      stateEnabled: !!editId && !isDirty,
+      disabledReason: "الصنف مفتوح للتحرير بالفعل",
+      onClick: () => { toast.info("الصنف مفتوح للتحرير"); },
+    },
+    delete: {
+      supported: true,
+      stateEnabled: !!editId,
+      disabledReason: "لا يمكن حذف صنف جديد غير محفوظ",
+      onClick: () => {
+        if (!editId) return;
+        if (confirm("هل أنت متأكد من حذف هذا الصنف؟ لا يمكن التراجع.")) {
+          deleteProduct.mutate({ id: editId });
+          setIsOpen(false);
+        }
+      },
+    },
+    first: { supported: true, stateEnabled: !!editId && currentNavIdx > 0, onClick: navFirst },
+    previous: { supported: true, stateEnabled: !!editId && currentNavIdx > 0, onClick: navPrev },
+    next: { supported: true, stateEnabled: !!editId && currentNavIdx >= 0 && currentNavIdx < sortedProducts.length - 1, onClick: navNext },
+    last: { supported: true, stateEnabled: !!editId && currentNavIdx >= 0 && currentNavIdx < sortedProducts.length - 1, onClick: navLast },
+    approve: { supported: false, disabledReason: "اعتماد الأصناف غير مستخدم في هذه الشاشة" },
+    cancel: { supported: false, disabledReason: "إلغاء الترحيل غير مستخدم في هذه الشاشة" },
+    preview: { supported: false, disabledReason: "معاينة الصنف غير مستخدمة في هذه الشاشة" },
+    send: { supported: false, disabledReason: "إرسال الصنف غير مستخدم في هذه الشاشة" },
+    print: { supported: false, disabledReason: "طباعة الصنف غير مستخدمة في هذه الشاشة" },
+    exit: { supported: true, onClick: () => { requestClose(() => setIsOpen(false)); } },
+  }), [
+    createProduct.isPending,
+    updateProduct.isPending,
+    editId,
+    isDirty,
+    currentNavIdx,
+    sortedProducts.length,
+    requestClose,
+    openCreate,
+    handleSubmit,
+    navFirst,
+    navPrev,
+    navNext,
+    navLast,
+    deleteProduct,
+  ]);
 
   return (
     <div className="space-y-4" dir="rtl">
@@ -2377,100 +2557,113 @@ export default function Products() {
       {/* ===== نافذة الصنف — قابلة للسحب والتكبير (react-rnd) ===== */}
       {isOpen && workspaceEl && createPortal(
         <>
-          {/* طبقة الخلفية — داخل منطقة العمل فقط */}
+          {/* مساحة النافذة تنتهي قبل شريط النوافذ السفلي؛ لا التظليل ولا النافذة يغطيانه. */}
           <div
-            style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.38)", zIndex: 9998 }}
-            onClick={() => requestClose(() => setIsOpen(false))}
-          />
-
-          <Rnd
-            position={{ x: winPos.x, y: winPos.y }}
-            size={{ width: winSize.w, height: winSize.h }}
-            onDragStop={(_, d) => {
-              if (!isMaximized) {
-                setWinPos({ x: d.x, y: d.y });
-                saveWinBounds(d.x, d.y, winSize.w, winSize.h);
-              }
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: TASKBAR_H,
+              overflow: "hidden",
+              zIndex: 9998,
             }}
-            onResizeStop={(_, __, ref, ___, pos) => {
-              if (!isMaximized) {
-                const w = ref.offsetWidth;
-                const h = ref.offsetHeight;
-                setWinSize({ w, h });
-                setWinPos({ x: pos.x, y: pos.y });
-                saveWinBounds(pos.x, pos.y, w, h);
-              }
-            }}
-            dragHandleClassName="erp-drag-handle"
-            minWidth={640}
-            minHeight={420}
-            bounds="parent"
-            disableDragging={isMaximized}
-            enableResizing={isMaximized ? false : {
-              top: true, bottom: true, left: true, right: true,
-              topLeft: true, topRight: true, bottomLeft: true, bottomRight: true,
-            }}
-            style={{ zIndex: 9999 }}
           >
+            {/* طبقة الحجب — النقر خارج النافذة لا يغلقها؛ يلفت الانتباه بنفس نمط دفاتر المستندات */}
+            <div
+              style={{
+                position: "absolute", inset: 0, zIndex: 0,
+                background: "rgba(226,217,202,0.84)",
+                backdropFilter: "blur(1.5px) saturate(0.5)",
+              }}
+              onMouseDown={handleProductBackdropMouseDown}
+            />
+
+            <Rnd
+              position={{ x: winPos.x, y: winPos.y }}
+              size={{ width: winSize.w, height: winSize.h }}
+              onDragStop={(_, d) => {
+                if (!isMaximized) {
+                  setWinPos({ x: d.x, y: d.y });
+                  saveWinBounds(d.x, d.y, winSize.w, winSize.h);
+                }
+              }}
+              onResizeStop={(_, __, ref, ___, pos) => {
+                if (!isMaximized) {
+                  const w = ref.offsetWidth;
+                  const h = ref.offsetHeight;
+                  setWinSize({ w, h });
+                  setWinPos({ x: pos.x, y: pos.y });
+                  saveWinBounds(pos.x, pos.y, w, h);
+                }
+              }}
+              dragHandleClassName="erp-drag-handle"
+              minWidth={640}
+              minHeight={420}
+              bounds="parent"
+              disableDragging={isMaximized}
+              enableResizing={isMaximized ? false : {
+                top: true, bottom: true, left: true, right: true,
+                topLeft: true, topRight: true, bottomLeft: true, bottomRight: true,
+              }}
+              style={{ zIndex: 1 }}
+            >
             {/* الحاوية الداخلية */}
             <div
+              ref={(node) => {
+                productWindowRef.current = node;
+                attentionRef.current = node;
+              }}
               dir="rtl"
-              onClick={e => e.stopPropagation()}
+              tabIndex={-1}
+              onMouseDown={e => e.stopPropagation()}
+              className={isShaking ? "product-modal-window-shake" : undefined}
               style={{
                 display: "flex", flexDirection: "column",
                 width: "100%", height: "100%",
-                background: "#fff",
-                borderRadius: isMaximized ? 4 : 8,
+                background: "#E6DED2",
+                borderRadius: isMaximized ? 5 : 8,
                 overflow: "hidden",
-                border: "2px solid rgba(59,130,246,0.7)",
-                boxShadow: "0 0 0 1px rgba(59,130,246,0.15),0 20px 60px -10px rgba(59,130,246,0.35),0 8px 32px rgba(0,0,0,0.18)",
+                border: "6px solid #BAC6D0",
+                outline: "1px solid #6B4A2D",
+                outlineOffset: -1,
+                boxShadow: "0 12px 30px rgba(0,0,0,0.20), 0 3px 9px rgba(0,0,0,0.10), inset 0 0 0 1px rgba(255,255,255,0.70)",
               }}
             >
-              {/* ── شريط الأدوات الرئيسي — Enterprise ERP Action Bar ── */}
+              {/* ── رأس النافذة — نفس تنسيق دفاتر المستندات ── */}
               <div
                 dir="rtl"
+                className="erp-drag-handle"
+                onDoubleClick={toggleMaximize}
                 style={{
                   flexShrink: 0,
                   display: "flex", flexDirection: "row", alignItems: "center",
                   justifyContent: "space-between",
-                  borderBottom: "1px solid #DDE3EC",
-                  background: "#FFFFFF",
-                  padding: "6px 10px",
-                  gap: 6,
+                  height: 42,
+                  background: "#2F5F8F",
+                  borderBottom: "1px solid #D2C9BC",
+                  padding: "0 12px",
                   userSelect: "none",
-                  minHeight: 48,
+                  cursor: isMaximized ? "default" : "move",
                 }}
               >
-                {/* ① العنوان — منطقة السحب */}
-                <div
-                  className="erp-drag-handle"
-                  onDoubleClick={toggleMaximize}
+                <span
                   style={{
-                    display: "flex", alignItems: "center", gap: 7,
-                    fontSize: 13, fontWeight: 600,
+                    flex: 1,
+                    fontSize: 13,
+                    fontWeight: 700,
                     fontFamily: "'Cairo', Tahoma, sans-serif",
-                    color: "#1E293B", whiteSpace: "nowrap", flexShrink: 0,
-                    cursor: isMaximized ? "default" : "move",
-                    paddingLeft: 2,
+                    color: "#fff",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
                   }}
                 >
-                  <div style={{
-                    width: 26, height: 26, borderRadius: 6,
-                    background: "#EFF6FF", border: "1px solid #BFDBFE",
-                    display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-                  }}>
-                    <Package style={{ width: 13, height: 13, color: "#2563EB", pointerEvents: "none" }} />
-                  </div>
-                  <span style={{ color: "#CA8A04", fontWeight: 700, fontSize: 15.5 }}>
-                    {editId ? "تعديل بيانات الصنف" : "إضافة صنف"}
-                  </span>
-                </div>
+                  {editId ? "تعديل بيانات الصنف" : "إضافة صنف"}
+                </span>
 
-                {/* فاصل رأسي */}
-                <div style={{ width: 1, height: 24, background: "#DDE3EC", margin: "0 2px", flexShrink: 0 }} />
-
-                {/* ② أزرار العمليات */}
-                <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                {/* الأوامر انتقلت إلى الشريط الموحد السفلي */}
+                <div style={{ display: "none", alignItems: "center", gap: 4, flexShrink: 0 }}>
                   <BotBtn
                     icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>}
                     label="حفظ" variant="primary"
@@ -2549,11 +2742,8 @@ export default function Products() {
                   />
                 </div>
 
-                {/* فاصل رأسي */}
-                <div style={{ width: 1, height: 24, background: "#DDE3EC", margin: "0 2px", flexShrink: 0 }} />
-
                 {/* ③ أسهم التنقل */}
-                <div style={{ display: "flex", alignItems: "center", gap: 3, flexShrink: 0 }}>
+                <div style={{ display: "none", alignItems: "center", gap: 3, flexShrink: 0 }}>
                   <NavBtn title="أول سجل" disabled={!editId || currentNavIdx <= 0} onClick={navFirst}>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                       <polyline points="11 17 6 12 11 7"/><polyline points="18 17 13 12 18 7"/>
@@ -2598,38 +2788,25 @@ export default function Products() {
                   </NavBtn>
                 </div>
 
-                {/* spacer — منطقة السحب الثانية */}
-                <div
-                  className="erp-drag-handle"
-                  onDoubleClick={toggleMaximize}
-                  style={{ flex: 1, cursor: isMaximized ? "default" : "move", minWidth: 16 }}
-                />
-
-                {/* فاصل رأسي */}
-                <div style={{ width: 1, height: 24, background: "#DDE3EC", margin: "0 2px", flexShrink: 0 }} />
-
                 {/* ④ تكبير + إغلاق */}
-                <div style={{ display: "flex", alignItems: "center", gap: 3, flexShrink: 0 }}>
+                <div data-winctrl style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
                   <button
+                    onMouseDown={e => e.stopPropagation()}
                     onClick={toggleMaximize}
                     title={isMaximized ? "استعادة الحجم" : "تكبير النافذة"}
                     style={{
                       display: "flex", alignItems: "center", justifyContent: "center",
-                      width: 32, height: 32,
-                      background: "#FFFFFF", border: "1px solid #D6DCE5",
-                      borderRadius: 6, cursor: "pointer", color: "#6B7280",
-                      transition: "background 0.15s ease, border-color 0.15s ease",
+                      width: 40, height: 42,
+                      background: "transparent", border: "none",
+                      borderRadius: 0, cursor: "pointer", color: "rgba(255,255,255,0.9)",
+                      transition: "background 0.1s",
                       flexShrink: 0,
                     }}
                     onMouseEnter={e => {
-                      e.currentTarget.style.background = "#F5F8FC";
-                      e.currentTarget.style.borderColor = "#B8C7DA";
-                      e.currentTarget.style.color = "#374151";
+                      e.currentTarget.style.background = "rgba(255,255,255,0.15)";
                     }}
                     onMouseLeave={e => {
-                      e.currentTarget.style.background = "#FFFFFF";
-                      e.currentTarget.style.borderColor = "#D6DCE5";
-                      e.currentTarget.style.color = "#6B7280";
+                      e.currentTarget.style.background = "transparent";
                     }}
                   >
                     {isMaximized
@@ -2637,50 +2814,73 @@ export default function Products() {
                       : <Maximize2 style={{ width: 13, height: 13, pointerEvents: "none" }} />}
                   </button>
                   <button
+                    onMouseDown={e => e.stopPropagation()}
                     onClick={() => requestClose(() => setIsOpen(false))}
                     title="إغلاق"
                     style={{
-                      display: "flex", alignItems: "center", gap: 5,
-                      padding: "0 12px", height: 32,
-                      background: "#FFFFFF", border: "1px solid #D6DCE5",
-                      borderRadius: 6, cursor: "pointer",
-                      fontFamily: "'Cairo', Tahoma, sans-serif", fontSize: 12, fontWeight: 500,
-                      color: "#6B7280", whiteSpace: "nowrap", flexShrink: 0,
-                      transition: "background 0.15s ease, border-color 0.15s ease, color 0.15s ease",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      width: 40, height: 42,
+                      background: "transparent", border: "none",
+                      borderRadius: 0, cursor: "pointer",
+                      color: "rgba(255,255,255,0.9)", flexShrink: 0,
+                      transition: "background 0.1s",
                     }}
                     onMouseEnter={e => {
-                      e.currentTarget.style.background = "#FEF2F2";
-                      e.currentTarget.style.borderColor = "#FECACA";
-                      (e.currentTarget.style as any).color = "#DC2626";
+                      e.currentTarget.style.background = "#c42b1c";
                     }}
                     onMouseLeave={e => {
-                      e.currentTarget.style.background = "#FFFFFF";
-                      e.currentTarget.style.borderColor = "#D6DCE5";
-                      e.currentTarget.style.color = "#6B7280";
+                      e.currentTarget.style.background = "transparent";
                     }}
                   >
-                    <X style={{ width: 12, height: 12, pointerEvents: "none" }} />
-                    إغلاق
+                    <X style={{ width: 13, height: 13, pointerEvents: "none" }} />
                   </button>
                 </div>
               </div>
 
+              {/* شريط الحالة الثابت — نفس تنسيق دفاتر المستندات */}
+              <div style={{
+                minHeight: 29, padding: "3px 10px", color: "#68727b", fontSize: 10,
+                 background: "#F2F0EC", borderBottom: "1px solid #c7c8c8",
+                display: "flex", justifyContent: "space-between", alignItems: "center",
+              }}>
+                <b>{editId ? "تعديل بيانات الصنف" : "إضافة صنف جديد"}</b>
+                <span>{editId ? `رقم السجل: ${editId}` : "سجل جديد"} • {isDirty ? "تعديلات غير محفوظة" : "جاهز"}</span>
+              </div>
+
               {/* محتوى الكارت */}
-              <div style={{ flex: 1, overflow: "hidden", minHeight: 0 }}>
+              <div
+                className="product-window-content-host"
+                style={{
+                  flex: "1 1 0%",
+                  minHeight: 0,
+                  minWidth: 0,
+                  overflow: "hidden",
+                  background: "#F2F0EC",
+                }}
+              >
                 <ProductCard
                   key={editId ?? "new"}
                   form={form}
                   setForm={setForm}
                   categories={categories}
                   groups={groups as any}
+                  activeTaxes={supportedTaxes}
                   productId={editId}
                   skuRef={skuRef}
                   nameRef={nameRef}
                   fieldErrors={fieldErrors}
                 />
               </div>
+
+              <div className="product-window-toolbar-host">
+                <UnifiedBottomToolbar
+                  actions={toolbarActions}
+                  tools={toolbarTools}
+                />
+              </div>
             </div>
-          </Rnd>
+            </Rnd>
+          </div>
         </>,
         workspaceEl
       )}

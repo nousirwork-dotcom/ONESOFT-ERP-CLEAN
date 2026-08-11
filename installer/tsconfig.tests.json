@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": [
+    "core/**/*",
+    "scripts/test-legacy-upgrade.ts",
+    "scripts/test-upgrade-entrypoint.ts"
+  ]
+}

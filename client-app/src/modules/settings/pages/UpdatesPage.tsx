@@ -620,10 +620,10 @@ export default function UpdatesPage() {
                 </div>
                 <Button
                   onClick={handleInstall}
-                  disabled={dlPhase === "installing"}
+                  disabled={false}
                   className="bg-green-600 hover:bg-green-700 text-white gap-1.5"
                 >
-                  <RefreshCw className={`w-4 h-4 ${dlPhase === "installing" ? "animate-spin" : ""}`} />
+                  <RefreshCw className="w-4 h-4" />
                   إعادة التشغيل والتحديث
                 </Button>
               </div>

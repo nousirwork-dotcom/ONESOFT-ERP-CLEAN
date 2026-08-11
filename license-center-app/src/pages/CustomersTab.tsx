@@ -52,6 +52,9 @@ function addMonths(d: string, n: number) {
   const dt = new Date(d + "T00:00:00"); dt.setMonth(dt.getMonth() + n);
   return dt.toISOString().slice(0, 10);
 }
+function trialExpiry(d: string) {
+  return addMonths(d, 3);
+}
 
 function computeStatus(row: ClientRow): ClientStatus {
   const lic = row.license;
@@ -287,7 +290,7 @@ function makeDefaultForm(): CreateForm {
     activityType: "", contactName: "", contactPhone: "", contactEmail: "",
     runType: "desktop", notes: "",
     packageName: "", licenseType: "subscription",
-    trialDays: 30, subPeriod: 12,
+    trialDays: 90, subPeriod: 12,
     startDate: today, expiryDate: addMonths(today, 12),
     maxUsers: 5, maxBranches: 1, maxPos: 1, maxDevices: 3, maxWeb: 0,
     webAllowed: false, desktopAllowed: true, offlineAllowed: false, syncAllowed: false,
@@ -310,14 +313,14 @@ function CreateClientDialog({ modules, onClose, onCreated }: {
       const next = { ...f, [k]: v };
       if (k === "licenseType") {
         if (v === "lifetime") next.expiryDate = "2099-12-31";
-        else if (v === "trial") next.expiryDate = addDays(next.startDate, next.trialDays);
+        else if (v === "trial") next.expiryDate = trialExpiry(next.startDate);
         else next.expiryDate = addMonths(next.startDate, next.subPeriod);
       }
       if (k === "startDate") {
-        if (next.licenseType === "trial") next.expiryDate = addDays(v as string, next.trialDays);
+        if (next.licenseType === "trial") next.expiryDate = trialExpiry(v as string);
         else if (next.licenseType === "subscription") next.expiryDate = addMonths(v as string, next.subPeriod);
       }
-      if (k === "trialDays") next.expiryDate = addDays(next.startDate, v as number);
+      if (k === "trialDays") next.expiryDate = trialExpiry(next.startDate);
       if (k === "subPeriod") next.expiryDate = addMonths(next.startDate, v as number);
       if (k === "runType") {
         if (v === "web") { next.webAllowed = true; next.desktopAllowed = false; }
@@ -494,9 +497,7 @@ function CreateClientDialog({ modules, onClose, onCreated }: {
                   <Field label="مدة التجربة">
                     <select value={form.trialDays} onChange={e => set("trialDays", parseInt(e.target.value))}
                       className={inputCls} style={inputStyle}>
-                      <option value={7}>7 أيام</option>
-                      <option value={14}>14 يوم</option>
-                      <option value={30}>30 يوم</option>
+                      <option value={90}>3 أشهر تقويمية</option>
                     </select>
                   </Field>
                   <Field label="تاريخ البداية">

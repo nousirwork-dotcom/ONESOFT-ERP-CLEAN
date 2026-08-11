@@ -114,6 +114,7 @@ let tray             = null;
 let serverProc       = null;
 let serverReady      = false;
 let isQuitting       = false;
+let exitRequestPending = false;
 let cfg              = loadConfig();
 let brandingSettings = {};  // cached after fetchBrandingSettings() at startup
 const SERVER_URL      = `http://localhost:${cfg.port}`;
@@ -377,23 +378,7 @@ function createMainWindow() {
   mainWin.on('close', (e) => {
     if (isQuitting) return;
     e.preventDefault();
-    const choice = dialog.showMessageBoxSync(mainWin, {
-      type: 'question',
-      title: 'إغلاق OneSoft ERP',
-      message: 'هل تريد إغلاق برنامج OneSoft ERP؟',
-      detail: 'يمكنك أيضاً تصغير البرنامج إلى شريط النظام ليبقى يعمل في الخلفية.',
-      buttons: ['إغلاق البرنامج', 'تصغير إلى شريط النظام', 'إلغاء'],
-      defaultId: 0,
-      cancelId: 2,
-      noLink: true,
-    });
-    if (choice === 0) {
-      isQuitting = true;
-      app.quit();
-    } else if (choice === 1) {
-      mainWin.hide();
-    }
-    // choice === 2 → إلغاء: لا شيء
+    requestApplicationExit();
   });
 
   mainWin.on('closed', () => { mainWin = null; });
@@ -460,8 +445,7 @@ function updateTrayMenu() {
     {
       label: 'إنهاء البرنامج',
       click: () => {
-        stopServer();
-        app.quit();
+        requestApplicationExit();
       },
     },
   ]);
@@ -475,10 +459,41 @@ ipcMain.on('get-launch-id-sync', (event) => { event.returnValue = LAUNCH_ID; });
 ipcMain.handle('get-config',       ()  => cfg);
 ipcMain.handle('open-browser',     ()  => shell.openExternal(SERVER_URL));
 ipcMain.handle('get-server-status',()  => ({ running: !!serverProc, ready: serverReady, url: SERVER_URL }));
+ipcMain.handle('window:minimize',  ()  => {
+  if (mainWin && !mainWin.isDestroyed()) mainWin.minimize();
+});
+ipcMain.handle('window:maximize',   ()  => {
+  if (!mainWin || mainWin.isDestroyed()) return;
+  if (mainWin.isMaximized()) mainWin.restore();
+  else mainWin.maximize();
+});
+ipcMain.handle('window:is-maximized', () => (
+  !!mainWin && !mainWin.isDestroyed() && mainWin.isMaximized()
+));
+ipcMain.handle('window:close',      ()  => requestApplicationExit());
+ipcMain.handle('app:get-version',   ()  => app.getVersion());
 ipcMain.handle('restart-server',   ()  => {
   stopServer();
   setTimeout(() => { startServer(); waitForServer(20000).catch(() => {}); }, 1000);
   return { ok: true };
+});
+
+function requestApplicationExit() {
+  if (isQuitting || exitRequestPending || !mainWin || mainWin.isDestroyed()) return;
+  exitRequestPending = true;
+  mainWin.show();
+  mainWin.focus();
+  mainWin.webContents.send('app:exit-request');
+}
+
+ipcMain.on('app:exit-response', (_event, response) => {
+  if (!exitRequestPending) return;
+  exitRequestPending = false;
+  if (response === 'cancel') return;
+  if (response === 'confirm') {
+    isQuitting = true;
+    app.quit();
+  }
 });
 ipcMain.handle('pos:setFullScreen', (_e, v) => {
   const win = BrowserWindow.getFocusedWindow();
