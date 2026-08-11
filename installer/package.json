@@ -13,6 +13,7 @@
     "test:core": "tsx core/index.ts",
     "test:legacy-upgrade": "tsx scripts/test-legacy-upgrade.ts",
     "test:atomic-upgrade": "tsx scripts/test-atomic-upgrade.ts",
+    "test:cross-stage-upgrade": "tsx scripts/test-cross-stage-upgrade.ts",
     "test:upgrade-entrypoint": "tsx scripts/test-upgrade-entrypoint.ts",
     "test:in-app-upgrade-bootstrap": "tsx scripts/test-in-app-upgrade-bootstrap.ts",
     "pack": "electron-builder --dir",

@@ -15,6 +15,7 @@ import {
   provisionRepairThenSaveCredential,
   RUNTIME_ROLE,
 } from '../database/DatabaseRoleManager.js';
+import type { MigrationCredential } from '../security/MigrationCredentialStore.js';
 import { APP_SCHEMA_VERSION } from '../version.js';
 import { ConfigManager } from '../config/ConfigManager.js';
 import { ServiceManager }       from '../services/ServiceManager.js';
@@ -27,11 +28,43 @@ import { spawnSync } from 'child_process';
 type Emit = (e: ProgressEvent) => void;
 type StatusCb = (s: UpgradeStatus) => void;
 
+type RoleManagerLike = Pick<DatabaseRoleManager, 'provision' | 'adoptAllowlistedObjects'>;
+type BackupManagerLike = Pick<BackupBeforeUpgrade, 'backup'>;
+type RollbackManagerLike = Pick<RollbackManager, 'rollback'>;
+type ServiceManagerLike = Pick<ServiceManager, 'stop' | 'start' | 'getStatus'>;
+
+export interface UpgradeManagerDependencies {
+  backupManager?: BackupManagerLike;
+  rollbackManager?: RollbackManagerLike;
+  roleManagerFactory?: () => RoleManagerLike;
+  serviceManager?: ServiceManagerLike;
+  loadMigrationCredential?: () => MigrationCredential | null;
+  saveMigrationCredential?: (credential: MigrationCredential) => void;
+  validateAdminCredential?: (opts: DatabaseConnectionOptions) => Promise<void>;
+}
+
 export class UpgradeManager {
   private readonly versionDetector = new VersionDetector();
-  private readonly backupManager   = new BackupBeforeUpgrade();
-  private readonly rollback        = new RollbackManager();
+  private readonly backupManager: BackupManagerLike;
+  private readonly rollback: RollbackManagerLike;
+  private readonly roleManagerFactory: () => RoleManagerLike;
+  private readonly serviceManager: ServiceManagerLike;
+  private readonly loadMigrationCredential: () => MigrationCredential | null;
+  private readonly saveMigrationCredential: (credential: MigrationCredential) => void;
+  private readonly validateAdminCredential: (opts: DatabaseConnectionOptions) => Promise<void>;
   private readonly diagnosticLogger = new UpgradeDiagnosticLogger();
+
+  constructor(deps: UpgradeManagerDependencies = {}) {
+    this.backupManager = deps.backupManager ?? new BackupBeforeUpgrade();
+    this.rollback = deps.rollbackManager ?? new RollbackManager();
+    this.roleManagerFactory = deps.roleManagerFactory ?? (() => new DatabaseRoleManager());
+    this.serviceManager = deps.serviceManager ?? new ServiceManager();
+    this.loadMigrationCredential = deps.loadMigrationCredential ?? (() => MigrationCredentialStore.load());
+    this.saveMigrationCredential = deps.saveMigrationCredential ?? ((credential) => {
+      DatabaseRoleManager.saveCredential(credential);
+    });
+    this.validateAdminCredential = deps.validateAdminCredential ?? validateAdminCredential;
+  }
 
   async upgrade(opts: {
     serverAppPath: string;
@@ -71,7 +104,7 @@ export class UpgradeManager {
       // machine has neither a protected migrator credential nor a one-time
       // legacy administrator credential. A runtime-only role cannot bootstrap
       // the migration roles or repair ownership.
-      const storedMigrationCredential = MigrationCredentialStore.load();
+      const storedMigrationCredential = this.loadMigrationCredential();
       if (
         (!storedMigrationCredential && !opts.adminDbOpts) ||
         (opts.forceRoleProvision === true && !opts.adminDbOpts)
@@ -89,7 +122,7 @@ export class UpgradeManager {
       startStage('admin-credential-validation');
       if (opts.adminDbOpts && (!storedMigrationCredential || opts.forceRoleProvision === true)) {
         try {
-          await validateAdminCredential(opts.adminDbOpts);
+          await this.validateAdminCredential(opts.adminDbOpts);
         } catch (error: unknown) {
           if (isPostgresAuthenticationFailure(error)) {
             throw new Error('بيانات PostgreSQL الإدارية غير صحيحة');
@@ -120,7 +153,7 @@ export class UpgradeManager {
       startStage('service-stop');
       onStatus?.('stopping-services');
       emit({ level: 'info', message: 'جارٍ إيقاف الخدمات...', timestamp: now() });
-      const svcMgr = new ServiceManager();
+      const svcMgr = this.serviceManager;
       svcMgr.stop('OneSoft-Server');
       svcMgr.stop('OneSoft-Client');
       emit({ level: 'success', message: 'تم إيقاف الخدمات', timestamp: now() });
@@ -133,9 +166,14 @@ export class UpgradeManager {
       if ((!migrationCredential || opts.forceRoleProvision === true) && opts.adminDbOpts) {
         startStage('role-bootstrap');
         emit({ level: 'warning', message: 'اعتماد الترحيل المحمي غير موجود — جارٍ إنشاءه من اعتماد Legacy صالح مرة واحدة...', timestamp: now() });
-        const roleManager = new DatabaseRoleManager();
+        const roleManager = this.roleManagerFactory();
         const provisioned = await provisionRepairThenSaveCredential(
-          () => roleManager.provision(opts.adminDbOpts!, dbOpts.database, dbOpts.password),
+          () => roleManager.provision(
+            opts.adminDbOpts!,
+            dbOpts.database,
+            dbOpts.password,
+            { preserveRuntimePassword: true },
+          ),
           async () => {
             successStage('role-bootstrap');
             startStage('ownership-repair');
@@ -147,7 +185,7 @@ export class UpgradeManager {
           },
           (credential) => {
             startStage('dpapi-credential-create');
-            DatabaseRoleManager.saveCredential(credential);
+            this.saveMigrationCredential(credential);
           },
         );
         if (activeStage === 'role-bootstrap') successStage('role-bootstrap');
@@ -180,7 +218,7 @@ export class UpgradeManager {
         }
         startStage('ownership-repair');
         emit({ level: 'warning', message: `تم اكتشاف انحراف ملكية في ${preflight.ownershipDrift.length} كائن — إصلاح Allowlist فقط...`, timestamp: now() });
-        await new DatabaseRoleManager().adoptAllowlistedObjects({
+        await this.roleManagerFactory().adoptAllowlistedObjects({
           ...opts.adminDbOpts,
           database: dbOpts.database,
         });

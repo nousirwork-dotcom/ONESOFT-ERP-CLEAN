@@ -1,5 +1,6 @@
 import { Pool } from 'pg';
 import { randomBytes } from 'crypto';
+import { Client } from 'pg';
 import type { DatabaseConnectionOptions } from '../types.js';
 import { MigrationCredentialStore, type MigrationCredential } from '../security/MigrationCredentialStore.js';
 import { APP_VERSION } from '../version.js';
@@ -60,6 +61,10 @@ export interface TransactionClient {
   ): Promise<{ rows: T[] }>;
 }
 
+export interface ProvisionOptions {
+  preserveRuntimePassword?: boolean;
+}
+
 function sqlLiteral(value: string): string {
   return `'${value.replaceAll("'", "''")}'`;
 }
@@ -82,6 +87,7 @@ export async function runRoleBootstrapTransaction(
   dbName: string,
   appPassword: string,
   migrationPassword: string,
+  options: ProvisionOptions = {},
 ): Promise<void> {
   await client.query('BEGIN');
   try {
@@ -101,13 +107,21 @@ export async function runRoleBootstrapTransaction(
         ALTER ROLE ${quote(MIGRATOR_ROLE)} LOGIN PASSWORD ${migrationLiteral};
       END IF;
     END $$;`);
-    await client.query(`DO $$ BEGIN
-      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${RUNTIME_ROLE}') THEN
-        CREATE ROLE ${quote(RUNTIME_ROLE)} LOGIN PASSWORD ${appLiteral};
-      ELSE
-        ALTER ROLE ${quote(RUNTIME_ROLE)} LOGIN PASSWORD ${appLiteral};
-      END IF;
-    END $$;`);
+    if (options.preserveRuntimePassword) {
+      await client.query(`DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${RUNTIME_ROLE}') THEN
+          CREATE ROLE ${quote(RUNTIME_ROLE)} LOGIN PASSWORD ${appLiteral};
+        END IF;
+      END $$;`);
+    } else {
+      await client.query(`DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${RUNTIME_ROLE}') THEN
+          CREATE ROLE ${quote(RUNTIME_ROLE)} LOGIN PASSWORD ${appLiteral};
+        ELSE
+          ALTER ROLE ${quote(RUNTIME_ROLE)} LOGIN PASSWORD ${appLiteral};
+        END IF;
+      END $$;`);
+    }
     await client.query(`GRANT ${quote(SCHEMA_OWNER_ROLE)} TO ${quote(MIGRATOR_ROLE)}`);
     await client.query(`GRANT CONNECT ON DATABASE ${quote(dbName)} TO ${quote(MIGRATOR_ROLE)}, ${quote(RUNTIME_ROLE)}`);
     await client.query(`ALTER DATABASE ${quote(dbName)} OWNER TO ${quote(SCHEMA_OWNER_ROLE)}`);
@@ -217,12 +231,38 @@ export class DatabaseRoleManager {
     admin: DatabaseConnectionOptions,
     dbName: string,
     appPassword = randomPassword(),
+    options: ProvisionOptions = {},
   ): Promise<ProvisionedRoles> {
     const migrationPassword = randomPassword();
     const pool = new Pool({ ...admin, database: 'postgres', connectionTimeoutMillis: 15_000 });
     const client = await pool.connect();
     try {
-      await runRoleBootstrapTransaction(client, dbName, appPassword, migrationPassword);
+      if (options.preserveRuntimePassword) {
+        const runtimeRole = await client.query<{ exists: boolean }>(
+          `SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = $1) AS exists`,
+          [RUNTIME_ROLE],
+        );
+        if (runtimeRole.rows[0]?.exists === true) {
+          const runtimeClient = new Client({
+            ...admin,
+            database: dbName,
+            user: RUNTIME_ROLE,
+            password: appPassword,
+            connectionTimeoutMillis: 15_000,
+          });
+          try {
+            await runtimeClient.connect();
+            await runtimeClient.query('SELECT 1');
+          } catch {
+            throw new Error(
+              'كلمة مرور onesoft_app الحالية غير متاحة أو غير صحيحة — تم إيقاف الترقية دون تدوير كلمة المرور',
+            );
+          } finally {
+            await runtimeClient.end().catch(() => {});
+          }
+        }
+      }
+      await runRoleBootstrapTransaction(client, dbName, appPassword, migrationPassword, options);
     } finally {
       client.release();
       await pool.end();
