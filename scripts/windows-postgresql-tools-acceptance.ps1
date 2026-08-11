@@ -76,7 +76,11 @@ function Get-PgTool([string]$ToolName) {
     if (Test-Path $pgRoot) {
       Get-ChildItem $pgRoot -Directory -ErrorAction SilentlyContinue |
         Where-Object { $_.Name -match '^\d+(\.\d+)?$' } |
-        Sort-Object { [version]$_.Name } -Descending |
+        Sort-Object {
+          $versionText = $_.Name
+          if ($versionText -match '^\d+$') { $versionText = "$versionText.0" }
+          [version]$versionText
+        } -Descending |
         ForEach-Object { $directories += @{ Path = (Join-Path $_.FullName 'bin'); Source = 'program-files' } }
     }
   }
