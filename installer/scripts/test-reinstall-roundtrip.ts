@@ -35,7 +35,10 @@ async function runSafeMigrations(pool: Pool): Promise<string[]> {
   const client = await pool.connect();
   const applied: string[] = [];
   try {
-    await client.query(fs.readFileSync(path.join(DRIZZLE, 'base_schema.sql'), 'utf-8'));
+    const orgCheck = await client.query(`SELECT to_regclass('public.organizations') AS tbl`);
+    if (orgCheck.rows[0]?.tbl === null) {
+      await client.query(fs.readFileSync(path.join(DRIZZLE, 'base_schema.sql'), 'utf-8'));
+    }
     await client.query(`CREATE TABLE IF NOT EXISTS __drizzle_migrations (
       id SERIAL PRIMARY KEY, tag TEXT NOT NULL UNIQUE, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
     for (const e of entries) {
