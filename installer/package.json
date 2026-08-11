@@ -11,6 +11,7 @@
     "build:preload": "esbuild electron/preload.ts --bundle --platform=node --target=node20 --format=cjs --external:electron --tsconfig=tsconfig.electron.json --outfile=dist-electron/electron/preload.js --log-level=warning",
     "build:core": "tsc -p tsconfig.core.json",
     "test:core": "tsx core/index.ts",
+    "test:legacy-upgrade": "tsx scripts/test-legacy-upgrade.ts",
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
     "release:patch": "node scripts/bump-version.mjs patch",

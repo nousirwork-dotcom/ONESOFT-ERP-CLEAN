@@ -71,6 +71,7 @@ export class DatabaseRoleManager {
           CREATE ROLE ${quote(SCHEMA_OWNER_ROLE)} NOLOGIN;
         END IF;
       END $$;`);
+      await client.query(`ALTER ROLE ${quote(SCHEMA_OWNER_ROLE)} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION`);
       await client.query(`DO $$ BEGIN
         IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${MIGRATOR_ROLE}') THEN
           CREATE ROLE ${quote(MIGRATOR_ROLE)} LOGIN PASSWORD ${migrationLiteral};
@@ -133,6 +134,9 @@ export class DatabaseRoleManager {
       // owner is therefore part of the migration-role invariant, even though
       // it is not included in the table/type allowlists below.
       await client.query(`ALTER SCHEMA public OWNER TO ${quote(SCHEMA_OWNER_ROLE)}`);
+      await client.query(`REVOKE CREATE ON SCHEMA public FROM PUBLIC`);
+      await client.query(`REVOKE CREATE ON DATABASE ${quote(admin.database)} FROM PUBLIC`);
+      await client.query(`GRANT USAGE ON SCHEMA public TO ${quote(MIGRATOR_ROLE)}`);
       for (const table of TABLE_ALLOWLIST) {
         const exists = await client.query(
           `SELECT to_regclass($1) IS NOT NULL AS exists`, [`public.${table}`],
