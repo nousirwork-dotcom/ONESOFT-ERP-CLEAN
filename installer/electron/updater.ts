@@ -31,6 +31,9 @@ import * as path           from 'path';
 import * as crypto         from 'crypto';
 import { spawn, spawnSync } from 'child_process';
 import type { BrowserWindow } from 'electron';
+import { ConfigManager } from '../core/config/ConfigManager.js';
+import { MigrationCredentialStore } from '../core/security/MigrationCredentialStore.js';
+import { chooseUpgradeLaunchMode } from '../core/upgrade/UpgradeLaunchPolicy.js';
 
 // ─── روابط Manifest حسب قناة التحديث ─────────────────────────────────────────
 // GitHub raw content — يعمل مباشرة بدون خادم خارجي
@@ -181,6 +184,30 @@ function fetchJson(url: string): Promise<unknown> {
 let downloadedFilePath: string | null = null;
 let _activeRequest:     import('http').ClientRequest | null = null;
 let _downloadAborted    = false;
+
+function hasLegacyAdminCredential(): boolean {
+  if (!ConfigManager.exists()) return false;
+  try {
+    const database = ConfigManager.load().database;
+    const configuredAdminUser = database.adminUser?.trim();
+    const configuredAdminPassword = database.adminPassword?.trim();
+    if (configuredAdminUser && configuredAdminPassword) return true;
+
+    // Older installations stored the PostgreSQL administrator as the active
+    // database user. Treat that pair as a valid bootstrap capability only
+    // while the runtime role has not yet been provisioned.
+    return database.user !== 'onesoft_app' && Boolean(database.user?.trim() && database.password);
+  } catch {
+    return false;
+  }
+}
+
+export function getUpgradeLaunchMode(): 'silent' | 'interactive' {
+  return chooseUpgradeLaunchMode({
+    migrationCredentialValid: MigrationCredentialStore.load() !== null,
+    legacyAdminCredentialValid: hasLegacyAdminCredential(),
+  });
+}
 
 /** إلغاء التحميل الجاري — يُطلق من update:cancel-download */
 function abortActiveDownload(): void {
@@ -419,6 +446,20 @@ export function setupUpdater(mainWindow: BrowserWindow): void {
       log('WARN', 'update:install-now — file not found');
       return { ok: false, error: 'الملف غير موجود — حاول التحميل مجدداً' };
     }
+    // Decide whether the downloaded NSIS installer may run silently before
+    // stopping the current application/services. A first Legacy bootstrap
+    // needs the interactive wizard; otherwise the old app would stop and
+    // leave the customer with a silent, non-actionable failure.
+    const launchMode = getUpgradeLaunchMode();
+    const installerArgs = launchMode === 'silent' ? ['/S'] : [];
+    log('INFO', `update-installer-launch-mode  mode=${launchMode}`);
+    send('update:log', {
+      event: 'update-installer-launch-mode',
+      mode: launchMode,
+      reason: launchMode === 'interactive'
+        ? 'migration-credential-and-legacy-admin-credential-unavailable'
+        : 'protected-migration-capability-available',
+    });
     log('INFO', `update-installing  path=${downloadedFilePath}`);
     send('update:log', { event: 'update-installing', path: downloadedFilePath });
     if (process.platform === 'win32') {
@@ -436,15 +477,8 @@ export function setupUpdater(mainWindow: BrowserWindow): void {
           });
         } catch {}
       }
-      try {
-        spawnSync('taskkill.exe', ['/F', '/T', '/IM', 'OneSoft ERP.exe'], {
-          windowsHide: true,
-          stdio: 'ignore',
-          timeout: 30_000,
-        });
-      } catch {}
     }
-    const child = spawn(downloadedFilePath, ['/S'], { detached: true, stdio: 'ignore', shell: false });
+    const child = spawn(downloadedFilePath, installerArgs, { detached: true, stdio: 'ignore', shell: false });
     child.unref();
     setTimeout(() => app.quit(), 500);
     return { ok: true };

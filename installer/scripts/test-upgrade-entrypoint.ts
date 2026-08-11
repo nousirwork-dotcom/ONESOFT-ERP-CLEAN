@@ -77,6 +77,8 @@ assert(
 );
 const wizard = read('ui/steps/UpgradeWizard.tsx');
 const upgradeIpc = read('electron/ipc/upgrade.ipc.ts');
+const updaterSource = read('electron/updater.ts');
+const launchPolicy = read('core/upgrade/UpgradeLaunchPolicy.ts');
 assert(
   wizard.includes('hasMigrationCredential') &&
     wizard.includes('adminUser') &&
@@ -89,10 +91,37 @@ assert(
   upgradeIpc.includes('MigrationCredentialStore.load() !== null'),
   'credential probe rejects missing or unreadable DPAPI credentials',
 );
+assert(
+  launchPolicy.includes('migrationCredentialValid') &&
+    launchPolicy.includes('legacyAdminCredentialValid') &&
+    launchPolicy.includes("return preflight.migrationCredentialValid || preflight.legacyAdminCredentialValid"),
+  'upgrade launch policy allows silent mode only with a bootstrap capability',
+);
+assert(
+  updaterSource.includes('getUpgradeLaunchMode') &&
+    updaterSource.includes('const installerArgs = launchMode === \'silent\' ? [\'/S\'] : []') &&
+    updaterSource.includes("MigrationCredentialStore.load() !== null") &&
+    updaterSource.includes('database.adminUser') &&
+    updaterSource.includes('database.adminPassword'),
+  'In-App updater preflights credentials before choosing silent or interactive NSIS',
+);
+assert(
+  updaterSource.indexOf('getUpgradeLaunchMode()') <
+    updaterSource.indexOf("spawn(downloadedFilePath, installerArgs") &&
+    updaterSource.indexOf('getUpgradeLaunchMode()') <
+      updaterSource.indexOf("spawnSync('sc.exe', ['stop'"),
+  'In-App credential preflight runs before launching the downloaded installer',
+);
 
 assert(
-  updater.includes("spawn(downloadedFilePath, ['/S']"),
-  'updater launches the same NSIS installer path',
+  updaterSource.includes('spawn(downloadedFilePath, installerArgs') &&
+    updaterSource.includes("const installerArgs = launchMode === 'silent' ? ['/S'] : []"),
+  'updater launches the same NSIS installer path in the selected mode',
+);
+assert(
+  !updaterSource.includes('taskkill.exe') &&
+    !updaterSource.includes('OneSoft ERP.exe", {'),
+  'In-App updater does not kill its own Electron process before launching NSIS',
 );
 assert(
   !updater.includes("sc.exe', ['start', 'OneSoft-Server']"),
