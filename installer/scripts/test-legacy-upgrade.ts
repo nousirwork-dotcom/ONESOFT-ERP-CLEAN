@@ -8,6 +8,7 @@ import { DatabaseRoleManager, MIGRATOR_ROLE, RUNTIME_ROLE, SCHEMA_OWNER_ROLE } f
 import { preflightDatabase, migrationConnection } from '../core/database/DatabasePreflight.js';
 import { MigrationRunner } from '../core/database/MigrationRunner.js';
 import type { DatabaseConnectionOptions, ProgressEvent } from '../core/types.js';
+import { APP_VERSION } from '../core/version.js';
 
 const { Client } = pg;
 const root = path.resolve(import.meta.dirname, '../..');
@@ -268,7 +269,7 @@ async function assertMigrationFailsAtForeignOwner(
 function configFor(runtime: DatabaseConnectionOptions, port: number): string {
   const configPath = path.join(os.tmpdir(), `onesoft-test-config-${process.pid}-${port}.json`);
   fs.writeFileSync(configPath, JSON.stringify({
-    version: '1.0.26',
+    version: APP_VERSION,
     configVersion: 4,
     database: {
       host: runtime.host,
@@ -455,7 +456,7 @@ async function main(): Promise<void> {
   const fullServer = await startBackend(fullRoles.runtime, fullPort);
   try {
     const health = await waitForHealth(fullPort, (value) => value.status === 200 && value.body.ready === true, fullServer.output);
-    if (health.body.status !== 'ok' || health.body.version !== '1.0.26') {
+    if (health.body.status !== 'ok' || health.body.version !== APP_VERSION) {
       throw new Error(`Unexpected ready health: ${JSON.stringify(health)}`);
     }
     console.log('[legacy-test] runtime onesoft_app health ready=true: PASS');

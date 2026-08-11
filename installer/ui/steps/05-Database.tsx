@@ -155,7 +155,7 @@ export default function Step06DatabaseMode() {
     setSaveState('running');
 
     const cfg = {
-        version: (await window.installer?.getVersion?.()) ?? '1.0.26',
+        version: (await window.installer?.getVersion?.()) ?? '1.0.27',
       database: {
         host:          dbOpts.host,
         port:          dbOpts.port,

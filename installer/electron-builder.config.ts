@@ -8,7 +8,7 @@ const config: Configuration = {
 
   // ── Windows metadata (shows in Settings → Apps & Programs and Features) ──
   extraMetadata: {
-    version: '1.0.26',
+    version: '1.0.27',
   },
 
   directories: {
