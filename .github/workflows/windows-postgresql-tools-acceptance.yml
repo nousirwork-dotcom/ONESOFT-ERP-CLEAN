@@ -36,6 +36,12 @@ jobs:
       - name: Install dependencies without build or release
         shell: pwsh
         run: pnpm install --frozen-lockfile
+        working-directory: installer
+
+      - name: Install server dependencies without build or release
+        shell: pwsh
+        run: pnpm install --frozen-lockfile
+        working-directory: server-app
 
       - name: Run resolver, UTF-8, Backup/Restore and Legacy acceptance
         shell: pwsh
