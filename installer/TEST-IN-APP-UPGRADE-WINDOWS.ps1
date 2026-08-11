@@ -18,7 +18,7 @@
 .USAGE
     PowerShell (Admin):
       .\TEST-IN-APP-UPGRADE-WINDOWS.ps1 `
-        -InstallerExe "C:\Build\OneSoftSetup-1.0.27-x64.exe"
+         -InstallerExe "C:\Build\OneSoftSetup-1.0.28-x64.exe"
 
     The script does not launch the installer automatically. It first verifies
     the exact precondition, then asks the operator to start the update from
@@ -32,7 +32,7 @@ param(
 
     [string]$InstallDir = "C:\OneSoft-ERP",
     [string]$ExpectedOldVersion = "1.0.26",
-    [string]$ExpectedNewVersion = "1.0.27",
+    [string]$ExpectedNewVersion = "1.0.28",
     [string]$ReportDir = "$env:USERPROFILE\Desktop\OneSoft-InApp-Upgrade-Report"
 )
 
@@ -93,7 +93,7 @@ $Log.Add("Started: $(Get-Date -Format s)")
 $Log.Add("Installer: $InstallerExe")
 
 Write-Host "`n=== Preconditions: installed 1.0.26 without bootstrap credentials ===" -ForegroundColor Cyan
-Require-Path $InstallerExe "1.0.27 installer"
+Require-Path $InstallerExe "1.0.28 installer"
 Require-Path $ConfigPath "OneSoft config"
 Require-Path $VersionPath "version marker"
 

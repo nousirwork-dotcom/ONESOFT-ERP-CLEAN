@@ -382,7 +382,7 @@ async function runUpgrade(
     backupsDir: path.join(testRoot, 'backups'),
     dbOpts,
     databaseUrl,
-    targetVersion: '1.0.27',
+    targetVersion: '1.0.28',
     backendPort,
     adminDbOpts,
     forceRoleProvision: true,

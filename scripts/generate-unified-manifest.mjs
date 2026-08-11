@@ -67,7 +67,7 @@ const clientPackage = readJson(path.join(CLIENT, 'package.json'));
 const rootVersion = readJson(path.join(ROOT, 'version.json'));
 const builderText = fs.readFileSync(path.join(INSTALLER, 'electron-builder.yml'), 'utf8');
 const builderVersion = builderText.match(/^\s*version:\s*"([^"]+)"/m)?.[1];
-const releaseVersion = installerPackage.version;
+const releaseVersion = rootVersion.version;
 const versions = {
   installer: installerPackage.version,
   server: serverPackage.version,
@@ -75,7 +75,7 @@ const versions = {
   root: rootVersion.version,
   builder: builderVersion,
 };
-const inconsistent = Object.entries(versions).filter(([, version]) => version !== releaseVersion);
+const inconsistent = Object.entries(versions).filter(([, version]) => version !== rootVersion.version);
 if (inconsistent.length) {
   throw new Error(`release version sources disagree: ${JSON.stringify(versions)}`);
 }

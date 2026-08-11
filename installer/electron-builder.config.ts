@@ -1,4 +1,5 @@
 import type { Configuration } from 'electron-builder';
+import versionInfo from '../version.json';
 
 const config: Configuration = {
   appId: 'com.onesoft.erp',
@@ -8,7 +9,7 @@ const config: Configuration = {
 
   // ── Windows metadata (shows in Settings → Apps & Programs and Features) ──
   extraMetadata: {
-    version: '1.0.27',
+    version: versionInfo.version,
   },
 
   directories: {
