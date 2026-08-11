@@ -1,18 +1,19 @@
 {
-  "latestVersion": "1.0.25",
+  "latestVersion": "1.0.27",
   "minSupportedVersion": "1.0.0",
   "mandatory": false,
-  "messageAr": "يوجد تحديث جديد (v1.0.25): تحسينات سند التوريد وتنسيق جدول الأصناف وإصلاحات في التحديث التلقائي.",
-  "messageEn": "New update (v1.0.25): Supply receipt improvements, item-table styling, and auto-update fixes.",
+  "messageAr": "يوجد تحديث جديد (v1.0.27): تحسينات الترقية الآمنة وإصلاحات الترحيل وقاعدة البيانات والتحديث داخل التطبيق.",
+  "messageEn": "New update (v1.0.27): safer upgrades, migration/database fixes, and improved in-app updating.",
   "releaseNotes": [
-    "نقل البحث إلى عمود اسم الصنف وجعل كود الصنف للكتابة فقط",
-    "تحسين تمدد جدول مواد سند التوريد وتنسيق العناوين",
-    "إصلاح فحص المسارات عند بناء نسخة Windows"
+    "ترقية آمنة موحّدة بين المثبت والتحديث داخل التطبيق",
+    "إصلاح ملكية PostgreSQL وتشغيل الترحيلات مع Runtime role محدود الصلاحيات",
+    "تحسين فحص التحديث قبل تسجيل الدخول وفتح Upgrade Wizard عند الحاجة",
+    "بناء رسمي لـ Windows x64 وia32 مع تحقق أمني كامل"
   ],
-  "downloadUrl": "https://github.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/releases/download/v1.0.25/OneSoftSetup-1.0.25-x64.exe",
-  "fileSizeBytes": 81631131,
-  "sha512": "Kxofxzcaj8FVbAwf1lR2j9d2GrW1Uazqg2ypr31ktdPdLvyd5dv7HguIBJg6G4yY/+X19LdMrsDcdo1l6Bh+Jw==",
-  "publishedAt": "2026-07-29T13:03:56.606Z",
+  "downloadUrl": "https://github.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/releases/download/v1.0.27/OneSoftSetup-1.0.27-x64.exe",
+  "fileSizeBytes": 81947186,
+  "sha512": "ug3+tc0J1GtPl6TasD+bHG0kroY3yO5adE97DbcyUZtfB3lcsejKlHqAuGSMpx+gwEVC4SyejzieMXDHWc5V3A==",
+  "publishedAt": "2026-08-11T04:48:11.622Z",
   "_notes": {
     "MANIFEST_URL": "استضِف هذا الملف على CDN عام أو GitHub Pages بدون توثيق (Public URL).",
     "ONESOFT_UPDATE_URL": "يمكن تجاوز الرابط الافتراضي عبر متغير البيئة ONESOFT_UPDATE_URL.",
@@ -23,9 +24,9 @@
     "publishedAt": "تاريخ نشر الإصدار بصيغة ISO 8601.",
     "skip_policy": "التحديث الاختياري يُعرض مرة واحدة ثم يُؤجّل 24 ساعة إذا ضغط المستخدم 'لاحقاً'.",
     "mandatory_block": "التحديث الإجباري يمنع الدخول لجميع صفحات النظام (login / dashboard / إلخ) حتى إتمام التحديث.",
-    "generate_sha512": "لحساب sha512 للملف على Windows: certutil -hashfile OneSoftSetup-1.0.25-x64.exe SHA512",
-    "generate_sha512_linux": "sha512sum OneSoftSetup-1.0.25-x64.exe | awk '{print $1}'"
+    "generate_sha512": "لحساب sha512 للملف على Windows: certutil -hashfile OneSoftSetup-1.0.27-x64.exe SHA512",
+    "generate_sha512_linux": "sha512sum OneSoftSetup-1.0.27-x64.exe | awk '{print $1}'"
   },
-  "version": "1.0.25",
-  "notes": "v1.0.25 — تحسينات سند التوريد وإصلاح بناء Windows"
+  "version": "1.0.27",
+  "notes": "v1.0.27 — ترقية آمنة موحّدة وإصلاحات الترحيل وقاعدة البيانات والتحديث داخل التطبيق"
 }
