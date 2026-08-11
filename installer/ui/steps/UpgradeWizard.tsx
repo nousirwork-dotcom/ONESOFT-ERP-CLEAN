@@ -108,7 +108,10 @@ export default function UpgradeWizard() {
         setBackupDir(result.backupDir ?? null);
         setPhase('done');
       } else {
-        setError('فشلت عملية الترقية — تم استعادة النسخة السابقة تلقائياً');
+        const detail = result?.error
+          ? `${result.error}${result.stage ? ` (المرحلة: ${result.stage})` : ''}${result.migration ? ` (migration: ${result.migration})` : ''}`
+          : 'فشلت عملية الترقية — تم استعادة النسخة السابقة تلقائياً';
+        setError(detail);
         setPhase('failed');
       }
     } catch (e: unknown) {

@@ -25,6 +25,27 @@ export interface DatabasePreflightResult {
 
 const quoteIdent = (value: string) => `"${value.replaceAll('"', '""')}"`;
 
+/**
+ * Read-only credential probe used before any backup or role DDL.
+ * The caller classifies the error for the user; this function deliberately
+ * does not log connection options or PostgreSQL error details.
+ */
+export async function validateAdminCredential(
+  admin: DatabaseConnectionOptions,
+): Promise<void> {
+  const client = new Client({
+    ...admin,
+    database: 'postgres',
+    connectionTimeoutMillis: 15_000,
+  });
+  try {
+    await client.connect();
+    await client.query('SELECT 1');
+  } finally {
+    await client.end().catch(() => {});
+  }
+}
+
 export async function preflightDatabase(
   db: DatabaseConnectionOptions,
   migrationTags: string[],

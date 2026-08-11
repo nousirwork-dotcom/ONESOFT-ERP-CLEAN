@@ -84,7 +84,13 @@ interface InstallerAPI {
     backendPort?: number;
     adminDbOpts?: import('../core/types').DatabaseConnectionOptions;
     forceRoleProvision?: boolean;
-  }) => Promise<{ success: boolean; backupDir?: string }>;
+  }) => Promise<{
+    success: boolean;
+    backupDir?: string;
+    error?: string;
+    stage?: string;
+    migration?: string;
+  }>;
   rollback:      (opts: unknown) => Promise<{ ok: boolean }>;
 
   // Uninstall

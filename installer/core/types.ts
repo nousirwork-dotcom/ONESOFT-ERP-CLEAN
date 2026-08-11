@@ -356,6 +356,7 @@ export interface MigrationResult {
   applied: string[];
   skipped: string[];
   failed?: string;
+  failedMigration?: string;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

@@ -88,11 +88,21 @@ export class MigrationRunner {
           } catch (baseErr: unknown) {
             const msg = baseErr instanceof Error ? baseErr.message : String(baseErr);
             emit({ level: 'error', message: `❌ فشل base_schema.sql: ${msg}`, timestamp: now() });
-            return { applied, skipped, failed: `base_schema.sql: ${msg}` };
+            return {
+              applied,
+              skipped,
+              failed: `base_schema.sql: ${msg}`,
+              failedMigration: 'base_schema.sql',
+            };
           }
         } else if (!databaseAlreadyInitialized) {
           emit({ level: 'error', message: `base_schema.sql غير موجود في: ${drizzleDir}`, timestamp: now() });
-          return { applied, skipped, failed: 'base_schema.sql not found' };
+          return {
+            applied,
+            skipped,
+            failed: 'base_schema.sql not found',
+            failedMigration: 'base_schema.sql',
+          };
         } else {
           emit({ level: 'info', message: 'قاعدة موجودة — تخطي base_schema.sql للحفاظ على بيانات العميل', timestamp: now() });
         }
@@ -105,7 +115,12 @@ export class MigrationRunner {
         if (!orgExists) {
           const msg = 'The database schema was not created successfully (organizations table missing).';
           emit({ level: 'error', message: msg, timestamp: now() });
-          return { applied, skipped, failed: msg };
+          return {
+            applied,
+            skipped,
+            failed: msg,
+            failedMigration: 'schema-check',
+          };
         }
         emit({ level: 'success', message: '✅ جدول organizations موجود', timestamp: now() });
 
@@ -191,7 +206,12 @@ export class MigrationRunner {
             await client.query('ROLLBACK');
             const msg = sqlErr instanceof Error ? sqlErr.message : String(sqlErr);
             emit({ level: 'error', message: `❌ فشل ${entry.tag}: ${msg}`, timestamp: now() });
-            return { applied, skipped, failed: msg };
+            return {
+              applied,
+              skipped,
+              failed: msg,
+              failedMigration: entry.tag,
+            };
           }
         }
 
@@ -202,7 +222,12 @@ export class MigrationRunner {
         if (finalCheck.rows[0]?.tbl === null) {
           const msg = 'The database schema was not created successfully.';
           emit({ level: 'error', message: msg, timestamp: now() });
-          return { applied, skipped, failed: msg };
+          return {
+            applied,
+            skipped,
+            failed: msg,
+            failedMigration: 'schema-check',
+          };
         }
 
         // ── STEP 6: ختم _schema_version ─────────────────────────────────────
