@@ -20,6 +20,14 @@ export interface PostgreSQLToolsResolverOptions {
   probeCommand?: (filePath: string, env: NodeJS.ProcessEnv) => boolean;
 }
 
+export interface PostgreSQLServerConnection {
+  host: string;
+  port: number;
+  database: string;
+  user: string;
+  password: string;
+}
+
 export const POSTGRESQL_TOOLS_MISSING_MESSAGE =
   'تعذر العثور على أدوات PostgreSQL اللازمة للنسخ الاحتياطي.';
 
@@ -71,58 +79,150 @@ export class PostgreSQLToolsResolver {
     });
   }
 
-  resolveAll(): PostgreSQLTools {
-    const resolved = new Map<PostgreSQLToolName, { path: string; source: PostgreSQLTools['sourceByTool'][PostgreSQLToolName] }>();
+  resolveAll(serverConnection?: PostgreSQLServerConnection): PostgreSQLTools {
     const tools: PostgreSQLToolName[] = ['pg_dump', 'pg_restore', 'psql'];
+    const candidates = this.candidateDirectories();
+    const serverMajor = serverConnection
+      ? this.discoverServerMajor(candidates, serverConnection)
+      : undefined;
+    const selected = this.selectDirectory(candidates, serverMajor);
 
-    for (const tool of tools) {
-      const result = this.resolveOne(tool);
-      if (result) resolved.set(tool, result);
+    if (!selected) {
+      throw new PostgreSQLToolsResolutionError(tools);
     }
 
-    const missing = tools.filter((tool) => !resolved.has(tool));
-    if (missing.length > 0) {
-      throw new PostgreSQLToolsResolutionError(missing);
-    }
+    const resolved = new Map(tools.map((tool) => [
+      tool,
+      this.executableIn(selected.path, tool)!,
+    ]));
 
     return {
-      pgDump: resolved.get('pg_dump')!.path,
-      pgRestore: resolved.get('pg_restore')!.path,
-      psql: resolved.get('psql')!.path,
+      pgDump: resolved.get('pg_dump')!,
+      pgRestore: resolved.get('pg_restore')!,
+      psql: resolved.get('psql')!,
       sourceByTool: {
-        pg_dump: resolved.get('pg_dump')!.source,
-        pg_restore: resolved.get('pg_restore')!.source,
-        psql: resolved.get('psql')!.source,
+        pg_dump: selected.source,
+        pg_restore: selected.source,
+        psql: selected.source,
       },
     };
   }
 
-  version(tool: PostgreSQLToolName): string {
-    const resolved = this.resolveOne(tool);
-    if (!resolved) throw new PostgreSQLToolsResolutionError([tool]);
-    return this.runCommand(resolved.path, ['--version'], this.env).trim();
+  version(tool: PostgreSQLToolName, serverConnection?: PostgreSQLServerConnection): string {
+    const resolved = this.resolveAll(serverConnection);
+    const executable = {
+      pg_dump: resolved.pgDump,
+      pg_restore: resolved.pgRestore,
+      psql: resolved.psql,
+    }[tool];
+    return this.runCommand(executable, ['--version'], this.env).trim();
   }
 
-  private resolveOne(tool: PostgreSQLToolName): {
-    path: string;
-    source: PostgreSQLTools['sourceByTool'][PostgreSQLToolName];
-  } | null {
+  private selectDirectory(
+    candidates: CandidateDirectory[],
+    serverMajor: number | undefined,
+  ): CandidateDirectory | null {
+    const complete = candidates
+      .map((candidate) => ({ candidate, inspection: this.inspectDirectory(candidate.path) }))
+      .filter((item): item is {
+        candidate: CandidateDirectory;
+        inspection: DirectoryInspection;
+      } => item.inspection !== null);
+
+    const matching = serverMajor === undefined
+      ? complete
+      : complete.filter(({ inspection }) => inspection.major === serverMajor);
+
+    if (matching.length === 0) return null;
+
+    // With a live server connection, the matching major version is the
+    // authority. Without one, never guess between multiple installations.
+    const serviceMatches = matching.filter(({ candidate }) => candidate.source === 'service');
+    if (serverMajor === undefined && serviceMatches.length === 1) {
+      return serviceMatches[0]!.candidate;
+    }
+    if (matching.length === 1) {
+      return matching[0]!.candidate;
+    }
+    return null;
+  }
+
+  private inspectDirectory(directory: string): DirectoryInspection | null {
+    const tools: PostgreSQLToolName[] = ['pg_dump', 'pg_restore', 'psql'];
+    const paths = new Map<PostgreSQLToolName, string>();
+    const versions = new Map<PostgreSQLToolName, number>();
+
+    for (const tool of tools) {
+      const executable = this.executableIn(directory, tool);
+      if (!executable || !this.isRunnable(executable)) return null;
+      let major: number | null;
+      try {
+        major = parseToolMajor(this.runCommand(executable, ['--version'], this.env));
+      } catch {
+        return null;
+      }
+      if (major === null) return null;
+      paths.set(tool, executable);
+      versions.set(tool, major);
+    }
+
+    const majors = [...versions.values()];
+    if (new Set(majors).size !== 1) return null;
+    return { major: majors[0]!, paths };
+  }
+
+  private discoverServerMajor(
+    candidates: CandidateDirectory[],
+    connection: PostgreSQLServerConnection,
+  ): number {
+    for (const candidate of candidates) {
+      const psql = this.executableIn(candidate.path, 'psql');
+      if (!psql || !this.isRunnable(psql)) continue;
+      try {
+        const output = this.runCommand(
+          psql,
+          [
+            '-h', connection.host,
+            '-p', String(connection.port),
+            '-U', connection.user,
+            '-d', connection.database,
+            '--no-password',
+            '-X',
+            '-q',
+            '-tA',
+            '-c',
+            'SHOW server_version_num;',
+          ],
+          { ...this.env, PGPASSWORD: connection.password },
+        );
+        const major = parseServerMajor(output);
+        if (major !== null) return major;
+      } catch {
+        // Try the next locally installed psql as a read-only probe.
+      }
+    }
+
+    throw new Error('تعذر تحديد إصدار PostgreSQL Server الفعلي عبر اتصال OneSoft.');
+  }
+
+  private candidateDirectories(): CandidateDirectory[] {
+    const candidates: CandidateDirectory[] = [];
     for (const directory of this.serviceBinDirectories()) {
-      const executable = this.executableIn(directory, tool);
-      if (executable && this.isRunnable(executable)) {
-        return { path: executable, source: 'service' };
-      }
+      candidates.push({ path: directory, source: 'service' });
     }
-
     for (const directory of this.programFilesBinDirectories()) {
-      const executable = this.executableIn(directory, tool);
-      if (executable && this.isRunnable(executable)) {
-        return { path: executable, source: 'program-files' };
-      }
+      candidates.push({ path: directory, source: 'program-files' });
     }
-
-    const executable = this.pathFallback(tool);
-    return executable ? { path: executable, source: 'path' } : null;
+    for (const directory of this.pathDirectories()) {
+      candidates.push({ path: directory, source: 'path' });
+    }
+    const seen = new Set<string>();
+    return candidates.filter((candidate) => {
+      const key = this.platform === 'win32' ? candidate.path.toLowerCase() : candidate.path;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   }
 
   private executableIn(directory: string, tool: PostgreSQLToolName): string | null {
@@ -187,15 +287,10 @@ export class PostgreSQLToolsResolver {
     return uniqueExistingDirectories(directories, this.exists);
   }
 
-  private pathFallback(tool: PostgreSQLToolName): string | null {
+  private pathDirectories(): string[] {
     const pathValue = this.env['PATH'] ?? this.env['Path'] ?? '';
-    const executableName = this.platform === 'win32' ? `${tool}.exe` : tool;
     const delimiter = this.platform === 'win32' ? ';' : this.filePath.delimiter;
-    for (const directory of pathValue.split(delimiter).filter(Boolean)) {
-      const executable = this.filePath.join(directory, executableName);
-      if (this.exists(executable) && this.isRunnable(executable)) return executable;
-    }
-    return null;
+    return pathValue.split(delimiter).filter(Boolean);
   }
 
   private runWindowsCommand(filePath: string, args: string[]): string {
@@ -231,4 +326,25 @@ function compareVersions(a: string, b: string): number {
     if (difference !== 0) return difference;
   }
   return 0;
+}
+
+interface CandidateDirectory {
+  path: string;
+  source: PostgreSQLTools['sourceByTool'][PostgreSQLToolName];
+}
+
+interface DirectoryInspection {
+  major: number;
+  paths: Map<PostgreSQLToolName, string>;
+}
+
+function parseToolMajor(output: string): number | null {
+  const match = output.match(/\b(\d+)\.(\d+)(?:\.\d+)?\b/);
+  return match ? Number(match[1]) : null;
+}
+
+function parseServerMajor(output: string): number | null {
+  const versionNum = Number(output.trim().split(/\s+/)[0]);
+  if (!Number.isInteger(versionNum) || versionNum <= 0) return null;
+  return versionNum >= 100000 ? Math.floor(versionNum / 10000) : Math.floor(versionNum / 10000);
 }

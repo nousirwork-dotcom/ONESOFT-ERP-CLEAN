@@ -32,7 +32,7 @@ export class BackupBeforeUpgrade {
       const user     = validateIdentifier(dbOpts.user);
       const database = validateIdentifier(dbOpts.database);
 
-      const pgDump = new PostgreSQLToolsResolver().resolveAll().pgDump;
+      const pgDump = new PostgreSQLToolsResolver().resolveAll(dbOpts).pgDump;
       emit({ level: 'info', message: `تم اكتشاف pg_dump.exe: ${pgDump}`, timestamp: now() });
       const env = { ...process.env, PGPASSWORD: dbOpts.password };
 

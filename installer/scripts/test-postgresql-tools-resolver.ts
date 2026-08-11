@@ -55,7 +55,8 @@ function fakeResolver(options: {
       if (filePath === 'sc.exe' && args[0] === 'qc') {
         return 'SERVICE_NAME: postgresql-x64-16\n        BINARY_PATH_NAME   : "C:\\Program Files\\PostgreSQL\\16\\bin\\postgres.exe" -D "C:\\data"';
       }
-      return `${filePath} (PostgreSQL) 16.10`;
+      if (args.includes('SHOW server_version_num;')) return '160004';
+      return `${filePath} (PostgreSQL) ${filePath.includes('\\PostgreSQL\\17\\') ? '17.10' : '16.10'}`;
     },
     probeCommand: () => true,
   });
@@ -71,6 +72,18 @@ assert.equal(serviceTools.pgDump, `${serviceBin}\\pg_dump.exe`);
 assert.equal(serviceTools.pgRestore, `${serviceBin}\\pg_restore.exe`);
 assert.equal(serviceTools.psql, `${serviceBin}\\psql.exe`);
 console.log('[resolver-test] service ImagePath wins over Program Files and PATH: PASS');
+
+const serverMatchedTools = fromService.resolveAll({
+  host: '127.0.0.1',
+  port: 5432,
+  database: 'postgres',
+  user: 'postgres',
+  password: 'secret',
+});
+assert.equal(serverMatchedTools.pgDump, `${serviceBin}\\pg_dump.exe`);
+assert.equal(serverMatchedTools.pgRestore, `${serviceBin}\\pg_restore.exe`);
+assert.equal(serverMatchedTools.psql, `${serviceBin}\\psql.exe`);
+console.log('[resolver-test] live server major version selects one matching bin: PASS');
 
 const fromProgramFiles = fakeResolver({ programFiles: [programFilesBin] });
 const programTools = fromProgramFiles.resolveAll();

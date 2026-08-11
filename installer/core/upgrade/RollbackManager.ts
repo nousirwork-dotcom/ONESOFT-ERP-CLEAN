@@ -44,7 +44,7 @@ export class RollbackManager {
         const user     = validateIdentifier(dbOpts.user);
         const database = validateIdentifier(dbOpts.database);
 
-        const psql = new PostgreSQLToolsResolver().resolveAll().psql;
+        const psql = new PostgreSQLToolsResolver().resolveAll(dbOpts).psql;
         emit({ level: 'info', message: `تم اكتشاف psql.exe للاستعادة: ${psql}`, timestamp: now() });
         const env = { ...process.env, PGPASSWORD: dbOpts.password };
 

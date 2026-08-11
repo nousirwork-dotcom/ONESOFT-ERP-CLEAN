@@ -94,7 +94,7 @@ export class DatabaseMigrator {
     includeData: boolean,
     emit: Emit,
   ): Promise<{ tablesTransferred: number; rowsTransferred: number }> {
-    const pgDump = new PostgreSQLToolsResolver().resolveAll().pgDump;
+    const pgDump = new PostgreSQLToolsResolver().resolveAll(db).pgDump;
     const env = { ...process.env, PGPASSWORD: db.password };
 
     const args = [
@@ -122,7 +122,7 @@ export class DatabaseMigrator {
     dumpPath: string,
     emit: Emit,
   ): Promise<void> {
-    const psql = new PostgreSQLToolsResolver().resolveAll().psql;
+    const psql = new PostgreSQLToolsResolver().resolveAll(db).psql;
 
     const { Pool } = await import('pg');
     const pool = new Pool({

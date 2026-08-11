@@ -47,7 +47,7 @@ const appPassword = `runtime_${suffix}`;
 const legacyOwner = `onesoft_legacy_owner_${process.pid}`;
 const createdRoles = new Set<string>();
 const tempFiles: string[] = [];
-const postgresTools = new PostgreSQLToolsResolver().resolveAll();
+const postgresTools = new PostgreSQLToolsResolver().resolveAll(admin);
 console.log(
   `[legacy-test] PostgreSQL tools: pg_dump=${postgresTools.pgDump} ` +
   `pg_restore=${postgresTools.pgRestore} psql=${postgresTools.psql}`,

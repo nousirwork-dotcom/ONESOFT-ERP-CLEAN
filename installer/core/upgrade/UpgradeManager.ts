@@ -140,7 +140,7 @@ export class UpgradeManager {
       // backup or stopping services. Windows service installations commonly
       // omit PostgreSQL\bin from PATH, so this must not be a PATH-only check.
       startStage('postgres-tools-preflight');
-      const postgresTools = this.postgresToolsResolver.resolveAll();
+      const postgresTools = this.postgresToolsResolver.resolveAll(dbOpts);
       emit({
         level: 'info',
         message: `أدوات PostgreSQL جاهزة: pg_dump=${postgresTools.pgDump}, pg_restore=${postgresTools.pgRestore}, psql=${postgresTools.psql}`,

@@ -59,7 +59,7 @@ function Get-ServiceToolBin {
   return $null
 }
 
-function Get-PgTool([string]$ToolName) {
+function Get-PgToolDirectories {
   $serviceBin = Get-ServiceToolBin
   $roots = @(
     $env:ProgramW6432,
@@ -87,19 +87,71 @@ function Get-PgTool([string]$ToolName) {
   foreach ($pathEntry in ($env:Path -split ';' | Where-Object { $_ })) {
     $directories += @{ Path = $pathEntry; Source = 'path' }
   }
+  return $directories
+}
 
-  foreach ($directory in $directories) {
-    $candidate = Join-Path $directory.Path "$ToolName.exe"
-    if (Test-Path $candidate) {
-      try {
-        & $candidate --version *> $null
-        if ($LASTEXITCODE -eq 0) {
-          return @{ Path = $candidate; Source = $directory.Source }
-        }
-      } catch {}
+function Get-PgToolVersion([string]$FilePath) {
+  $output = & $FilePath --version 2>&1
+  if ($LASTEXITCODE -ne 0) {
+    return $null
+  }
+  $text = ($output -join ' ').Trim()
+  $match = [regex]::Match($text, '\b(\d+)\.(\d+)(?:\.\d+)?\b')
+  if (-not $match.Success) {
+    return $null
+  }
+  return @{
+    Text = $text
+    Major = [int]$match.Groups[1].Value
+  }
+}
+
+function Get-ServerMajorVersion([string]$PsqlPath) {
+  $output = & $PsqlPath `
+    '-h' 'localhost' `
+    '-p' '5432' `
+    '-U' 'postgres' `
+    '-d' 'postgres' `
+    '--no-password' `
+    '-X' '-q' '-tA' `
+    '-c' 'SHOW server_version_num;' 2>&1
+  if ($LASTEXITCODE -ne 0) {
+    Fail "could not query PostgreSQL server version with $PsqlPath`n$($output -join "`n")"
+  }
+  $serverVersionNum = [int64](($output -join '').Trim())
+  if ($serverVersionNum -lt 10000) {
+    Fail "invalid PostgreSQL server_version_num: $serverVersionNum"
+  }
+  return [int][math]::Floor($serverVersionNum / 10000)
+}
+
+function Get-MatchingPgTools([int]$ServerMajor, [object[]]$Directories) {
+  foreach ($directory in $Directories) {
+    $found = @{}
+    $valid = $true
+    foreach ($name in @('pg_dump', 'pg_restore', 'psql')) {
+      $candidate = Join-Path $directory.Path "$name.exe"
+      if (-not (Test-Path $candidate)) {
+        $valid = $false
+        break
+      }
+      $version = Get-PgToolVersion $candidate
+      if (-not $version -or $version.Major -ne $ServerMajor) {
+        $valid = $false
+        break
+      }
+      $found[$name] = @{
+        Path = $candidate
+        Source = $directory.Source
+        Version = $version.Text
+        Major = $version.Major
+      }
+    }
+    if ($valid) {
+      return $found
     }
   }
-  Fail "$ToolName.exe was not found or could not run"
+  Fail "no single PostgreSQL bin contains pg_dump, pg_restore and psql matching server major $ServerMajor"
 }
 
 New-Item -ItemType Directory -Force -Path $ReportDir | Out-Null
@@ -109,22 +161,51 @@ try {
   $pgBinOnPath = ($env:Path -split ';' | Where-Object { $_ -match '\\PostgreSQL\\' })
   Assert-True ($pgBinOnPath.Count -eq 0) 'PostgreSQL bin is absent from PATH'
 
-  $tools = @{}
+  $env:PGPASSWORD = $DatabasePassword
+  $directories = @(Get-PgToolDirectories)
+  $probePsql = $null
+  foreach ($directory in $directories) {
+    $candidate = Join-Path $directory.Path 'psql.exe'
+    if (Test-Path $candidate) {
+      $version = Get-PgToolVersion $candidate
+      if ($version) {
+        $probePsql = $candidate
+        break
+      }
+    }
+  }
+  if (-not $probePsql) { Fail 'psql.exe was not found for PostgreSQL server version probe' }
+  $serverMajor = Get-ServerMajorVersion $probePsql
+  Log "Server major version: $serverMajor"
+
+  $tools = Get-MatchingPgTools $serverMajor $directories
   foreach ($name in @('pg_dump', 'pg_restore', 'psql')) {
-    $tool = Get-PgTool $name
-    $tools[$name] = $tool
-    Log "DISCOVERED: $name.exe = $($tool.Path) (source=$($tool.Source))"
+    Log "DISCOVERED: $name.exe = $($tools[$name].Path) (source=$($tools[$name].Source))"
+    Log "$name version: $($tools[$name].Version)"
   }
   Assert-True ($tools['pg_dump'].Source -eq 'service' -or $tools['pg_dump'].Source -eq 'program-files') `
     'pg_dump.exe was discovered without PATH'
   Assert-True ([IO.Path]::IsPathFullyQualified($tools['pg_dump'].Path)) 'pg_dump.exe path is absolute'
+  $toolBins = @(
+    (Split-Path $tools['pg_dump'].Path),
+    (Split-Path $tools['pg_restore'].Path),
+    (Split-Path $tools['psql'].Path)
+  ) | Select-Object -Unique
+  Assert-True ($toolBins.Count -eq 1) 'all PostgreSQL tools come from the same bin directory'
+  Assert-True (
+    $tools['pg_dump'].Major -eq $serverMajor -and
+    $tools['pg_restore'].Major -eq $serverMajor -and
+    $tools['psql'].Major -eq $serverMajor
+  ) 'PostgreSQL tool majors match the server major version'
   Log "TOOLS: pg_dump.exe=$($tools['pg_dump'].Path)"
   Log "TOOLS: pg_restore.exe=$($tools['pg_restore'].Path)"
   Log "TOOLS: psql.exe=$($tools['psql'].Path)"
 
-  $env:PGPASSWORD = $DatabasePassword
   $databaseUrl = "postgresql://postgres:$([uri]::EscapeDataString($DatabasePassword))@localhost:5432/postgres"
-  $probe = Invoke-Tool $tools['psql'].Path @($databaseUrl, '-X', '-q', '-tA', '-c', 'SELECT 1;')
+  $probe = Invoke-Tool $tools['psql'].Path @(
+    '-h', 'localhost', '-p', '5432', '-U', 'postgres', '-d', 'postgres',
+    '--no-password', '-X', '-q', '-tA', '-c', 'SELECT 1;'
+  )
   Assert-True ($probe.Trim() -eq '1') 'PostgreSQL service is installed and reachable'
 
   $repo = $env:GITHUB_WORKSPACE
