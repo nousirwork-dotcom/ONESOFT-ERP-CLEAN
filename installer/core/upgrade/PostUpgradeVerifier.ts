@@ -208,6 +208,21 @@ export async function verifyPostUpgrade(opts: {
   }
 }
 
+/** Verify schema/Foundation without requiring the HTTP server to be running. */
+export async function verifyPostUpgradeDatabase(opts: {
+  databaseUrl: string;
+  serverAppPath: string;
+  expectedSchemaVersion: string;
+}, emit: Emit): Promise<void> {
+  const client = new Client({ connectionString: opts.databaseUrl, connectionTimeoutMillis: 15_000 });
+  await client.connect();
+  try {
+    await verifyFoundation(client, opts.serverAppPath, opts.expectedSchemaVersion, emit);
+  } finally {
+    await client.end();
+  }
+}
+
 function now(): string {
   return new Date().toISOString();
 }

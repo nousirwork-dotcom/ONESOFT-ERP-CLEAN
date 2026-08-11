@@ -29,6 +29,7 @@ import Step17HealthCheck  from './steps/09-HealthCheck';       // 17: فحص ا�
 import Step18Complete     from './steps/10-Complete';          // 18: الانتهاء
 
 import UninstallWizard    from './steps/Uninstall';
+import UpgradeWizard     from './steps/UpgradeWizard';
 
 // ── تعريف خطوات المعالج — 18 خطوة ───────────────────────────────────────────
 const STEPS_INSTALL = [
@@ -55,6 +56,8 @@ const STEPS_INSTALL = [
 const isUninstall = typeof window !== 'undefined' &&
   (window.location.search.includes('uninstall') ||
    (window as any).__ONESOFT_MODE__ === 'uninstall');
+const isUpgrade = typeof window !== 'undefined' &&
+  new URLSearchParams(window.location.search).get('mode') === 'upgrade';
 
 export default function App() {
   const {
@@ -88,6 +91,28 @@ export default function App() {
             <div style={{ fontSize: 13, color: '#B91C1C', fontWeight: 700 }}>إلغاء التثبيت</div>
           </div>
           <UninstallWizard />
+        </div>
+      </div>
+    );
+  }
+
+  if (isUpgrade) {
+    return (
+      <div style={{
+        minHeight: '100vh', background: '#F5F2EC',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontFamily: "'Segoe UI', Tahoma, Arial, sans-serif", direction: 'rtl',
+      }}>
+        <div style={{
+          background: '#fff', borderRadius: 16, padding: 36,
+          width: 620, maxWidth: 'calc(100vw - 40px)',
+          minHeight: 420, boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+        }}>
+          <div style={{ textAlign: 'center', marginBottom: 24 }}>
+            <div style={{ fontSize: 28, fontWeight: 900, color: '#1E344F' }}>OneSoft ERP</div>
+            <div style={{ fontSize: 13, color: '#406B93', fontWeight: 700 }}>ترقية قاعدة البيانات بأمان</div>
+          </div>
+          <UpgradeWizard />
         </div>
       </div>
     );

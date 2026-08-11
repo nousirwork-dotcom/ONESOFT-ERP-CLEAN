@@ -34,19 +34,46 @@
 !macroend
 
 ; عند التحديث الصامت لا تمر واجهة المعالج بخطوة تثبيت الخدمات مرة أخرى.
-; تشغيل الخدمة الموجودة بعد نسخ الملفات يجعل التحديث قابلاً للتحقق فعلياً،
-; بينما تفشل أوامر sc بهدوء في التثبيت الأول قبل إنشاء الخدمة.
+; يجب أن يمر التثبيت السابق عبر Upgrade Core قبل تشغيل Backend:
+;   Legacy credential → roles/ownership → preflight → migrations
+;   → Foundation/health verification → service start
+; هذا هو نفس المسار الذي يستخدمه updater لأن updater يطلق NSIS نفسه.
 !macro customInstall
   Sleep 1500
-  nsExec::Exec 'sc start OneSoft-Server'
-
-  ; silent updater installs do not run the first-run React wizard, so keep the
-  ; ProgramData installation marker in sync with the files just copied.
-  ; The wizard may overwrite this later with its richer marker payload.
   ReadEnvStr $R6 "PROGRAMDATA"
   ${If} $R6 == ""
     StrCpy $R6 "C:\ProgramData"
   ${EndIf}
+
+  ; Fresh installs have no config/version pair yet; the React wizard owns
+  ; database setup and service installation in that case. Existing installs
+  ; must use the shared headless Upgrade Core before any service can start.
+  ; A config file is the authoritative existing-install marker. Legacy
+  ; machines may have config.json but no version.json, and must not bypass
+  ; migrations by being mistaken for a fresh install.
+  ${If} ${FileExists} "$R6\OneSoft\config\onesoft.config.json"
+    ; Manual installs get the interactive wizard so a Legacy machine can
+    ; receive a one-time PostgreSQL administrator credential. Silent updater
+    ; installs remain fail-closed and never prompt.
+    IfSilent silent_upgrade manual_upgrade
+    silent_upgrade:
+      DetailPrint "Running OneSoft Upgrade Core before starting services..."
+      ExecWait '"$INSTDIR\OneSoft ERP.exe" --run-upgrade-core --silent' $R0
+      Goto upgrade_result
+    manual_upgrade:
+      DetailPrint "Opening OneSoft Upgrade Wizard before starting services..."
+      ExecWait '"$INSTDIR\OneSoft ERP.exe" --run-upgrade-wizard' $R0
+    upgrade_result:
+    ${If} $R0 != 0
+      DetailPrint "Upgrade Core failed with exit code $R0"
+      MessageBox MB_ICONSTOP|MB_OK "OneSoft upgrade failed before services were started. Review the installer log and retry."
+      Abort
+    ${EndIf}
+    DetailPrint "Upgrade Core completed successfully."
+  ${EndIf}
+
+  ; Silent updater installs do not run the first-run React wizard. Keep the
+  ; machine-level marker in sync only after the Upgrade Core gate succeeds.
   CreateDirectory "$R6\OneSoft"
   FileOpen $R5 "$R6\OneSoft\version.json" w
   FileWrite $R5 "{$\r$\n  $\"version$\": $\"${VERSION}$\",$\r$\n  $\"source$\": $\"nsis-update$\"$\r$\n}$\r$\n"

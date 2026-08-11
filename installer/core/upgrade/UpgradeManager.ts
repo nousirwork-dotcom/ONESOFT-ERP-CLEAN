@@ -5,13 +5,14 @@ import { RollbackManager }      from './RollbackManager.js';
 import { MigrationRunner }      from '../database/MigrationRunner.js';
 import { preflightDatabase, migrationConnection, safeMigrationError } from '../database/DatabasePreflight.js';
 import { MigrationCredentialStore } from '../security/MigrationCredentialStore.js';
-import { DatabaseRoleManager } from '../database/DatabaseRoleManager.js';
+import { DatabaseRoleManager, RUNTIME_ROLE } from '../database/DatabaseRoleManager.js';
 import { APP_SCHEMA_VERSION } from '../version.js';
 import { ConfigManager } from '../config/ConfigManager.js';
 import { ServiceManager }       from '../services/ServiceManager.js';
-import { verifyPostUpgrade }    from './PostUpgradeVerifier.js';
+import { verifyPostUpgrade, verifyPostUpgradeDatabase } from './PostUpgradeVerifier.js';
 import * as fs from 'fs';
 import * as path from 'path';
+import { spawnSync } from 'child_process';
 
 type Emit = (e: ProgressEvent) => void;
 type StatusCb = (s: UpgradeStatus) => void;
@@ -29,12 +30,29 @@ export class UpgradeManager {
     targetVersion: string;
     backendPort?: number;
     adminDbOpts?: DatabaseConnectionOptions;
+    forceRoleProvision?: boolean;
   }, emit: Emit, onStatus?: StatusCb): Promise<{ success: boolean; backupDir?: string }> {
     const { serverAppPath, backupsDir, dbOpts, databaseUrl, targetVersion } = opts;
 
     let backupDir: string | undefined;
+    const originalConfig = snapshotConfig();
 
     try {
+      // Fail closed before creating a backup or stopping services when the
+      // machine has neither a protected migrator credential nor a one-time
+      // legacy administrator credential. A runtime-only role cannot bootstrap
+      // the migration roles or repair ownership.
+      const storedMigrationCredential = MigrationCredentialStore.load();
+      if (
+        (!storedMigrationCredential && !opts.adminDbOpts) ||
+        (opts.forceRoleProvision === true && !opts.adminDbOpts)
+      ) {
+        throw new Error(
+          'لا يوجد اعتماد ترحيل محمي ولا اعتماد PostgreSQL إداري Legacy. ' +
+          'يجب إدخال اعتماد إداري لمرة واحدة لإكمال ترقية قاعدة Legacy بأمان.',
+        );
+      }
+
       // 1. اكتشاف النسخة الحالية
       onStatus?.('detecting');
       const current = this.versionDetector.detect();
@@ -61,19 +79,15 @@ export class UpgradeManager {
       // 4. لا نبدأ أي DDL قبل إثبات أن اعتماد الترحيل المحمي موجود وصالح.
       // الاعتماد الإداري القديم يُستخدم مرة واحدة فقط لترميم الدور ثم يُزال من
       // active config؛ لا يتم تمريره إلى الواجهة أو تسجيله.
-      let migrationCredential = MigrationCredentialStore.load();
-      if (!migrationCredential && opts.adminDbOpts) {
+      let migrationCredential = storedMigrationCredential;
+      if ((!migrationCredential || opts.forceRoleProvision === true) && opts.adminDbOpts) {
         emit({ level: 'warning', message: 'اعتماد الترحيل المحمي غير موجود — جارٍ إنشاءه من اعتماد Legacy صالح مرة واحدة...', timestamp: now() });
         const roleManager = new DatabaseRoleManager();
         const provisioned = await roleManager.provision(opts.adminDbOpts, dbOpts.database, dbOpts.password);
         await roleManager.adoptAllowlistedObjects({ ...opts.adminDbOpts, database: dbOpts.database });
         DatabaseRoleManager.saveCredential(provisioned.migration);
-        ConfigManager.removeLegacyAdminCredentials();
         migrationCredential = provisioned.migration;
       }
-      // Also scrub stale legacy fields when a protected credential already
-      // exists. This makes the transition idempotent after an interrupted run.
-      ConfigManager.removeLegacyAdminCredentials();
       if (!migrationCredential) {
         throw new Error('لا يوجد اعتماد ترحيل محمي صالح. أوقف التحديث بأمان، وأعد تشغيل المثبّت لإصلاح أدوار قاعدة البيانات أولاً.');
       }
@@ -116,7 +130,29 @@ export class UpgradeManager {
         throw new Error(`فشل Migrations: ${safeMigrationError(result.failed)}`);
       }
 
-      // 5. تشغيل الخدمات
+      // 6. Apply Foundation with the production engine before any Backend
+      // service is started. The one-shot process does not listen on HTTP.
+      onStatus?.('health-check');
+      emit({ level: 'info', message: 'جارٍ تطبيق Foundation قبل تشغيل الخادم...', timestamp: now() });
+      runFoundationOnly(serverAppPath, databaseUrl, emit);
+
+      const expectedSchemaVersion = APP_SCHEMA_VERSION;
+      if (!expectedSchemaVersion) {
+        throw new Error('Journal فارغ — لا يمكن التحقق من إصدار المخطط');
+      }
+      await verifyPostUpgradeDatabase({
+        databaseUrl,
+        serverAppPath,
+        expectedSchemaVersion,
+      }, emit);
+
+      // The service reads config.json at process start. Commit the runtime
+      // connection only after all pre-service DB work has succeeded; the
+      // original bytes are restored below if any later service/health step
+      // fails.
+      persistRuntimeConfig(dbOpts);
+
+      // 7. تشغيل الخدمات only after migrations and Foundation verification.
       onStatus?.('starting-services');
       emit({ level: 'info', message: 'جارٍ تشغيل الخدمات...', timestamp: now() });
       const backendStart = svcMgr.start('OneSoft-Server');
@@ -124,15 +160,19 @@ export class UpgradeManager {
         throw new Error(`تعذّر تشغيل خدمة الخادم: ${backendStart.error ?? 'خطأ غير معروف'}`);
       }
       await sleep(2000);
-      const clientStart = svcMgr.start('OneSoft-Client');
-      if (!clientStart.success) {
-        throw new Error(`تعذّر تشغيل خدمة العميل: ${clientStart.error ?? 'خطأ غير معروف'}`);
+      // OneSoft-Client is no longer installed by the current deployment
+      // model. Preserve compatibility with machines that still have the
+      // legacy service, but never make it a prerequisite for an upgrade.
+      if (svcMgr.getStatus('OneSoft-Client') !== 'not-installed') {
+        const clientStart = svcMgr.start('OneSoft-Client');
+        if (!clientStart.success) {
+          throw new Error(`تعذّر تشغيل خدمة العميل: ${clientStart.error ?? 'خطأ غير معروف'}`);
+        }
       }
       emit({ level: 'success', message: 'تم تشغيل الخدمات', timestamp: now() });
 
       onStatus?.('health-check');
       emit({ level: 'info', message: 'جارٍ التحقق من health/schema/Foundation والروابط...', timestamp: now() });
-       const expectedSchemaVersion = APP_SCHEMA_VERSION;
       if (!expectedSchemaVersion) {
         throw new Error('Journal فارغ — لا يمكن التحقق من إصدار المخطط');
       }
@@ -148,6 +188,7 @@ export class UpgradeManager {
       return { success: true, backupDir };
 
     } catch (e: unknown) {
+      restoreConfig(originalConfig);
       const msg = safeMigrationError(e);
       emit({ level: 'error', message: `❌ فشلت الترقية: ${msg}`, timestamp: now() });
       emit({ level: 'warning', message: 'جارٍ التراجع تلقائياً...', timestamp: now() });
@@ -175,4 +216,74 @@ function readMigrationTags(serverAppPath: string): string[] {
     entries?: Array<{ tag: string }>;
   };
   return (journal.entries ?? []).map((entry) => entry.tag);
+}
+
+function persistRuntimeConfig(dbOpts: DatabaseConnectionOptions): void {
+  if (!ConfigManager.exists()) return;
+  const config = ConfigManager.load();
+  if (
+    config.database.user === RUNTIME_ROLE &&
+    config.database.password === dbOpts.password
+  ) {
+    return;
+  }
+  ConfigManager.save({
+    ...config,
+    database: {
+      ...config.database,
+      user: RUNTIME_ROLE,
+      password: dbOpts.password,
+    },
+  });
+}
+
+function snapshotConfig(): Buffer | undefined {
+  if (!ConfigManager.exists()) return undefined;
+  return fs.readFileSync(ConfigManager.getConfigPath());
+}
+
+function restoreConfig(snapshot: Buffer | undefined): void {
+  if (!snapshot || !ConfigManager.exists()) return;
+  const configPath = ConfigManager.getConfigPath();
+  const temporary = `${configPath}.rollback-${process.pid}`;
+  try {
+    fs.writeFileSync(temporary, snapshot, { mode: 0o600 });
+    fs.renameSync(temporary, configPath);
+  } catch {
+    try { fs.rmSync(temporary, { force: true }); } catch { /* best effort */ }
+  }
+}
+
+function runFoundationOnly(
+  serverAppPath: string,
+  databaseUrl: string,
+  emit: Emit,
+): void {
+  // Electron ships a Node-compatible runtime. ELECTRON_RUN_AS_NODE makes the
+  // packaged executable run the bundled server entrypoint without depending
+  // on a globally installed Node.js or PATH state on the customer machine.
+  const nodePath = process.execPath;
+  const serverEntry = path.join(serverAppPath, 'dist', 'index.mjs');
+  const result = spawnSync(nodePath, [serverEntry], {
+    env: {
+      ...process.env,
+      NODE_ENV: 'production',
+      ELECTRON_RUN_AS_NODE: '1',
+      ONESOFT_FOUNDATION_ONLY: '1',
+      ONESOFT_UPGRADE_DATABASE_URL: databaseUrl,
+    },
+    encoding: 'utf8',
+    stdio: 'pipe',
+    timeout: 300_000,
+    windowsHide: true,
+  });
+  const stdout = (result.stdout ?? '').trim();
+  const stderr = (result.stderr ?? '').trim();
+  if (stdout) emit({ level: 'info', message: `[foundation-only]\n${stdout.slice(-4000)}`, timestamp: now() });
+  if (stderr) emit({ level: 'warning', message: `[foundation-only stderr]\n${stderr.slice(-4000)}`, timestamp: now() });
+  if (result.error || result.status !== 0) {
+    throw new Error(
+      `فشل تطبيق Foundation قبل تشغيل الخادم: ${result.error?.message ?? `exit=${result.status ?? 'unknown'}`}`,
+    );
+  }
 }

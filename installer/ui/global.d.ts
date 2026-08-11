@@ -75,7 +75,16 @@ interface InstallerAPI {
   // Upgrade
   detectVersion: () => Promise<import('../core/types').VersionInfo | null>;
   getVersion:    () => Promise<string>;
-  runUpgrade:    (opts: unknown) => Promise<{ success: boolean; backupDir?: string }>;
+  hasMigrationCredential: () => Promise<boolean>;
+  runUpgrade:    (opts: {
+    backupsDir: string;
+    dbOpts: import('../core/types').DatabaseConnectionOptions;
+    databaseUrl: string;
+    targetVersion: string;
+    backendPort?: number;
+    adminDbOpts?: import('../core/types').DatabaseConnectionOptions;
+    forceRoleProvision?: boolean;
+  }) => Promise<{ success: boolean; backupDir?: string }>;
   rollback:      (opts: unknown) => Promise<{ ok: boolean }>;
 
   // Uninstall

@@ -44,6 +44,8 @@ export { VersionDetector }      from './upgrade/VersionDetector.js';
 export { BackupBeforeUpgrade }  from './upgrade/BackupBeforeUpgrade.js';
 export { RollbackManager }      from './upgrade/RollbackManager.js';
 export { UpgradeManager }       from './upgrade/UpgradeManager.js';
+export { verifyPostUpgradeDatabase } from './upgrade/PostUpgradeVerifier.js';
+export { runHeadlessUpgrade }   from './upgrade/HeadlessUpgrade.js';
 
 // Uninstall
 export { UninstallManager }     from './uninstall/UninstallManager.js';

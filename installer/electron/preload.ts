@@ -50,6 +50,7 @@ contextBridge.exposeInMainWorld('installer', {
 
   // Upgrade
   detectVersion: () => ipcRenderer.invoke('upgrade:detect'),
+  hasMigrationCredential: () => ipcRenderer.invoke('upgrade:has-credential'),
   runUpgrade:    (opts: unknown) => ipcRenderer.invoke('upgrade:run', opts),
   rollback:      (opts: unknown) => ipcRenderer.invoke('upgrade:rollback', opts),
 

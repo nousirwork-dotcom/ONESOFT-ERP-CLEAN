@@ -364,6 +364,27 @@ console.log(`[4/6] Starting HTTP server on port ${ENV.port} (DB init will follow
 let _listenRetries = 0;
 const _maxListenRetries = 6;
 
+// ── Installer Foundation pass ───────────────────────────────────────────────
+// The upgrade core runs this mode before starting OneSoft-Server. It imports
+// the production Foundation engine but never opens an HTTP listener, so a
+// Legacy database cannot be exposed as a running application between
+// migrations and Foundation completion.
+if (process.env['ONESOFT_FOUNDATION_ONLY'] === '1') {
+  try {
+    const { runFoundationUpdateForAllOrgs } = await import('./foundation-update.js');
+    const foundationResult = await runFoundationUpdateForAllOrgs(ENV.dbUrl);
+    if (!foundationResult.ok) {
+      console.error('[foundation-only] FOUNDATION_INCOMPLETE', foundationResult);
+      process.exit(1);
+    }
+    console.log('[foundation-only] FOUNDATION_OK');
+    process.exit(0);
+  } catch (error) {
+    console.error('[foundation-only] FOUNDATION_INCOMPLETE', error);
+    process.exit(1);
+  }
+}
+
 const server = app.listen(ENV.port, () => {
   console.log(`[5/6] ✅ OneSoft ERP listening on http://localhost:${ENV.port}`);
   logger.info('server', `OneSoft ERP HTTP server started on http://localhost:${ENV.port}`, {

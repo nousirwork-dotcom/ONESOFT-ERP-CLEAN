@@ -7,5 +7,9 @@
     "noEmit": true,
     "types": ["node"]
   },
-  "include": ["core/**/*", "scripts/test-legacy-upgrade.ts"]
+  "include": [
+    "core/**/*",
+    "scripts/test-legacy-upgrade.ts",
+    "scripts/test-upgrade-entrypoint.ts"
+  ]
 }

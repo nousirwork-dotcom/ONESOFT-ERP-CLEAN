@@ -425,8 +425,8 @@ export function setupUpdater(mainWindow: BrowserWindow): void {
       // NSIS may invoke the previous uninstaller during an update. That
       // uninstaller belongs to the old installation, so stopping services
       // here is the only version-independent way to release Node handles
-      // before replacement. The target installer starts existing services
-      // again after its files are copied.
+      // before replacement. The target installer runs the shared Upgrade Core
+      // after its files are copied and starts services only after that gate.
       for (const service of ['OneSoft-Client', 'OneSoft-Updater', 'OneSoft-Server']) {
         try {
           spawnSync('sc.exe', ['stop', service], {
