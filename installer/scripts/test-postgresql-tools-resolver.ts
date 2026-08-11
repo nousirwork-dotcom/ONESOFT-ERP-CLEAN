@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
-import { PostgreSQLToolsResolutionError, PostgreSQLToolsResolver } from '../core/database/PostgreSQLToolsResolver.js';
+import {
+  buildPostgreSQLConnectionArgs,
+  PostgreSQLToolsResolutionError,
+  PostgreSQLToolsResolver,
+} from '../core/database/PostgreSQLToolsResolver.js';
 
 const serviceBin = 'C:\\Program Files\\PostgreSQL\\16\\bin';
 const programFilesBin = 'C:\\Program Files\\PostgreSQL\\17\\bin';
@@ -84,6 +88,24 @@ assert.equal(serverMatchedTools.pgDump, `${serviceBin}\\pg_dump.exe`);
 assert.equal(serverMatchedTools.pgRestore, `${serviceBin}\\pg_restore.exe`);
 assert.equal(serverMatchedTools.psql, `${serviceBin}\\psql.exe`);
 console.log('[resolver-test] live server major version selects one matching bin: PASS');
+
+const spacedArgs = buildPostgreSQLConnectionArgs({
+  host: 'localhost',
+  port: 5432,
+  database: 'backup database',
+  user: 'postgres',
+  password: 'not-on-command-line',
+});
+assert.deepEqual(spacedArgs, [
+  '-h', 'localhost',
+  '-p', '5432',
+  '-U', 'postgres',
+  '-d', 'backup database',
+  '--no-password',
+]);
+assert.ok(serverMatchedTools.pgDump.includes('Program Files'));
+assert.ok(!spacedArgs.includes('not-on-command-line'));
+console.log('[resolver-test] absolute paths and arguments with spaces stay unmerged: PASS');
 
 const fromProgramFiles = fakeResolver({ programFiles: [programFilesBin] });
 const programTools = fromProgramFiles.resolveAll();

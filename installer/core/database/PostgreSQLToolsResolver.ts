@@ -28,6 +28,26 @@ export interface PostgreSQLServerConnection {
   password: string;
 }
 
+export function buildPostgreSQLConnectionArgs(
+  connection: PostgreSQLServerConnection,
+  database = connection.database,
+): string[] {
+  return [
+    '-h', connection.host,
+    '-p', String(connection.port),
+    '-U', connection.user,
+    '-d', database,
+    '--no-password',
+  ];
+}
+
+export function buildPostgreSQLToolEnv(
+  connection: PostgreSQLServerConnection,
+  baseEnv: NodeJS.ProcessEnv = process.env,
+): NodeJS.ProcessEnv {
+  return { ...baseEnv, PGPASSWORD: connection.password };
+}
+
 export const POSTGRESQL_TOOLS_MISSING_MESSAGE =
   'تعذر العثور على أدوات PostgreSQL اللازمة للنسخ الاحتياطي.';
 
@@ -182,11 +202,7 @@ export class PostgreSQLToolsResolver {
         const output = this.runCommand(
           psql,
           [
-            '-h', connection.host,
-            '-p', String(connection.port),
-            '-U', connection.user,
-            '-d', connection.database,
-            '--no-password',
+            ...buildPostgreSQLConnectionArgs(connection),
             '-X',
             '-q',
             '-tA',

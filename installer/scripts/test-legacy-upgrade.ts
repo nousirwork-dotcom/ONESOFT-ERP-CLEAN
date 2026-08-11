@@ -7,7 +7,11 @@ import pg from 'pg';
 import { DatabaseRoleManager, MIGRATOR_ROLE, RUNTIME_ROLE, SCHEMA_OWNER_ROLE } from '../core/database/DatabaseRoleManager.js';
 import { preflightDatabase, migrationConnection } from '../core/database/DatabasePreflight.js';
 import { MigrationRunner } from '../core/database/MigrationRunner.js';
-import { PostgreSQLToolsResolver } from '../core/database/PostgreSQLToolsResolver.js';
+import {
+  buildPostgreSQLConnectionArgs,
+  buildPostgreSQLToolEnv,
+  PostgreSQLToolsResolver,
+} from '../core/database/PostgreSQLToolsResolver.js';
 import type { DatabaseConnectionOptions, ProgressEvent } from '../core/types.js';
 import { APP_VERSION } from '../core/version.js';
 
@@ -431,11 +435,29 @@ async function assertFoundationIdempotency(name: string, runtime: DatabaseConnec
 async function assertBackupReadable(name: string): Promise<void> {
   const backupPath = path.join(os.tmpdir(), `onesoft-test-${name}.sql`);
   tempFiles.push(backupPath);
-  execFileSync(postgresTools.pgDump, [dbUrl(name), '-F', 'p', '-f', backupPath], { stdio: 'pipe' });
+  const connection = { ...admin, database: name };
+  execFileSync(postgresTools.pgDump, [
+    ...buildPostgreSQLConnectionArgs(connection),
+    '-F', 'p',
+    '-f', backupPath,
+  ], {
+    env: buildPostgreSQLToolEnv(connection),
+    stdio: 'pipe',
+    windowsHide: true,
+  });
   const stats = fs.statSync(backupPath);
   if (!stats.isFile() || stats.size < 128) throw new Error('Backup is empty');
   await createDb(restoreDb);
-  execFileSync(postgresTools.psql, [dbUrl(restoreDb), '-v', 'ON_ERROR_STOP=1', '-f', backupPath], { stdio: 'pipe' });
+  const restoreConnection = { ...admin, database: restoreDb };
+  execFileSync(postgresTools.psql, [
+    ...buildPostgreSQLConnectionArgs(restoreConnection),
+    '-v', 'ON_ERROR_STOP=1',
+    '-f', backupPath,
+  ], {
+    env: buildPostgreSQLToolEnv(restoreConnection),
+    stdio: 'pipe',
+    windowsHide: true,
+  });
   const restored = await withClient(dbUrl(restoreDb), async (client) => (
     client.query(`SELECT to_regclass('public.organizations') AS table_name`)
       .then((result) => result.rows[0]?.table_name)
