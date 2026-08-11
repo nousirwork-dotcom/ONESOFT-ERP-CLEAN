@@ -1,6 +1,6 @@
 import { Pool } from 'pg';
 import type { DatabaseConnectionOptions, ProgressEvent } from '../types.js';
-import { DatabaseRoleManager, SCHEMA_OWNER_ROLE } from './DatabaseRoleManager.js';
+import { DatabaseRoleManager } from './DatabaseRoleManager.js';
 
 type Emit = (e: ProgressEvent) => void;
 
@@ -71,7 +71,6 @@ export class DatabaseInstaller {
         ...adminOpts,
         database: dbName,
       }, dbName, appPassword.trim() || undefined);
-      await client.query(`ALTER DATABASE ${client.escapeIdentifier(dbName)} OWNER TO ${client.escapeIdentifier(SCHEMA_OWNER_ROLE)}`);
       await roleManager.adoptAllowlistedObjects({
         ...adminOpts,
         database: dbName,

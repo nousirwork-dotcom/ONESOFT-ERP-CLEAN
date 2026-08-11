@@ -1,7 +1,7 @@
 import type { ProgressEvent, DatabaseConnectionOptions, UpgradeStatus } from '../types.js';
 import { VersionDetector }      from './VersionDetector.js';
 import { BackupBeforeUpgrade }  from './BackupBeforeUpgrade.js';
-import { RollbackManager }      from './RollbackManager.js';
+import { RollbackManager, type RollbackResult } from './RollbackManager.js';
 import { MigrationRunner }      from '../database/MigrationRunner.js';
 import {
   preflightDatabase,
@@ -10,7 +10,11 @@ import {
   safeMigrationError,
 } from '../database/DatabasePreflight.js';
 import { MigrationCredentialStore } from '../security/MigrationCredentialStore.js';
-import { DatabaseRoleManager, RUNTIME_ROLE } from '../database/DatabaseRoleManager.js';
+import {
+  DatabaseRoleManager,
+  provisionRepairThenSaveCredential,
+  RUNTIME_ROLE,
+} from '../database/DatabaseRoleManager.js';
 import { APP_SCHEMA_VERSION } from '../version.js';
 import { ConfigManager } from '../config/ConfigManager.js';
 import { ServiceManager }       from '../services/ServiceManager.js';
@@ -44,12 +48,14 @@ export class UpgradeManager {
     error?: string;
     stage?: string;
     migration?: string;
+    rollback?: RollbackResult;
   }> {
     const { serverAppPath, backupsDir, dbOpts, databaseUrl, targetVersion } = opts;
 
     let backupDir: string | undefined;
     let activeStage = 'preflight';
     let failedMigration: string | undefined;
+    let rollbackResult: RollbackResult | undefined;
     const originalConfig = snapshotConfig();
     const startStage = (stage: string) => {
       activeStage = stage;
@@ -128,15 +134,23 @@ export class UpgradeManager {
         startStage('role-bootstrap');
         emit({ level: 'warning', message: 'اعتماد الترحيل المحمي غير موجود — جارٍ إنشاءه من اعتماد Legacy صالح مرة واحدة...', timestamp: now() });
         const roleManager = new DatabaseRoleManager();
-        const provisioned = await roleManager.provision(opts.adminDbOpts, dbOpts.database, dbOpts.password);
-        successStage('role-bootstrap');
-
-        startStage('ownership-repair');
-        await roleManager.adoptAllowlistedObjects({ ...opts.adminDbOpts, database: dbOpts.database });
-        successStage('ownership-repair');
-
-        startStage('dpapi-credential-create');
-        DatabaseRoleManager.saveCredential(provisioned.migration);
+        const provisioned = await provisionRepairThenSaveCredential(
+          () => roleManager.provision(opts.adminDbOpts!, dbOpts.database, dbOpts.password),
+          async () => {
+            successStage('role-bootstrap');
+            startStage('ownership-repair');
+            await roleManager.adoptAllowlistedObjects({
+              ...opts.adminDbOpts!,
+              database: dbOpts.database,
+            });
+            successStage('ownership-repair');
+          },
+          (credential) => {
+            startStage('dpapi-credential-create');
+            DatabaseRoleManager.saveCredential(credential);
+          },
+        );
+        if (activeStage === 'role-bootstrap') successStage('role-bootstrap');
         migrationCredential = provisioned.migration;
         successStage('dpapi-credential-create');
       } else {
@@ -280,16 +294,49 @@ export class UpgradeManager {
       onStatus?.('rolling-back');
       if (backupDir && dbOpts) {
         try {
-          await this.rollback.rollback({
+          const roleBootstrapRollback = failedStage === 'role-bootstrap'
+            ? 'atomic-rollback' as const
+            : failedStage === 'preflight' || failedStage === 'admin-credential-validation' ||
+                failedStage === 'backup' || failedStage === 'service-stop'
+              ? 'not-attempted' as const
+              : 'preserved' as const;
+          const ownershipRollback = failedStage === 'ownership-repair'
+            ? 'atomic-rollback' as const
+            : failedStage === 'preflight' || failedStage === 'admin-credential-validation' ||
+                failedStage === 'backup' || failedStage === 'service-stop' ||
+                failedStage === 'role-bootstrap'
+              ? 'not-attempted' as const
+              : 'preserved' as const;
+          rollbackResult = await this.rollback.rollback({
             backupDir,
             dbOpts: opts.adminDbOpts ?? dbOpts,
+            roleBootstrapRollback,
+            ownershipRollback,
           }, emit);
-          successStage('rollback');
+          if (rollbackResult.ok) {
+            successStage('rollback');
+          } else {
+            this.diagnosticLogger.record('rollback', 'failure', {
+              error: 'rollback-incomplete',
+            });
+          }
         } catch (rollbackError: unknown) {
+          rollbackResult = {
+            ok: false,
+            databaseRollback: 'failed',
+            roleBootstrapRollback: 'failed',
+            ownershipRollback: 'failed',
+          };
           this.diagnosticLogger.record('rollback', 'failure', { error: safeMigrationError(rollbackError) });
         }
         onStatus?.('rollback-complete');
       } else {
+        rollbackResult = {
+          ok: true,
+          databaseRollback: 'not-attempted',
+          roleBootstrapRollback: 'not-attempted',
+          ownershipRollback: 'not-attempted',
+        };
         successStage('rollback');
       }
 
@@ -299,6 +346,7 @@ export class UpgradeManager {
         error: msg,
         stage: failedStage,
         migration: failedMigration,
+        rollback: rollbackResult,
       };
     }
   }

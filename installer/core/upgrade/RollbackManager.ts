@@ -5,12 +5,30 @@ import type { ProgressEvent, DatabaseConnectionOptions } from '../types.js';
 
 type Emit = (e: ProgressEvent) => void;
 
+export type RollbackStageStatus =
+  | 'success'
+  | 'failed'
+  | 'not-attempted'
+  | 'atomic-rollback'
+  | 'preserved';
+
+export interface RollbackResult {
+  ok: boolean;
+  databaseRollback: RollbackStageStatus;
+  roleBootstrapRollback: RollbackStageStatus;
+  ownershipRollback: RollbackStageStatus;
+}
+
 export class RollbackManager {
   async rollback(opts: {
     backupDir: string;
     dbOpts: DatabaseConnectionOptions;
-  }, emit: Emit): Promise<void> {
+    roleBootstrapRollback?: RollbackStageStatus;
+    ownershipRollback?: RollbackStageStatus;
+  }, emit: Emit): Promise<RollbackResult> {
     const { backupDir, dbOpts } = opts;
+    let databaseRollback: RollbackStageStatus = 'not-attempted';
+    let configRollback: RollbackStageStatus = 'not-attempted';
 
     emit({ level: 'warning', message: 'جارٍ التراجع (Rollback)...', timestamp: now() });
 
@@ -33,8 +51,10 @@ export class RollbackManager {
           { env, stdio: 'pipe', timeout: 300_000 },
         );
         emit({ level: 'success', message: 'تم استعادة قاعدة البيانات', timestamp: now() });
+        databaseRollback = 'success';
       } catch (e: unknown) {
         emit({ level: 'error', message: `فشل استعادة قاعدة البيانات: ${e instanceof Error ? e.message : String(e)}`, timestamp: now() });
+        databaseRollback = 'failed';
       }
     }
 
@@ -42,12 +62,36 @@ export class RollbackManager {
     const configBackup = path.join(backupDir, 'onesoft.config.json');
     const configDest = path.join(process.env['ProgramData'] || 'C:\\ProgramData', 'OneSoft', 'config', 'onesoft.config.json');
     if (fs.existsSync(configBackup)) {
-      fs.copyFileSync(configBackup, configDest);
-      emit({ level: 'success', message: 'تم استعادة ملف الإعدادات', timestamp: now() });
+      try {
+        fs.copyFileSync(configBackup, configDest);
+        emit({ level: 'success', message: 'تم استعادة ملف الإعدادات', timestamp: now() });
+        configRollback = 'success';
+      } catch (e: unknown) {
+        emit({ level: 'error', message: `فشل استعادة ملف الإعدادات: ${e instanceof Error ? e.message : String(e)}`, timestamp: now() });
+        configRollback = 'failed';
+      }
     }
 
-    emit({ level: 'success', message: 'اكتمل التراجع (Rollback) بنجاح', timestamp: now() });
+    const result: RollbackResult = {
+      ok: databaseRollback !== 'failed' &&
+        configRollback !== 'failed' &&
+        isRollbackComplete(opts.roleBootstrapRollback ?? 'not-attempted') &&
+        isRollbackComplete(opts.ownershipRollback ?? 'not-attempted'),
+      databaseRollback,
+      roleBootstrapRollback: opts.roleBootstrapRollback ?? 'not-attempted',
+      ownershipRollback: opts.ownershipRollback ?? 'not-attempted',
+    };
+    if (result.ok) {
+      emit({ level: 'success', message: 'اكتمل التراجع (Rollback) بنجاح', timestamp: now() });
+    } else {
+      emit({ level: 'error', message: 'اكتمل التراجع جزئياً — راجع نتائج مراحل التراجع', timestamp: now() });
+    }
+    return result;
   }
+}
+
+function isRollbackComplete(status: RollbackStageStatus): boolean {
+  return status === 'success' || status === 'atomic-rollback' || status === 'not-attempted';
 }
 
 function findPsql(): string {

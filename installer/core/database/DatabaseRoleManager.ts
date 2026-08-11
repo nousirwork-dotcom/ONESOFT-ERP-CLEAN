@@ -53,6 +53,165 @@ export interface ProvisionedRoles {
   migration: MigrationCredential;
 }
 
+export interface TransactionClient {
+  query<T extends Record<string, unknown> = Record<string, unknown>>(
+    text: string,
+    values?: unknown[],
+  ): Promise<{ rows: T[] }>;
+}
+
+function sqlLiteral(value: string): string {
+  return `'${value.replaceAll("'", "''")}'`;
+}
+
+async function rollbackTransaction(client: TransactionClient): Promise<void> {
+  try {
+    await client.query('ROLLBACK');
+  } catch {
+    // Preserve the original PostgreSQL error.
+  }
+}
+
+/**
+ * PostgreSQL role DDL is transactional. Keeping this whole batch on one
+ * connection means a failure cannot leave a newly-created role, membership,
+ * grant, or role attribute from this bootstrap attempt.
+ */
+export async function runRoleBootstrapTransaction(
+  client: TransactionClient,
+  dbName: string,
+  appPassword: string,
+  migrationPassword: string,
+): Promise<void> {
+  await client.query('BEGIN');
+  try {
+    const appLiteral = sqlLiteral(appPassword);
+    const migrationLiteral = sqlLiteral(migrationPassword);
+
+    await client.query(`DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${SCHEMA_OWNER_ROLE}') THEN
+        CREATE ROLE ${quote(SCHEMA_OWNER_ROLE)} NOLOGIN;
+      END IF;
+    END $$;`);
+    await client.query(`ALTER ROLE ${quote(SCHEMA_OWNER_ROLE)} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION`);
+    await client.query(`DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${MIGRATOR_ROLE}') THEN
+        CREATE ROLE ${quote(MIGRATOR_ROLE)} LOGIN PASSWORD ${migrationLiteral};
+      ELSE
+        ALTER ROLE ${quote(MIGRATOR_ROLE)} LOGIN PASSWORD ${migrationLiteral};
+      END IF;
+    END $$;`);
+    await client.query(`DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${RUNTIME_ROLE}') THEN
+        CREATE ROLE ${quote(RUNTIME_ROLE)} LOGIN PASSWORD ${appLiteral};
+      ELSE
+        ALTER ROLE ${quote(RUNTIME_ROLE)} LOGIN PASSWORD ${appLiteral};
+      END IF;
+    END $$;`);
+    await client.query(`GRANT ${quote(SCHEMA_OWNER_ROLE)} TO ${quote(MIGRATOR_ROLE)}`);
+    await client.query(`GRANT CONNECT ON DATABASE ${quote(dbName)} TO ${quote(MIGRATOR_ROLE)}, ${quote(RUNTIME_ROLE)}`);
+    await client.query(`ALTER DATABASE ${quote(dbName)} OWNER TO ${quote(SCHEMA_OWNER_ROLE)}`);
+    await client.query(`ALTER ROLE ${quote(MIGRATOR_ROLE)} NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION`);
+    await client.query(`ALTER ROLE ${quote(RUNTIME_ROLE)} NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION`);
+    await client.query('COMMIT');
+  } catch (error: unknown) {
+    await rollbackTransaction(client);
+    throw error;
+  }
+}
+
+/**
+ * Ownership repair is a separate transaction because PostgreSQL cannot make
+ * DDL on the `postgres` database and DDL on the application database one
+ * cross-database transaction. Every ownership/privilege change in the target
+ * database is nevertheless atomic.
+ */
+export async function runOwnershipRepairTransaction(
+  client: TransactionClient,
+  admin: DatabaseConnectionOptions,
+): Promise<void> {
+  await client.query('BEGIN');
+  try {
+    await client.query(`ALTER SCHEMA public OWNER TO ${quote(SCHEMA_OWNER_ROLE)}`);
+    await client.query(`REVOKE CREATE ON SCHEMA public FROM PUBLIC`);
+    await client.query(`REVOKE CREATE ON DATABASE ${quote(admin.database)} FROM PUBLIC`);
+    await client.query(`GRANT USAGE ON SCHEMA public TO ${quote(MIGRATOR_ROLE)}`);
+    await client.query(`GRANT USAGE ON SCHEMA public TO ${quote(RUNTIME_ROLE)}`);
+    await client.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ${quote(RUNTIME_ROLE)}`);
+    await client.query(`GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO ${quote(RUNTIME_ROLE)}`);
+    await client.query(`GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO ${quote(RUNTIME_ROLE)}`);
+    await client.query(`ALTER DEFAULT PRIVILEGES FOR ROLE ${quote(SCHEMA_OWNER_ROLE)} IN SCHEMA public
+      GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ${quote(RUNTIME_ROLE)}`);
+    await client.query(`ALTER DEFAULT PRIVILEGES FOR ROLE ${quote(SCHEMA_OWNER_ROLE)} IN SCHEMA public
+      GRANT USAGE, SELECT ON SEQUENCES TO ${quote(RUNTIME_ROLE)}`);
+
+    for (const table of TABLE_ALLOWLIST) {
+      const exists = await client.query(
+        `SELECT to_regclass($1) IS NOT NULL AS exists`, [`public.${table}`],
+      );
+      if (exists.rows[0]?.exists === true) {
+        await client.query(`ALTER TABLE public.${quote(table)} OWNER TO ${quote(SCHEMA_OWNER_ROLE)}`);
+      }
+    }
+
+    const sequences = await client.query<{ relname: string }>(
+      `SELECT seq.relname
+         FROM pg_class seq
+         JOIN pg_namespace seq_ns ON seq_ns.oid = seq.relnamespace
+         JOIN pg_depend dep ON dep.objid = seq.oid AND dep.deptype = 'a'
+         JOIN pg_class tbl ON tbl.oid = dep.refobjid
+         JOIN pg_namespace tbl_ns ON tbl_ns.oid = tbl.relnamespace
+        WHERE seq.relkind = 'S'
+          AND seq_ns.nspname = 'public'
+          AND tbl_ns.nspname = 'public'
+          AND tbl.relname = ANY($1::text[])`,
+      [TABLE_ALLOWLIST],
+    );
+    for (const row of sequences.rows) {
+      await client.query(`ALTER SEQUENCE public.${quote(row.relname)} OWNER TO ${quote(SCHEMA_OWNER_ROLE)}`);
+    }
+
+    for (const type of TYPE_ALLOWLIST) {
+      const exists = await client.query(
+        `SELECT to_regtype($1) IS NOT NULL AS exists`, [`public.${type}`],
+      );
+      if (exists.rows[0]?.exists === true) {
+        await client.query(`ALTER TYPE public.${quote(type)} OWNER TO ${quote(SCHEMA_OWNER_ROLE)}`);
+      }
+    }
+
+    for (const fn of FUNCTION_ALLOWLIST) {
+      const functions = await client.query<{ identity: string }>(
+        `SELECT pg_get_function_identity_arguments(p.oid) AS identity
+           FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+          WHERE n.nspname = 'public' AND p.proname = $1`, [fn],
+      );
+      for (const row of functions.rows) {
+        await client.query(`ALTER FUNCTION public.${quote(fn)}(${row.identity}) OWNER TO ${quote(SCHEMA_OWNER_ROLE)}`);
+      }
+    }
+    await client.query('COMMIT');
+  } catch (error: unknown) {
+    await rollbackTransaction(client);
+    throw error;
+  }
+}
+
+/**
+ * The DPAPI callback is intentionally last. This small orchestration helper
+ * is also used by the focused atomicity tests.
+ */
+export async function provisionRepairThenSaveCredential(
+  provision: () => Promise<ProvisionedRoles>,
+  repair: () => Promise<void>,
+  save: (credential: MigrationCredential) => void,
+): Promise<ProvisionedRoles> {
+  const provisioned = await provision();
+  await repair();
+  save(provisioned.migration);
+  return provisioned;
+}
+
 export class DatabaseRoleManager {
   async provision(
     admin: DatabaseConnectionOptions,
@@ -63,53 +222,10 @@ export class DatabaseRoleManager {
     const pool = new Pool({ ...admin, database: 'postgres', connectionTimeoutMillis: 15_000 });
     const client = await pool.connect();
     try {
-      const appLiteral = client.escapeLiteral(appPassword);
-      const migrationLiteral = client.escapeLiteral(migrationPassword);
-
-      await client.query(`DO $$ BEGIN
-        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${SCHEMA_OWNER_ROLE}') THEN
-          CREATE ROLE ${quote(SCHEMA_OWNER_ROLE)} NOLOGIN;
-        END IF;
-      END $$;`);
-      await client.query(`ALTER ROLE ${quote(SCHEMA_OWNER_ROLE)} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION`);
-      await client.query(`DO $$ BEGIN
-        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${MIGRATOR_ROLE}') THEN
-          CREATE ROLE ${quote(MIGRATOR_ROLE)} LOGIN PASSWORD ${migrationLiteral};
-        ELSE
-          ALTER ROLE ${quote(MIGRATOR_ROLE)} LOGIN PASSWORD ${migrationLiteral};
-        END IF;
-      END $$;`);
-      await client.query(`DO $$ BEGIN
-        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${RUNTIME_ROLE}') THEN
-          CREATE ROLE ${quote(RUNTIME_ROLE)} LOGIN PASSWORD ${appLiteral};
-        ELSE
-          ALTER ROLE ${quote(RUNTIME_ROLE)} LOGIN PASSWORD ${appLiteral};
-        END IF;
-      END $$;`);
-      await client.query(`GRANT ${quote(SCHEMA_OWNER_ROLE)} TO ${quote(MIGRATOR_ROLE)}`);
-      await client.query(`GRANT CONNECT ON DATABASE ${quote(dbName)} TO ${quote(MIGRATOR_ROLE)}, ${quote(RUNTIME_ROLE)}`);
-      await client.query(`ALTER ROLE ${quote(MIGRATOR_ROLE)} NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION`);
-      await client.query(`ALTER ROLE ${quote(RUNTIME_ROLE)} NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION`);
+      await runRoleBootstrapTransaction(client, dbName, appPassword, migrationPassword);
     } finally {
       client.release();
       await pool.end();
-    }
-
-    const dbPool = new Pool({ ...admin, database: dbName, connectionTimeoutMillis: 15_000 });
-    const dbClient = await dbPool.connect();
-    try {
-      await dbClient.query(`ALTER SCHEMA public OWNER TO ${quote(SCHEMA_OWNER_ROLE)}`);
-      await dbClient.query(`GRANT USAGE ON SCHEMA public TO ${quote(RUNTIME_ROLE)}`);
-      await dbClient.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ${quote(RUNTIME_ROLE)}`);
-      await dbClient.query(`GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO ${quote(RUNTIME_ROLE)}`);
-      await dbClient.query(`GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO ${quote(RUNTIME_ROLE)}`);
-      await dbClient.query(`ALTER DEFAULT PRIVILEGES FOR ROLE ${quote(SCHEMA_OWNER_ROLE)} IN SCHEMA public
-        GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ${quote(RUNTIME_ROLE)}`);
-      await dbClient.query(`ALTER DEFAULT PRIVILEGES FOR ROLE ${quote(SCHEMA_OWNER_ROLE)} IN SCHEMA public
-        GRANT USAGE, SELECT ON SEQUENCES TO ${quote(RUNTIME_ROLE)}`);
-    } finally {
-      dbClient.release();
-      await dbPool.end();
     }
 
     return {
@@ -130,55 +246,7 @@ export class DatabaseRoleManager {
     const pool = new Pool({ ...admin, connectionTimeoutMillis: 15_000 });
     const client = await pool.connect();
     try {
-      // The public schema is the namespace in which migrations execute. Its
-      // owner is therefore part of the migration-role invariant, even though
-      // it is not included in the table/type allowlists below.
-      await client.query(`ALTER SCHEMA public OWNER TO ${quote(SCHEMA_OWNER_ROLE)}`);
-      await client.query(`REVOKE CREATE ON SCHEMA public FROM PUBLIC`);
-      await client.query(`REVOKE CREATE ON DATABASE ${quote(admin.database)} FROM PUBLIC`);
-      await client.query(`GRANT USAGE ON SCHEMA public TO ${quote(MIGRATOR_ROLE)}`);
-      for (const table of TABLE_ALLOWLIST) {
-        const exists = await client.query(
-          `SELECT to_regclass($1) IS NOT NULL AS exists`, [`public.${table}`],
-        );
-        if (exists.rows[0]?.exists) {
-          await client.query(`ALTER TABLE public.${quote(table)} OWNER TO ${quote(SCHEMA_OWNER_ROLE)}`);
-        }
-      }
-      const sequences = await client.query<{ relname: string }>(
-        `SELECT seq.relname
-           FROM pg_class seq
-           JOIN pg_namespace seq_ns ON seq_ns.oid = seq.relnamespace
-           JOIN pg_depend dep ON dep.objid = seq.oid AND dep.deptype = 'a'
-           JOIN pg_class tbl ON tbl.oid = dep.refobjid
-           JOIN pg_namespace tbl_ns ON tbl_ns.oid = tbl.relnamespace
-          WHERE seq.relkind = 'S'
-            AND seq_ns.nspname = 'public'
-            AND tbl_ns.nspname = 'public'
-            AND tbl.relname = ANY($1::text[])`,
-        [TABLE_ALLOWLIST],
-      );
-      for (const row of sequences.rows) {
-        await client.query(`ALTER SEQUENCE public.${quote(row.relname)} OWNER TO ${quote(SCHEMA_OWNER_ROLE)}`);
-      }
-      for (const type of TYPE_ALLOWLIST) {
-        const exists = await client.query(
-          `SELECT to_regtype($1) IS NOT NULL AS exists`, [`public.${type}`],
-        );
-        if (exists.rows[0]?.exists) {
-          await client.query(`ALTER TYPE public.${quote(type)} OWNER TO ${quote(SCHEMA_OWNER_ROLE)}`);
-        }
-      }
-      for (const fn of FUNCTION_ALLOWLIST) {
-        const functions = await client.query<{ identity: string }>(
-          `SELECT pg_get_function_identity_arguments(p.oid) AS identity
-             FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-            WHERE n.nspname = 'public' AND p.proname = $1`, [fn],
-        );
-        for (const row of functions.rows) {
-          await client.query(`ALTER FUNCTION public.${quote(fn)}(${row.identity}) OWNER TO ${quote(SCHEMA_OWNER_ROLE)}`);
-        }
-      }
+      await runOwnershipRepairTransaction(client, admin);
     } finally {
       client.release();
       await pool.end();

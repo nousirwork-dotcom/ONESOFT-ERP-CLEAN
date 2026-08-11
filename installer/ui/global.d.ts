@@ -90,8 +90,14 @@ interface InstallerAPI {
     error?: string;
     stage?: string;
     migration?: string;
+    rollback?: import('../core/upgrade/RollbackManager').RollbackResult;
   }>;
-  rollback:      (opts: unknown) => Promise<{ ok: boolean }>;
+  rollback:      (opts: unknown) => Promise<{
+    ok: boolean;
+    databaseRollback: string;
+    roleBootstrapRollback: string;
+    ownershipRollback: string;
+  }>;
 
   // Uninstall
   uninstall: (opts: import('../core/uninstall/UninstallManager').UninstallOptions) => Promise<{ ok: boolean }>;

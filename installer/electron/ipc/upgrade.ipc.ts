@@ -41,7 +41,6 @@ export function registerUpgradeIpc(
     dbOpts: DatabaseConnectionOptions;
   }) => {
     const mgr = new RollbackManager();
-    await mgr.rollback(opts, emit as any);
-    return { ok: true };
+    return mgr.rollback(opts, emit as any);
   });
 }

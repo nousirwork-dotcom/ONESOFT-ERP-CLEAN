@@ -16,7 +16,12 @@ export { PostgreSQLFixer }      from './requirements/fixers/PostgreSQLFixer.js';
 export { ConnectionTester }     from './database/ConnectionTester.js';
 export { DatabaseInstaller }    from './database/DatabaseInstaller.js';
 export { MigrationRunner }      from './database/MigrationRunner.js';
-export { DatabaseRoleManager }  from './database/DatabaseRoleManager.js';
+export {
+  DatabaseRoleManager,
+  runRoleBootstrapTransaction,
+  runOwnershipRepairTransaction,
+  provisionRepairThenSaveCredential,
+} from './database/DatabaseRoleManager.js';
 export {
   preflightDatabase,
   validateAdminCredential,
