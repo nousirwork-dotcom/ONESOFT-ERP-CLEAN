@@ -408,8 +408,44 @@ jobs:
             bash scripts/verify-installer.sh "$UNPACKED" 2>&1 || true
           } | tee "$REPORT"
 
-      # ── توليد latest-ia32.yml لـ auto-update الـ ia32 ─────────────────────
-      # electron-builder يولّد latest.yml للـ x64 تلقائياً
+      # ── توليد metadata صريحة للـ auto-update حسب المعمارية ────────────────
+      # لا نعتمد على latest.yml الذي قد يولده electron-builder عند وجود أكثر
+      # من target؛ نعيد توليده من ملف x64 المنشور فعلياً حتى لا يشير path
+      # إلى artifact غير مرفوع.
+      - name: Generate latest.yml (x64)
+        shell: pwsh
+        run: |
+          $releaseDir = "installer/release"
+          $x64Exe = Get-ChildItem $releaseDir -Filter "*-x64.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $x64Exe) {
+            Write-Error "❌ No x64 exe found — latest.yml cannot be generated"
+            exit 1
+          }
+
+          $version = (Get-Content installer/package.json | ConvertFrom-Json).version
+          $size    = $x64Exe.Length
+          $bytes   = [System.IO.File]::ReadAllBytes($x64Exe.FullName)
+          $sha512  = [Convert]::ToBase64String(
+            [System.Security.Cryptography.SHA512]::Create().ComputeHash($bytes)
+          )
+          $date    = (Get-Date -AsUTC).ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
+          $name    = $x64Exe.Name
+
+          $yml = "version: $version`n" +
+                 "files:`n" +
+                 "  - url: $name`n" +
+                 "    sha512: $sha512`n" +
+                 "    size: $size`n" +
+                 "path: $name`n" +
+                 "sha512: $sha512`n" +
+                 "releaseDate: '$date'"
+          Set-Content "$releaseDir/latest.yml" $yml -Encoding UTF8
+          Write-Host "✅ latest.yml generated from x64 installer"
+          Write-Host "   File  : $name"
+          Write-Host "   Size  : $size bytes"
+          Write-Host "   SHA512: $($sha512.Substring(0,32))..."
+          Get-Content "$releaseDir/latest.yml"
+
       # latest-ia32.yml نولّده يدوياً من ملف ia32.exe
       - name: Generate latest-ia32.yml
         shell: pwsh
