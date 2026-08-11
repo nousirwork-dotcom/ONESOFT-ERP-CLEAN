@@ -57,10 +57,11 @@ $Script:StartTime      = Get-Date
 # ---------------------------------------------------------------------------
 function Write-Banner {
     $line = '=' * 62
+    $version = (Get-Content "$PSScriptRoot\..\version.json" -Raw | ConvertFrom-Json).version
     Write-Host ''
     Write-Host $line                                                  -ForegroundColor Blue
     Write-Host '       OneSoft ERP  -  Professional Installer Build  ' -ForegroundColor Blue
-    Write-Host '                      Version 1.0.25                 ' -ForegroundColor Blue
+    Write-Host "                      Version $version                 " -ForegroundColor Blue
     Write-Host $line                                                  -ForegroundColor Blue
     Write-Host ''
 }

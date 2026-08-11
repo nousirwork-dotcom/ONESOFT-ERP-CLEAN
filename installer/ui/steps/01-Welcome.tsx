@@ -1,4 +1,5 @@
 import logoUrl from '../assets/logo.png';
+import { APP_VERSION } from '../../core/version';
 
 export default function Step01Welcome() {
 
@@ -66,7 +67,7 @@ export default function Step01Welcome() {
 
 
       <p style={{ color: '#9CA3AF', fontSize: 11, margin: 0 }}>
-        الإصدار 1.0.25 — OneSoft ERP
+        الإصدار {APP_VERSION} — OneSoft ERP
       </p>
     </div>
   );

@@ -3,6 +3,11 @@ import { VersionDetector }      from './VersionDetector.js';
 import { BackupBeforeUpgrade }  from './BackupBeforeUpgrade.js';
 import { RollbackManager }      from './RollbackManager.js';
 import { MigrationRunner }      from '../database/MigrationRunner.js';
+import { preflightDatabase, migrationConnection, safeMigrationError } from '../database/DatabasePreflight.js';
+import { MigrationCredentialStore } from '../security/MigrationCredentialStore.js';
+import { DatabaseRoleManager } from '../database/DatabaseRoleManager.js';
+import { APP_SCHEMA_VERSION } from '../version.js';
+import { ConfigManager } from '../config/ConfigManager.js';
 import { ServiceManager }       from '../services/ServiceManager.js';
 import { verifyPostUpgrade }    from './PostUpgradeVerifier.js';
 import * as fs from 'fs';
@@ -23,6 +28,7 @@ export class UpgradeManager {
     databaseUrl: string;
     targetVersion: string;
     backendPort?: number;
+    adminDbOpts?: DatabaseConnectionOptions;
   }, emit: Emit, onStatus?: StatusCb): Promise<{ success: boolean; backupDir?: string }> {
     const { serverAppPath, backupsDir, dbOpts, databaseUrl, targetVersion } = opts;
 
@@ -38,7 +44,11 @@ export class UpgradeManager {
 
       // 2. نسخة احتياطية إلزامية
       onStatus?.('backing-up');
-      backupDir = await this.backupManager.backup({ dbOpts, backupsDir, currentVersion }, emit);
+      backupDir = await this.backupManager.backup({
+        dbOpts: opts.adminDbOpts ?? dbOpts,
+        backupsDir,
+        currentVersion,
+      }, emit);
 
       // 3. إيقاف الخدمات
       onStatus?.('stopping-services');
@@ -48,12 +58,62 @@ export class UpgradeManager {
       svcMgr.stop('OneSoft-Client');
       emit({ level: 'success', message: 'تم إيقاف الخدمات', timestamp: now() });
 
-      // 4. تشغيل Migrations الجديدة
+      // 4. لا نبدأ أي DDL قبل إثبات أن اعتماد الترحيل المحمي موجود وصالح.
+      // الاعتماد الإداري القديم يُستخدم مرة واحدة فقط لترميم الدور ثم يُزال من
+      // active config؛ لا يتم تمريره إلى الواجهة أو تسجيله.
+      let migrationCredential = MigrationCredentialStore.load();
+      if (!migrationCredential && opts.adminDbOpts) {
+        emit({ level: 'warning', message: 'اعتماد الترحيل المحمي غير موجود — جارٍ إنشاءه من اعتماد Legacy صالح مرة واحدة...', timestamp: now() });
+        const roleManager = new DatabaseRoleManager();
+        const provisioned = await roleManager.provision(opts.adminDbOpts, dbOpts.database, dbOpts.password);
+        await roleManager.adoptAllowlistedObjects({ ...opts.adminDbOpts, database: dbOpts.database });
+        DatabaseRoleManager.saveCredential(provisioned.migration);
+        ConfigManager.removeLegacyAdminCredentials();
+        migrationCredential = provisioned.migration;
+      }
+      // Also scrub stale legacy fields when a protected credential already
+      // exists. This makes the transition idempotent after an interrupted run.
+      ConfigManager.removeLegacyAdminCredentials();
+      if (!migrationCredential) {
+        throw new Error('لا يوجد اعتماد ترحيل محمي صالح. أوقف التحديث بأمان، وأعد تشغيل المثبّت لإصلاح أدوار قاعدة البيانات أولاً.');
+      }
+
+      const migrationTags = readMigrationTags(serverAppPath);
+      const preflight = await preflightDatabase(migrationCredential, migrationTags);
+      if (!preflight.ok) {
+        throw new Error(`فشل فحص قاعدة البيانات قبل الترحيل: ${safeMigrationError(preflight.error ?? 'اتصال غير صالح')}`);
+      }
+      emit({
+        level: 'info',
+        message: `فحص Read-only ناجح: user=${preflight.currentUser ?? '—'}, schema=${preflight.currentSchemaVersion ?? 'مفقود'}, pending=${preflight.pendingMigration ?? 'لا يوجد'}, drift=${preflight.drift.length}`,
+        timestamp: now(),
+      });
+      if (preflight.ownershipDrift.length > 0) {
+        if (!opts.adminDbOpts) {
+          throw new Error('ملكية كائنات OneSoft غير صحيحة ولا يوجد اعتماد إداري Legacy لإصلاحها — لم يتم تنفيذ أي تغيير');
+        }
+        emit({ level: 'warning', message: `تم اكتشاف انحراف ملكية في ${preflight.ownershipDrift.length} كائن — إصلاح Allowlist فقط...`, timestamp: now() });
+        await new DatabaseRoleManager().adoptAllowlistedObjects({
+          ...opts.adminDbOpts,
+          database: dbOpts.database,
+        });
+      }
+      if (preflight.ledgerDrift.length > 0) {
+        throw new Error(`انحراف غير قابل للاستئناف في سجل migrations: ${preflight.ledgerDrift.join('; ')}`);
+      }
+      if (!preflight.migratorRoleExists || !preflight.schemaOwnerRoleExists) {
+        throw new Error('أدوار الترحيل المطلوبة غير موجودة — لم يتم تنفيذ أي تغيير');
+      }
+      if (!preflight.canSetSchemaOwner) {
+        throw new Error('حساب الترحيل لا يستطيع SET ROLE onesoft_schema_owner — لم يتم تنفيذ أي تغيير');
+      }
+
+      // 5. تشغيل Migrations بحساب migrator ثم SET ROLE للمالك، وليس بحساب Runtime.
       onStatus?.('running-migrations');
       const migrator = new MigrationRunner(serverAppPath);
-      const result = await migrator.runMigrations(databaseUrl, emit);
+      const result = await migrator.runMigrations(migrationConnection(migrationCredential), emit);
       if (result.failed) {
-        throw new Error(`فشل Migrations: ${result.failed}`);
+        throw new Error(`فشل Migrations: ${safeMigrationError(result.failed)}`);
       }
 
       // 5. تشغيل الخدمات
@@ -72,11 +132,7 @@ export class UpgradeManager {
 
       onStatus?.('health-check');
       emit({ level: 'info', message: 'جارٍ التحقق من health/schema/Foundation والروابط...', timestamp: now() });
-      const journalPath = path.join(serverAppPath, 'drizzle', 'meta', '_journal.json');
-      const journal = JSON.parse(fs.readFileSync(journalPath, 'utf8')) as {
-        entries: Array<{ tag: string }>;
-      };
-      const expectedSchemaVersion = journal.entries.at(-1)?.tag;
+       const expectedSchemaVersion = APP_SCHEMA_VERSION;
       if (!expectedSchemaVersion) {
         throw new Error('Journal فارغ — لا يمكن التحقق من إصدار المخطط');
       }
@@ -92,13 +148,16 @@ export class UpgradeManager {
       return { success: true, backupDir };
 
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
+      const msg = safeMigrationError(e);
       emit({ level: 'error', message: `❌ فشلت الترقية: ${msg}`, timestamp: now() });
       emit({ level: 'warning', message: 'جارٍ التراجع تلقائياً...', timestamp: now() });
 
       onStatus?.('rolling-back');
       if (backupDir && dbOpts) {
-        await this.rollback.rollback({ backupDir, dbOpts }, emit);
+        await this.rollback.rollback({
+          backupDir,
+          dbOpts: opts.adminDbOpts ?? dbOpts,
+        }, emit);
         onStatus?.('rollback-complete');
       }
 
@@ -109,3 +168,11 @@ export class UpgradeManager {
 
 function now() { return new Date().toISOString(); }
 function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
+
+function readMigrationTags(serverAppPath: string): string[] {
+  const journalPath = path.join(serverAppPath, 'drizzle', 'meta', '_journal.json');
+  const journal = JSON.parse(fs.readFileSync(journalPath, 'utf8')) as {
+    entries?: Array<{ tag: string }>;
+  };
+  return (journal.entries ?? []).map((entry) => entry.tag);
+}

@@ -155,15 +155,13 @@ export default function Step06DatabaseMode() {
     setSaveState('running');
 
     const cfg = {
-      version: '1.0.25',
+        version: (await window.installer?.getVersion?.()) ?? '1.0.26',
       database: {
         host:          dbOpts.host,
         port:          dbOpts.port,
         name:          dbOpts.database,
         user:          'onesoft_app',
         password:      dbOpts.password,
-        adminUser:     dbOpts.user,
-        adminPassword: dbOpts.password,
         poolMin:       2,
         poolMax:       10,
       },

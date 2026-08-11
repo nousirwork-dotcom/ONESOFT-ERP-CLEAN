@@ -9,7 +9,7 @@
     .\MAKE-RELEASE.ps1 -Version "1.0.1" -OutputDir "D:\Releases"
 #>
 param(
-    [string]$Version   = "1.0.25",
+    [string]$Version   = ((Get-Content "$PSScriptRoot\..\version.json" -Raw | ConvertFrom-Json).version),
     [string]$OutputDir = "$PSScriptRoot\..\release"
 )
 

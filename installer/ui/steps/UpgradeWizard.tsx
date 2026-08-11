@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useInstallerStore } from '../store/installer.store';
 import type { ProgressEvent } from '../../core/types';
+import { APP_VERSION } from '../../core/version';
 
 type Phase = 'detect' | 'confirm' | 'running' | 'done' | 'failed';
 
@@ -8,7 +9,8 @@ export default function UpgradeWizard() {
   const { dbOpts, getDatabaseUrl } = useInstallerStore();
   const [phase, setPhase] = useState<Phase>('detect');
   const [currentVersion, setCurrentVersion] = useState<string | null>(null);
-  const [targetVersion, setTargetVersion] = useState('1.0.25');
+  const [targetVersion, setTargetVersion] = useState(APP_VERSION);
+  const [runtimePassword, setRuntimePassword] = useState(dbOpts.password);
   const [backendPort, setBackendPort] = useState(3000);
   const [log, setLog] = useState<ProgressEvent[]>([]);
   const [backupDir, setBackupDir] = useState<string | null>(null);
@@ -25,6 +27,9 @@ export default function UpgradeWizard() {
         window.installer?.detectVersion?.(),
         window.installer?.getConfig?.(),
       ]);
+      if (config?.database?.password && config.database.user === 'onesoft_app') {
+        setRuntimePassword(config.database.password);
+      }
       if (info) {
         setCurrentVersion(info.version ?? null);
       } else {
@@ -53,9 +58,13 @@ export default function UpgradeWizard() {
       const result = await window.installer?.runUpgrade?.({
         dbOpts: {
           host: dbOpts.host, port: dbOpts.port,
+          database: dbOpts.database, user: 'onesoft_app', password: runtimePassword,
+        },
+        adminDbOpts: {
+          host: dbOpts.host, port: dbOpts.port,
           database: dbOpts.database, user: dbOpts.user, password: dbOpts.password,
         },
-        databaseUrl: getDatabaseUrl(),
+        databaseUrl: `postgresql://onesoft_app:${encodeURIComponent(runtimePassword)}@${dbOpts.host}:${dbOpts.port}/${dbOpts.database}`,
         backupsDir: 'C:\\ProgramData\\OneSoft\\Backups',
         targetVersion,
         backendPort,

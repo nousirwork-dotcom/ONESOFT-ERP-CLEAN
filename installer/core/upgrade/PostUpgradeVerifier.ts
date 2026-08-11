@@ -29,9 +29,10 @@ async function getJson(
       response.on('data', (chunk: Buffer) => chunks.push(chunk));
       response.on('end', () => {
         try {
+          const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as Record<string, unknown>;
           resolve({
             status: response.statusCode ?? 0,
-            body: JSON.parse(Buffer.concat(chunks).toString('utf8')) as Record<string, unknown>,
+            body,
           });
         } catch (error) {
           reject(error);
@@ -50,6 +51,9 @@ async function waitForReady(port: number, emit: Emit): Promise<void> {
     try {
       const result = await getJson(port, '/api/health');
       last = `HTTP ${result.status}: ${JSON.stringify(result.body)}`;
+      if (result.body.status === 'migration_failed') {
+        throw new Error(`الخادم أعلن فشل الترحيل${result.body.migration ? ` عند ${String(result.body.migration)}` : ''}: ${String(result.body.message ?? 'خطأ غير محدد')}`);
+      }
       if (result.status === 200 && result.body.ready === true) {
         emit({ level: 'success', message: `✅ الخادم جاهز: ${last}`, timestamp: now() });
         return;

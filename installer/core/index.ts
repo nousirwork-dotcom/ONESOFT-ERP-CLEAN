@@ -16,6 +16,10 @@ export { PostgreSQLFixer }      from './requirements/fixers/PostgreSQLFixer.js';
 export { ConnectionTester }     from './database/ConnectionTester.js';
 export { DatabaseInstaller }    from './database/DatabaseInstaller.js';
 export { MigrationRunner }      from './database/MigrationRunner.js';
+export { DatabaseRoleManager }  from './database/DatabaseRoleManager.js';
+export { preflightDatabase, migrationConnection, safeMigrationError } from './database/DatabasePreflight.js';
+export { MigrationCredentialStore } from './security/MigrationCredentialStore.js';
+export { VERSION_INFO, APP_VERSION, APP_SCHEMA_VERSION, APP_BUILD } from './version.js';
 export { ExistingDbDetector }   from './database/ExistingDbDetector.js';
 export type { ExistingDbInfo }  from './database/ExistingDbDetector.js';
 

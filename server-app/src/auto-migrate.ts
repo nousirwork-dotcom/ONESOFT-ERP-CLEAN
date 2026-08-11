@@ -19,7 +19,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  * عمداً — أي تعديل في أحدهما (خصوصاً خطوة ختم _schema_version) يجب أن
  * يُطبَّق على الآخر أيضاً.
  */
-export async function autoMigrate(pool: Pool): Promise<{ ok: boolean; error?: string }> {
+export async function autoMigrate(pool: Pool): Promise<{ ok: boolean; error?: string; failedMigration?: string }> {
   // drizzle/ يُشحن بجانب dist/index.mjs — أي: server-app/drizzle
   const drizzleDir = path.join(__dirname, '..', 'drizzle');
 
@@ -133,7 +133,7 @@ export async function autoMigrate(pool: Pool): Promise<{ ok: boolean; error?: st
       } catch (err) {
         await client.query('ROLLBACK');
         const msg = err instanceof Error ? err.message : String(err);
-        return { ok: false, error: `فشل تطبيق ${entry.tag}: ${msg}` };
+        return { ok: false, error: `فشل تطبيق ${entry.tag}: ${msg}`, failedMigration: entry.tag };
       }
     }
 

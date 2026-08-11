@@ -15,6 +15,8 @@ import { appRouter } from './routers/index.js';
 import { loginHandler, logoutHandler, meHandler, getAuthCookieOptions } from './auth.js';
 import { pool } from './db.js';
 import { checkSchema } from './check-schema.js';
+import { APP_VERSION } from './app-version.js';
+import { REQUIRED_SCHEMA_VERSION } from './schema-version.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -38,6 +40,11 @@ const uploadsDir = process.env.UPLOADS_DIR
 console.log('[3/6] All modules loaded — creating HTTP app...');
 const app = express();
 let startupReady = false;
+let startupPhase: 'database' | 'migration' | 'foundation' | 'ready' = 'database';
+let startupFailure: {
+  migration?: string;
+  message: string;
+} | null = null;
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
 app.use(cors({ origin: true, credentials: true }));
@@ -144,9 +151,12 @@ app.post('/api/upload/logo', async (req, res) => {
 });
 
 app.get('/api/health', (_req, res) => res.status(startupReady ? 200 : 503).json({
-  status:    startupReady ? 'ok' : 'starting',
+  status:    startupReady ? 'ok' : startupFailure ? 'migration_failed' : 'starting',
   ready:     startupReady,
-  version:   '1.0.26',
+  startupPhase: startupFailure ? 'migration' : startupPhase,
+  migration: startupFailure?.migration,
+  message:   startupFailure?.message,
+  version:   APP_VERSION,
   env:       ENV.nodeEnv,
   port:      ENV.port,
   electron:  ENV.isElectron,
@@ -396,7 +406,7 @@ async function waitForDatabaseReady(): Promise<boolean> {
     const ok = await checkSchema(pool);
     if (ok) return true;
 
-    if (!autoMigrateTried) {
+    if (!autoMigrateTried && ENV.nodeEnv !== 'production') {
       autoMigrateTried = true;
       try {
         await pool.query('SELECT 1');
@@ -407,10 +417,33 @@ async function waitForDatabaseReady(): Promise<boolean> {
           console.log('[startup] ✅ auto-migrate نجح — إعادة فحص المخطط...');
           continue;
         } else {
-          console.error(`[startup] ❌ auto-migrate فشل: ${result.error}`);
+          startupPhase = 'migration';
+          startupFailure = {
+            migration: result.failedMigration,
+            message: safeStartupMessage(result.error ?? 'فشل ترحيل قاعدة البيانات'),
+          };
+          console.error(`[startup] ❌ auto-migrate فشل: ${startupFailure.message}`);
+          return false;
         }
       } catch {
         // فشل الاتصال أصلاً — الانتظار العادي أدناه سيتكفل بإعادة المحاولة
+      }
+    }
+
+    // Production never performs DDL. If PostgreSQL is reachable but the
+    // schema is not the version shipped by this build, fail deterministically
+    // on the first check so the installer can report migration_failed.
+    if (ENV.nodeEnv === 'production') {
+      try {
+        await pool.query('SELECT 1');
+        startupPhase = 'migration';
+        startupFailure = {
+          migration: await findPendingMigration(),
+          message: 'قاعدة البيانات متصلة لكن مخططها غير مكتمل. يجب تشغيل الترقية من المثبّت.',
+        };
+        return false;
+      } catch {
+        // PostgreSQL itself may still be starting; retain bounded retries.
       }
     }
 
@@ -427,7 +460,17 @@ const schemaOk = await waitForDatabaseReady();
 if (!schemaOk) {
   console.error(`[startup] ❌ [6/6] FAILED — تعذّر الاتصال بقاعدة البيانات أو إصلاح المخطط بعد ${MAX_ATTEMPTS} محاولة.`);
   console.error(`          DATABASE_URL source: ${ENV.configSource}`);
-  process.exit(1);
+  if (!startupFailure) {
+    startupPhase = 'migration';
+    startupFailure = {
+      migration: await findPendingMigration(),
+      message: 'قاعدة البيانات غير جاهزة. يجب تشغيل الترقية من المثبّت.',
+    };
+  }
+  // Keep the HTTP listener alive so the installer can receive a deterministic
+  // migration_failed health response instead of observing an endless restart
+  // loop from NSSM. No application bootstrap or DDL runs after this point.
+  await new Promise<void>(() => {});
 }
 // ─── تهيئة أول تشغيل ─────────────────────────────────────────────────────────
 // على قاعدة بيانات جديدة (جدول المستخدمين فارغ): يُنشئ مؤسسة تجريبية + مستخدم ADMIN
@@ -454,6 +497,7 @@ try {
 }
 
 console.log('[6/6] ✅ PostgreSQL connected — schema OK — server fully ready');
+startupPhase = 'ready';
 startupReady = true;
 
 // Durable Mock-only ZATCA queue. It is started only after schema validation,
@@ -467,3 +511,30 @@ try {
 }
 
 export type { AppRouter } from './routers/index.js';
+
+function safeStartupMessage(value: string): string {
+  return value
+    .replace(/postgres(?:ql)?:\/\/\S+/gi, 'postgresql://***')
+    .replace(/password authentication failed for user ".*?"/gi, 'database authentication failed')
+    .replace(/(password|secret|token|credential|api[-_]?key|private[-_]?key)\s*[:=]\s*\S+/gi, '$1=***');
+}
+
+async function findPendingMigration(): Promise<string | undefined> {
+  try {
+    const journalPath = path.join(__dirname, '..', 'drizzle', 'meta', '_journal.json');
+    const journal = JSON.parse(fs.readFileSync(journalPath, 'utf8')) as {
+      entries?: Array<{ tag: string }>;
+    };
+    const ledger = await pool.query<{ tag: string }>(
+      'SELECT tag FROM __drizzle_migrations ORDER BY id',
+    ).catch(() => ({ rows: [] as { tag: string }[] }));
+    const applied = new Set(ledger.rows.map((row) => row.tag));
+    return (journal.entries ?? []).find((entry) => !applied.has(entry.tag))?.tag
+      ?? (await pool.query<{ version: string }>(
+        'SELECT version FROM _schema_version WHERE id = 1',
+      ).catch(() => ({ rows: [] as { version: string }[] })) ).rows[0]?.version
+      ?? REQUIRED_SCHEMA_VERSION;
+  } catch {
+    return REQUIRED_SCHEMA_VERSION;
+  }
+}

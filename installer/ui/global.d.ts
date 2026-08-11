@@ -14,7 +14,7 @@ interface InstallerAPI {
 
   // Requirements
   checkRequirements: () => Promise<import('../core/types').RequirementsReport>;
-  fixRequirement:    (id: string) => Promise<{ ok: boolean }>;
+  fixRequirement:    (id: string, pgPassword?: string) => Promise<{ ok: boolean }>;
 
   // Database
   testConnection: (opts: import('../core/types').DatabaseConnectionOptions) => Promise<{ ok: boolean; detail: string; ms: number }>;
@@ -23,7 +23,7 @@ interface InstallerAPI {
   createDatabase: (opts: {
     adminOpts: import('../core/types').DatabaseConnectionOptions;
     dbName: string; appUser: string; appPassword: string;
-  }) => Promise<{ ok: boolean }>;
+   }) => Promise<{ ok: boolean; appPassword?: string }>;
   runMigrations: (url: string) => Promise<import('../core/types').MigrationResult>;
 
   // Setup

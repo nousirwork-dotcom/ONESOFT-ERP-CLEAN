@@ -64,6 +64,12 @@ export class MigrationRunner {
     try {
       const client = await pool.connect();
       try {
+        // The migrator is allowed to LOGIN, but all OneSoft objects must be
+        // owned by the NOLOGIN schema-owner role. SET ROLE makes every DDL
+        // statement below execute as that owner without granting SUPERUSER to
+        // either the runtime or migrator login.
+        await client.query('SET ROLE "onesoft_schema_owner"');
+
         // ── STEP 1: تطبيق base_schema.sql على قاعدة فارغة فقط ───────────────
         // لا يجوز إعادة تشغيل الـbaseline على قاعدة عميل موجودة؛ بعض الجداول
         // التاريخية تُنشأ في migration 0002، كما أن شكل الـbaseline قد يتغير
@@ -234,42 +240,6 @@ export class MigrationRunner {
           emit({
             level: 'error',
             message: '⚠️ لا توجد migrations في الـ journal — تعذّر ختم _schema_version. سيفشل فحص المخطط عند بدء تشغيل الخادم.',
-            timestamp: now(),
-          });
-        }
-
-        // ── STEP 7: نقل ملكية الجداول لحساب التشغيل (onesoft_app) ──────────
-        // سبب حرج: هذا الاتصال يعمل بحساب المدير (postgres عادة)، فكل جدول
-        // يُنشأ هنا يصبح مملوكاً لحساب المدير. لكن server-app وقت التشغيل
-        // الفعلي يتصل بحساب أقل صلاحية (onesoft_app) — وPostgreSQL لا يسمح
-        // بتعديل تركيب جدول (ALTER TABLE) إلا لمالكه أو لمستخدم Superuser.
-        // بدون هذه الخطوة، أي محاولة تعديل مستقبلية (تحديث أو إصلاح ذاتي من
-        // auto-migrate.ts) تفشل بخطأ "must be owner of table ...".
-        emit({ level: 'info', message: 'جارٍ نقل ملكية الجداول لحساب التشغيل (onesoft_app)...', timestamp: now() });
-        try {
-          const APP_DB_USER = 'onesoft_app';
-          const tablesRes = await client.query(
-            `SELECT tablename FROM pg_tables WHERE schemaname = 'public'`
-          );
-          for (const row of tablesRes.rows) {
-            await client.query(`ALTER TABLE public.${quoteIdent(row.tablename)} OWNER TO ${quoteIdent(APP_DB_USER)}`);
-          }
-          const seqRes = await client.query(
-            `SELECT sequencename FROM pg_sequences WHERE schemaname = 'public'`
-          );
-          for (const row of seqRes.rows) {
-            await client.query(`ALTER SEQUENCE public.${quoteIdent(row.sequencename)} OWNER TO ${quoteIdent(APP_DB_USER)}`);
-          }
-          emit({
-            level: 'success',
-            message: `✅ تم نقل ملكية ${tablesRes.rows.length} جدول و${seqRes.rows.length} sequence إلى ${APP_DB_USER}`,
-            timestamp: now(),
-          });
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          emit({
-            level: 'warning',
-            message: `⚠️ تعذّر نقل ملكية بعض الجداول إلى onesoft_app: ${msg} — قد تحدث أخطاء صلاحيات لاحقاً عند أي تحديث`,
             timestamp: now(),
           });
         }

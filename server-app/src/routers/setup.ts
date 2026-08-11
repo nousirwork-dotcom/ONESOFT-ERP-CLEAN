@@ -14,6 +14,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { eq, sql } from 'drizzle-orm';
 import process from 'process';
+import { APP_VERSION } from '../app-version.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..', '..', '..');
@@ -22,8 +23,8 @@ const ROOT = path.resolve(__dirname, '..', '..', '..');
 function getAppVersion(): string {
   try {
     const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf-8'));
-    return pkg.version ?? '1.0.26';
-  } catch { return '1.0.26'; }
+    return pkg.version ?? APP_VERSION;
+  } catch { return APP_VERSION; }
 }
 
 // ── Build Info — يُقرأ من dist/build-info.json الذي يُكتب وقت البناء ─────────

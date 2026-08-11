@@ -17,6 +17,7 @@ export function registerUpgradeIpc(ipc: IpcMain, win: BrowserWindow | null) {
     databaseUrl: string;
     targetVersion: string;
     backendPort?: number;
+    adminDbOpts?: DatabaseConnectionOptions;
   }) => {
     // ✅ المسار الصحيح في حزمة electron-builder: resources/app/server-app
     const serverAppPath = path.join(process.resourcesPath ?? process.cwd(), 'app', 'server-app');

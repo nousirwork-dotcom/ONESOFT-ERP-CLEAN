@@ -38,16 +38,37 @@ export class BackupBeforeUpgrade {
         `"${pgDump}" -h ${host} -p ${port} -U ${user} -d ${database} -F p -f "${dumpFile}"`,
         { env, stdio: 'pipe', timeout: 300_000 },
       );
+      const dumpStats = fs.statSync(dumpFile);
+      if (!dumpStats.isFile() || dumpStats.size < 128) {
+        throw new Error('pg_dump produced an empty or incomplete backup');
+      }
       emit({ level: 'success', message: `تم حفظ قاعدة البيانات: ${dumpFile}`, timestamp: now() });
     } catch (e: unknown) {
-      emit({ level: 'warning', message: `تحذير: فشل dump قاعدة البيانات — ${e instanceof Error ? e.message : String(e)}`, timestamp: now() });
+      throw new Error(`فشل إنشاء/التحقق من النسخة الاحتياطية: ${e instanceof Error ? e.message : String(e)}`);
     }
 
     // حفظ ملف الإعدادات
     const configSrc = path.join(process.env['ProgramData'] || 'C:\\ProgramData', 'OneSoft', 'config', 'onesoft.config.json');
     if (fs.existsSync(configSrc)) {
-      fs.copyFileSync(configSrc, path.join(backupDir, 'onesoft.config.json'));
-      emit({ level: 'success', message: 'تم حفظ ملف الإعدادات', timestamp: now() });
+      try {
+        const raw = JSON.parse(fs.readFileSync(configSrc, 'utf8')) as {
+          database?: Record<string, unknown>;
+        };
+        if (raw.database) {
+          delete raw.database['adminUser'];
+          delete raw.database['adminPassword'];
+        }
+        fs.writeFileSync(
+          path.join(backupDir, 'onesoft.config.json'),
+          `${JSON.stringify(raw, null, 2)}\n`,
+          { encoding: 'utf8', mode: 0o600 },
+        );
+      } catch {
+        // Do not copy an unreadable legacy config: it may contain plaintext
+        // administrative credentials that must not enter a new backup.
+        emit({ level: 'warning', message: 'تعذّر قراءة config القديم — تم تخطي نسخه لحماية بيانات الاعتماد', timestamp: now() });
+      }
+      emit({ level: 'success', message: 'تم حفظ ملف الإعدادات بدون اعتماد المدير القديم', timestamp: now() });
     }
 
     emit({ level: 'success', message: `النسخة الاحتياطية محفوظة في: ${backupDir}`, timestamp: now() });

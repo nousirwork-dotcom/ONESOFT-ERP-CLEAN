@@ -14,6 +14,7 @@ import path                      from 'path';
 import fs                        from 'fs';
 import { fileURLToPath }         from 'url';
 import { createHash }            from 'crypto';
+import { APP_VERSION }           from '../app-version.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR  = path.join(__dirname, '..', '..', '..');
@@ -27,7 +28,7 @@ function readVersionFile(): CurrentVersionInfo {
     }
   } catch {}
   return {
-    version:       '1.0.26',
+    version:       APP_VERSION,
     build:         '20260630.001',
     releaseDate:   '2026-06-30',
     schemaVersion: '0092_repair_legacy_migration_drift',
