@@ -4,11 +4,13 @@ import { BackupBeforeUpgrade }  from './BackupBeforeUpgrade.js';
 import { RollbackManager, type RollbackResult } from './RollbackManager.js';
 import { MigrationRunner }      from '../database/MigrationRunner.js';
 import {
+  formatOwnershipViolation,
   preflightDatabase,
   validateAdminCredential,
   migrationConnection,
   safeMigrationError,
 } from '../database/DatabasePreflight.js';
+import type { OwnershipViolation } from '../database/DatabasePreflight.js';
 import { MigrationCredentialStore } from '../security/MigrationCredentialStore.js';
 import {
   DatabaseRoleManager,
@@ -93,6 +95,8 @@ export class UpgradeManager {
     let activeStage = 'preflight';
     let failedMigration: string | undefined;
     let rollbackResult: RollbackResult | undefined;
+    let ownershipRepairPerformed = false;
+    let serverWasRunning = false;
     const originalConfig = snapshotConfig();
     const startStage = (stage: string) => {
       activeStage = stage;
@@ -170,6 +174,7 @@ export class UpgradeManager {
       onStatus?.('stopping-services');
       emit({ level: 'info', message: 'جارٍ إيقاف الخدمات...', timestamp: now() });
       const svcMgr = this.serviceManager;
+      serverWasRunning = ['running', 'starting'].includes(svcMgr.getStatus('OneSoft-Server'));
       svcMgr.stop('OneSoft-Server');
       svcMgr.stop('OneSoft-Client');
       emit({ level: 'success', message: 'تم إيقاف الخدمات', timestamp: now() });
@@ -191,13 +196,12 @@ export class UpgradeManager {
             { preserveRuntimePassword: true },
           ),
           async () => {
-            successStage('role-bootstrap');
             startStage('ownership-repair');
             await roleManager.adoptAllowlistedObjects({
               ...opts.adminDbOpts!,
               database: dbOpts.database,
             });
-            successStage('ownership-repair');
+            ownershipRepairPerformed = true;
           },
           (credential) => {
             startStage('dpapi-credential-create');
@@ -209,7 +213,6 @@ export class UpgradeManager {
         successStage('dpapi-credential-create');
       } else {
         successStage('role-bootstrap');
-        successStage('ownership-repair');
         successStage('dpapi-credential-create');
       }
       if (!migrationCredential) {
@@ -218,30 +221,45 @@ export class UpgradeManager {
 
       startStage('preflight');
       const migrationTags = readMigrationTags(serverAppPath);
-      const preflight = await preflightDatabase(migrationCredential, migrationTags);
+      let preflight = await preflightDatabase(migrationCredential, migrationTags);
       if (!preflight.ok) {
         throw new Error(`فشل فحص قاعدة البيانات قبل الترحيل: ${safeMigrationError(preflight.error ?? 'اتصال غير صالح')}`);
       }
-      successStage('preflight');
       emit({
         level: 'info',
         message: `فحص Read-only ناجح: user=${preflight.currentUser ?? '—'}, schema=${preflight.currentSchemaVersion ?? 'مفقود'}, pending=${preflight.pendingMigration ?? 'لا يوجد'}, drift=${preflight.drift.length}`,
         timestamp: now(),
       });
+      if (preflight.ledgerDrift.length > 0) {
+        throw new Error(`انحراف غير قابل للاستئناف في سجل migrations: ${preflight.ledgerDrift.join('; ')}`);
+      }
       if (preflight.ownershipDrift.length > 0) {
+        logOwnershipViolations(this.diagnosticLogger, emit, preflight.ownershipViolations);
         if (!opts.adminDbOpts) {
           throw new Error('ملكية كائنات OneSoft غير صحيحة ولا يوجد اعتماد إداري Legacy لإصلاحها — لم يتم تنفيذ أي تغيير');
         }
         startStage('ownership-repair');
-        emit({ level: 'warning', message: `تم اكتشاف انحراف ملكية في ${preflight.ownershipDrift.length} كائن — إصلاح Allowlist فقط...`, timestamp: now() });
+        emit({
+          level: 'warning',
+          message: `تم اكتشاف انحراف ملكية في ${preflight.ownershipDrift.length} كائن OneSoft — إصلاح النطاق الموحّد فقط...`,
+          timestamp: now(),
+        });
         await this.roleManagerFactory().adoptAllowlistedObjects({
           ...opts.adminDbOpts,
           database: dbOpts.database,
         });
-        successStage('ownership-repair');
-      }
-      if (preflight.ledgerDrift.length > 0) {
-        throw new Error(`انحراف غير قابل للاستئناف في سجل migrations: ${preflight.ledgerDrift.join('; ')}`);
+        ownershipRepairPerformed = true;
+        startStage('preflight');
+        preflight = await preflightDatabase(migrationCredential, migrationTags);
+        if (!preflight.ok) {
+          throw new Error(`فشل فحص قاعدة البيانات بعد إصلاح الملكية: ${safeMigrationError(preflight.error ?? 'اتصال غير صالح')}`);
+        }
+        if (preflight.ownershipDrift.length > 0) {
+          logOwnershipViolations(this.diagnosticLogger, emit, preflight.ownershipViolations);
+          throw new Error(
+            `فشل preflight بعد إصلاح الملكية: ما زال ${preflight.ownershipDrift.length} كائن OneSoft خارج المالك المتوقع`,
+          );
+        }
       }
       if (!preflight.migratorRoleExists || !preflight.schemaOwnerRoleExists) {
         throw new Error('أدوار الترحيل المطلوبة غير موجودة — لم يتم تنفيذ أي تغيير');
@@ -249,6 +267,8 @@ export class UpgradeManager {
       if (!preflight.canSetSchemaOwner) {
         throw new Error('حساب الترحيل لا يستطيع SET ROLE onesoft_schema_owner — لم يتم تنفيذ أي تغيير');
       }
+      if (ownershipRepairPerformed) successStage('ownership-repair');
+      successStage('preflight');
 
       // 5. تشغيل Migrations بحساب migrator ثم SET ROLE للمالك، وليس بحساب Runtime.
       startStage('migrations');
@@ -366,6 +386,7 @@ export class UpgradeManager {
             dbOpts: opts.adminDbOpts ?? dbOpts,
             roleBootstrapRollback,
             ownershipRollback,
+            restartServer: serverWasRunning,
           }, emit);
           if (rollbackResult.ok) {
             successStage('rollback');
@@ -380,6 +401,7 @@ export class UpgradeManager {
             databaseRollback: 'failed',
             roleBootstrapRollback: 'failed',
             ownershipRollback: 'failed',
+            serviceRollback: 'failed',
           };
           this.diagnosticLogger.record('rollback', 'failure', { error: safeMigrationError(rollbackError) });
         }
@@ -390,6 +412,7 @@ export class UpgradeManager {
           databaseRollback: 'not-attempted',
           roleBootstrapRollback: 'not-attempted',
           ownershipRollback: 'not-attempted',
+          serviceRollback: 'not-attempted',
         };
         successStage('rollback');
       }
@@ -404,6 +427,25 @@ export class UpgradeManager {
       };
     }
   }
+}
+
+function logOwnershipViolations(
+  diagnosticLogger: UpgradeDiagnosticLogger,
+  emit: Emit,
+  violations: OwnershipViolation[],
+): void {
+  if (!violations.length) return;
+  const firstTwenty = violations.slice(0, 20);
+  const details = firstTwenty.map(formatOwnershipViolation);
+  emit({
+    level: 'warning',
+    message: `تفاصيل أول ${firstTwenty.length} مخالفة ownership:\n${details.join('\n')}`,
+    timestamp: now(),
+  });
+  diagnosticLogger.record('preflight', 'failure', {
+    error: `ownership drift: ${violations.length} OneSoft objects`,
+    ownershipViolations: firstTwenty,
+  });
 }
 
 function now() { return new Date().toISOString(); }
