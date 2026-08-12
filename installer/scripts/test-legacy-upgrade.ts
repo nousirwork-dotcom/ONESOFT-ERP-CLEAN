@@ -7,6 +7,7 @@ import pg from 'pg';
 import { DatabaseRoleManager, MIGRATOR_ROLE, RUNTIME_ROLE, SCHEMA_OWNER_ROLE } from '../core/database/DatabaseRoleManager.js';
 import { preflightDatabase, migrationConnection } from '../core/database/DatabasePreflight.js';
 import { MigrationRunner } from '../core/database/MigrationRunner.js';
+import { RollbackManager } from '../core/upgrade/RollbackManager.js';
 import {
   buildPostgreSQLConnectionArgs,
   buildPostgreSQLToolEnv,
@@ -193,6 +194,10 @@ async function assertLegacyOwnershipDrift(
   if (!result.ownershipDrift.some((item) => item.startsWith('invoice_type owned by '))) {
     throw new Error(`Preflight did not report invoice_type ownership drift: ${result.ownershipDrift.join('; ')}`);
   }
+  console.log(
+    `[legacy-test] ownership violations first ${Math.min(20, result.ownershipViolations.length)}: ` +
+    JSON.stringify(result.ownershipViolations.slice(0, 20)),
+  );
   console.log(`[legacy-test] ${name}: foreign invoice_type owner detected before repair: PASS`);
 }
 
@@ -218,6 +223,12 @@ async function assertPreflight(name: string, credential: DatabaseConnectionOptio
     throw new Error(`pending migration mismatch: ${result.pendingMigration} != ${expectedPending}`);
   }
   if (result.ownershipDrift.length || result.ledgerDrift.length) {
+    if (result.ownershipViolations.length) {
+      console.error(
+        `[legacy-test] preflight ownership violations first ${Math.min(20, result.ownershipViolations.length)}: ` +
+        JSON.stringify(result.ownershipViolations.slice(0, 20)),
+      );
+    }
     throw new Error(`unexpected preflight drift: ${JSON.stringify({
       ownership: result.ownershipDrift,
       ledger: result.ledgerDrift,
@@ -339,6 +350,108 @@ async function startBackend(runtime: DatabaseConnectionOptions, port: number): P
   child.stdout?.on('data', (chunk: Buffer) => output.push(chunk.toString()));
   child.stderr?.on('data', (chunk: Buffer) => output.push(chunk.toString()));
   return { child, output };
+}
+
+function findNssm(): string {
+  const candidates = [
+    process.env['NSSM_PATH'],
+    'nssm.exe',
+    'C:\\ProgramData\\chocolatey\\bin\\nssm.exe',
+  ].filter((value): value is string => Boolean(value));
+  for (const candidate of candidates) {
+    if (candidate === 'nssm.exe' || fs.existsSync(candidate)) return candidate;
+  }
+  try {
+    return execFileSync('where.exe', ['nssm.exe'], {
+      encoding: 'utf8',
+      stdio: 'pipe',
+      windowsHide: true,
+    }).trim().split(/\r?\n/)[0]!;
+  } catch {
+    throw new Error('NSSM is required for the Windows OneSoft-Server service acceptance');
+  }
+}
+
+function invokeNssm(nssm: string, args: string[]): void {
+  execFileSync(nssm, args, {
+    encoding: 'utf8',
+    stdio: 'pipe',
+    windowsHide: true,
+  });
+}
+
+async function assertWindowsServiceReady(
+  runtime: DatabaseConnectionOptions,
+  port: number,
+): Promise<void> {
+  if (process.platform !== 'win32') return;
+
+  const serviceName = 'OneSoft-Server';
+  const nssm = findNssm();
+  const tsxEntry = path.join(serverRoot, 'node_modules', 'tsx', 'dist', 'cli.mjs');
+  const serviceLog = path.join(os.tmpdir(), `onesoft-service-${process.pid}-${port}.log`);
+  tempFiles.push(serviceLog);
+
+  // The GitHub runner is disposable. Remove a stale service so this assertion
+  // cannot pass by observing a previous process.
+  try { invokeNssm(nssm, ['stop', serviceName]); } catch {}
+  try { invokeNssm(nssm, ['remove', serviceName, 'confirm']); } catch {}
+
+  const configPath = configFor(runtime, port);
+  invokeNssm(nssm, ['install', serviceName, process.execPath, tsxEntry, 'src/index.ts']);
+  invokeNssm(nssm, ['set', serviceName, 'AppDirectory', serverRoot]);
+  const quotedTsxEntry = /\s/.test(tsxEntry) ? `"${tsxEntry}"` : tsxEntry;
+  invokeNssm(nssm, ['set', serviceName, 'AppParameters', `${quotedTsxEntry} src/index.ts`]);
+  invokeNssm(nssm, [
+    'set', serviceName, 'AppEnvironmentExtra',
+    'NODE_ENV=production',
+    `ONESOFT_CONFIG=${configPath}`,
+    `PORT=${port}`,
+    'ELECTRON_MODE=0',
+  ]);
+  invokeNssm(nssm, ['set', serviceName, 'AppStdout', serviceLog]);
+  invokeNssm(nssm, ['set', serviceName, 'AppStderr', serviceLog]);
+  invokeNssm(nssm, ['set', serviceName, 'Start', 'SERVICE_DEMAND_START']);
+  invokeNssm(nssm, ['start', serviceName]);
+
+  try {
+    const health = await waitForHealth(
+      port,
+      (value) => value.status === 200 && value.body.ready === true,
+      [],
+    );
+    const serviceState = execFileSync('sc.exe', ['query', serviceName], {
+      encoding: 'utf8',
+      stdio: 'pipe',
+      windowsHide: true,
+    });
+    if (!/RUNNING/.test(serviceState)) {
+      throw new Error(`OneSoft-Server did not reach RUNNING: ${serviceState}`);
+    }
+    if (health.body.status !== 'ok') {
+      throw new Error(`Windows service health is not ok: ${JSON.stringify(health.body)}`);
+    }
+    console.log('[legacy-test] Windows OneSoft-Server service start → ready=true: PASS');
+
+    invokeNssm(nssm, ['stop', serviceName]);
+    const rollback = await new RollbackManager().rollback({
+      backupDir: path.join(os.tmpdir(), `onesoft-empty-rollback-${process.pid}`),
+      dbOpts: runtime,
+      restartServer: true,
+    }, () => {});
+    if (!rollback.ok || rollback.serviceRollback !== 'success') {
+      throw new Error(`Rollback did not restart OneSoft-Server: ${JSON.stringify(rollback)}`);
+    }
+    await waitForHealth(
+      port,
+      (value) => value.status === 200 && value.body.ready === true,
+      [],
+    );
+    console.log('[legacy-test] Windows rollback → old OneSoft-Server restarted → ready=true: PASS');
+  } finally {
+    try { invokeNssm(nssm, ['stop', serviceName]); } catch {}
+    try { invokeNssm(nssm, ['remove', serviceName, 'confirm']); } catch {}
+  }
 }
 
 async function waitForHealth(port: number, predicate: (health: { status: number; body: Record<string, unknown> }) => boolean, output: string[]): Promise<{ status: number; body: Record<string, unknown> }> {
@@ -482,15 +595,19 @@ async function main(): Promise<void> {
   await assertRuntimeCannotDdl(fullRoles.runtime);
 
   const fullPort = 38_500 + (process.pid % 400);
-  const fullServer = await startBackend(fullRoles.runtime, fullPort);
-  try {
-    const health = await waitForHealth(fullPort, (value) => value.status === 200 && value.body.ready === true, fullServer.output);
-    if (health.body.status !== 'ok' || health.body.version !== APP_VERSION) {
-      throw new Error(`Unexpected ready health: ${JSON.stringify(health)}`);
+  if (process.platform === 'win32') {
+    await assertWindowsServiceReady(fullRoles.runtime, fullPort);
+  } else {
+    const fullServer = await startBackend(fullRoles.runtime, fullPort);
+    try {
+      const health = await waitForHealth(fullPort, (value) => value.status === 200 && value.body.ready === true, fullServer.output);
+      if (health.body.status !== 'ok' || health.body.version !== APP_VERSION) {
+        throw new Error(`Unexpected ready health: ${JSON.stringify(health)}`);
+      }
+      console.log('[legacy-test] runtime onesoft_app health ready=true: PASS');
+    } finally {
+      await stop(fullServer.child);
     }
-    console.log('[legacy-test] runtime onesoft_app health ready=true: PASS');
-  } finally {
-    await stop(fullServer.child);
   }
   await assertFoundation(fullDb, fullRoles.runtime);
   await assertFoundationIdempotency(fullDb, fullRoles.runtime);
