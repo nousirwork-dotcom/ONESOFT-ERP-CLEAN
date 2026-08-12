@@ -97,6 +97,7 @@ interface InstallerAPI {
     databaseRollback: string;
     roleBootstrapRollback: string;
     ownershipRollback: string;
+    serviceRollback: string;
   }>;
 
   // Uninstall
