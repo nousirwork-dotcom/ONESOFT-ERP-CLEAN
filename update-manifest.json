@@ -1,18 +1,18 @@
 {
-  "latestVersion": "1.0.29",
+  "latestVersion": "1.0.30",
   "minSupportedVersion": "1.0.0",
   "mandatory": false,
-  "messageAr": "يوجد تحديث جديد (v1.0.29): أدوات PostgreSQL متوافقة مع الخادم وإصدار Windows موثّق لمعمارَي x64 وia32.",
-  "messageEn": "New update (v1.0.29): PostgreSQL tools matched to the server and verified Windows installers for x64 and ia32.",
+  "messageAr": "يوجد تحديث جديد (v1.0.30): إصلاحات Upgrade Core وRollback وملفات Windows موثّقة لمعمارَي x64 وia32.",
+  "messageEn": "New update (v1.0.30): Upgrade Core and rollback fixes with verified Windows installers for x64 and ia32.",
   "releaseNotes": [
     "اختيار pg_dump وpg_restore وpsql من نفس إصدار PostgreSQL Server",
     "إصلاح Backup وRestore باستخدام مسارات مطلقة ووسائط آمنة",
     "بناء Windows موثّق ومتحقق أمنيًا لمعمارَيتَي x64 وia32"
   ],
-  "downloadUrl": "https://github.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/releases/download/v1.0.29/OneSoftSetup-1.0.29-x64.exe",
-  "fileSizeBytes": 81950994,
-  "sha512": "0e4oP9SxrUiGcjYqtDcQdbS77awbWiUL2iHRZ023I8/hbH4NCp7ZHILViab653C2etvYo13rnIll6QudR8tXPQ==",
-  "publishedAt": "2026-08-11T23:19:13Z",
+  "downloadUrl": "https://github.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/releases/download/v1.0.30/OneSoftSetup-1.0.30-x64.exe",
+  "fileSizeBytes": 81951747,
+  "sha512": "K36fxJRQ5iVcxoi0JgaoUwYkOYsMhTCga/ItooUXFpsyuu4bP++gDFf+tsDGdnvQWavjWHyUgC+cqZOtdy+BYw==",
+  "publishedAt": "2026-08-12T00:43:52Z",
   "_notes": {
     "MANIFEST_URL": "استضِف هذا الملف على CDN عام أو GitHub Pages بدون توثيق (Public URL).",
     "ONESOFT_UPDATE_URL": "يمكن تجاوز الرابط الافتراضي عبر متغير البيئة ONESOFT_UPDATE_URL.",
@@ -23,9 +23,9 @@
     "publishedAt": "تاريخ نشر الإصدار بصيغة ISO 8601.",
     "skip_policy": "التحديث الاختياري يُعرض مرة واحدة ثم يُؤجّل 24 ساعة إذا ضغط المستخدم 'لاحقاً'.",
     "mandatory_block": "التحديث الإجباري يمنع الدخول لجميع صفحات النظام (login / dashboard / إلخ) حتى إتمام التحديث.",
-    "generate_sha512": "لحساب sha512 للملف على Windows: certutil -hashfile OneSoftSetup-1.0.29-x64.exe SHA512",
-    "generate_sha512_linux": "sha512sum OneSoftSetup-1.0.29-x64.exe | awk '{print $1}'"
+    "generate_sha512": "لحساب sha512 للملف على Windows: certutil -hashfile OneSoftSetup-1.0.30-x64.exe SHA512",
+    "generate_sha512_linux": "sha512sum OneSoftSetup-1.0.30-x64.exe | awk '{print $1}'"
   },
-  "version": "1.0.29",
-  "notes": "v1.0.29 — توافق أدوات PostgreSQL ونسخة Windows موثّقة"
+  "version": "1.0.30",
+  "notes": "v1.0.30 — إصلاحات Upgrade Core وRollback ونسخة Windows موثّقة"
 }

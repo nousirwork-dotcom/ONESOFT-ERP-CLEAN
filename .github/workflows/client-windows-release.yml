@@ -308,6 +308,40 @@ jobs:
             console.log("✅ All version sources consistent: " + pkg);
           '
 
+      # ── تجهيز شهادة Authenticode من GitHub Secrets ─────────────────────────
+      # لا نضع PFX أو كلمة المرور في المستودع. تُحفظ الشهادة كـ Base64 في
+      # WIN_CSC_PFX_BASE64 وتُكتب فقط إلى مجلد TEMP الخاص بالـ runner.
+      - name: Prepare Authenticode certificate
+        shell: pwsh
+        env:
+          WIN_CSC_PFX_BASE64: ${{ secrets.WIN_CSC_PFX_BASE64 }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ([string]::IsNullOrWhiteSpace($env:WIN_CSC_PFX_BASE64)) {
+            Write-Error "WIN_CSC_PFX_BASE64 is not configured — signed build is blocked"
+            exit 1
+          }
+          if ([string]::IsNullOrWhiteSpace($env:WIN_CSC_KEY_PASSWORD)) {
+            Write-Error "WIN_CSC_KEY_PASSWORD is not configured — signed build is blocked"
+            exit 1
+          }
+          $pfxPath = Join-Path $env:RUNNER_TEMP 'onesoft-code-signing.pfx'
+          try {
+            $bytes = [Convert]::FromBase64String($env:WIN_CSC_PFX_BASE64)
+            [System.IO.File]::WriteAllBytes($pfxPath, $bytes)
+          } catch {
+            Write-Error "WIN_CSC_PFX_BASE64 is not valid Base64"
+            exit 1
+          }
+          if ((Get-Item $pfxPath).Length -lt 1024) {
+            Write-Error "Decoded Authenticode certificate is unexpectedly small"
+            exit 1
+          }
+          "CSC_LINK=$pfxPath" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "CSC_KEY_PASSWORD=$env:WIN_CSC_KEY_PASSWORD" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "✅ Authenticode certificate prepared in runner TEMP (value not printed)"
+
       # ── بناء Electron (main + preload + NSIS installer) ────────────────────
       - name: Build Electron installer
         working-directory: installer
@@ -319,6 +353,31 @@ jobs:
         run: |
           # بناء electron main + preload + UI + installer
           pnpm run build
+
+      # ── لا نسمح ببناء قابل للنشر بدون توقيع Authenticode ───────────────────
+      - name: Verify Authenticode signatures
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $targets = @()
+          $targets += @(Get-ChildItem installer/release -Filter '*-x64.exe' -File -ErrorAction SilentlyContinue)
+          $targets += @(Get-ChildItem installer/release -Filter '*-ia32.exe' -File -ErrorAction SilentlyContinue)
+          $targets += @(Get-ChildItem installer/release -Recurse -Filter 'OneSoft ERP.exe' -File -ErrorAction SilentlyContinue)
+          if ($targets.Count -lt 3) {
+            Write-Error "Expected x64 installer, ia32 installer, and OneSoft ERP.exe"
+            exit 1
+          }
+          $failed = $false
+          foreach ($target in $targets) {
+            $signature = Get-AuthenticodeSignature $target.FullName
+            Write-Host "$($target.FullName): $($signature.Status)"
+            if ($signature.Status -ne 'Valid') {
+              Write-Error "Unsigned or invalid Authenticode signature: $($target.FullName)"
+              $failed = $true
+            }
+          }
+          if ($failed) { exit 1 }
+          Write-Host "✅ Authenticode valid on installers and OneSoft ERP.exe"
 
       # ── فحص أسماء ملفات EXE الناتجة تطابق الـ Tag (يفشل CI عند عدم التطابق) ──
       - name: Verify EXE names match tag version
