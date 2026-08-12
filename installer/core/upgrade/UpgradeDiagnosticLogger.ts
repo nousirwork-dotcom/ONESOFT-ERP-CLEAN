@@ -9,6 +9,13 @@ export interface UpgradeDiagnosticEntry {
   status: UpgradeDiagnosticStatus;
   error?: string;
   migration?: string;
+  ownershipViolations?: Array<{
+    schema: string;
+    objectName: string;
+    objectType: string;
+    currentOwner: string;
+    expectedOwner: string;
+  }>;
 }
 
 const LOG_PATH = path.join(
@@ -41,7 +48,11 @@ export class UpgradeDiagnosticLogger {
   record(
     stage: string,
     status: UpgradeDiagnosticStatus,
-    details: { error?: unknown; migration?: string } = {},
+    details: {
+      error?: unknown;
+      migration?: string;
+      ownershipViolations?: UpgradeDiagnosticEntry['ownershipViolations'];
+    } = {},
   ): void {
     const entry: UpgradeDiagnosticEntry = {
       timestamp: new Date().toISOString(),
@@ -54,6 +65,9 @@ export class UpgradeDiagnosticLogger {
     }
     if (details.migration) {
       entry.migration = details.migration;
+    }
+    if (details.ownershipViolations?.length) {
+      entry.ownershipViolations = details.ownershipViolations.slice(0, 20);
     }
 
     try {
