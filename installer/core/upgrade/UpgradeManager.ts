@@ -98,6 +98,7 @@ export class UpgradeManager {
     let rollbackResult: RollbackResult | undefined;
     let ownershipRepairPerformed = false;
     let serverWasRunning = false;
+    let adminCredentialValidated = false;
     const originalConfig = snapshotConfig();
     const startStage = (stage: string) => {
       activeStage = stage;
@@ -105,6 +106,20 @@ export class UpgradeManager {
     };
     const successStage = (stage: string, migration?: string) => {
       this.diagnosticLogger.record(stage, 'success', migration ? { migration } : {});
+    };
+    const ensureAdminCredential = async (): Promise<void> => {
+      if (!opts.adminDbOpts || adminCredentialValidated) return;
+      startStage('admin-credential-validation');
+      try {
+        await this.validateAdminCredential(opts.adminDbOpts);
+        adminCredentialValidated = true;
+      } catch (error: unknown) {
+        if (isPostgresAuthenticationFailure(error)) {
+          throw new Error('بيانات PostgreSQL الإدارية غير صحيحة');
+        }
+        throw error;
+      }
+      successStage('admin-credential-validation');
     };
 
     try {
@@ -126,20 +141,12 @@ export class UpgradeManager {
       successStage('preflight');
 
       // Validate the legacy administrator with a read-only SELECT before
-      // creating a backup or changing roles. A valid pg_dump alone does not
-      // prove that the account may provision roles or repair ownership.
-      startStage('admin-credential-validation');
-      if (opts.adminDbOpts && (!storedMigrationCredential || opts.forceRoleProvision === true)) {
-        try {
-          await this.validateAdminCredential(opts.adminDbOpts);
-        } catch (error: unknown) {
-          if (isPostgresAuthenticationFailure(error)) {
-            throw new Error('بيانات PostgreSQL الإدارية غير صحيحة');
-          }
-          throw error;
-        }
+      // creating a backup or changing roles. The same validated credential is
+      // also used for a first backup when read-only preflight finds legacy
+      // ownership drift.
+      if (!storedMigrationCredential || opts.forceRoleProvision === true) {
+        await ensureAdminCredential();
       }
-      successStage('admin-credential-validation');
 
       // Resolve and execute-test all PostgreSQL client tools before creating a
       // backup or stopping services. Windows service installations commonly
@@ -160,38 +167,81 @@ export class UpgradeManager {
       emit({ level: 'info', message: `النسخة الحالية: v${currentVersion}`, timestamp: now() });
       emit({ level: 'info', message: `الترقية إلى: v${targetVersion}`, timestamp: now() });
 
-      // 2. نسخة احتياطية إلزامية
+      // 2. Read-only preflight must happen before the first backup. If a
+      // legacy database has ownership drift, its migrator cannot read every
+      // table yet, so the first backup must use the validated admin account.
+      const migrationTags = readMigrationTags(serverAppPath);
+      startStage('preflight');
+      const preflightCredential = storedMigrationCredential ?? opts.adminDbOpts;
+      if (!preflightCredential) {
+        throw new Error('لا يوجد اعتماد صالح لفحص قاعدة البيانات قبل النسخة الاحتياطية');
+      }
+      let initialPreflight = await preflightDatabase(preflightCredential, migrationTags);
+      if (!initialPreflight.ok && storedMigrationCredential && opts.adminDbOpts) {
+        await ensureAdminCredential();
+        initialPreflight = await preflightDatabase(opts.adminDbOpts, migrationTags);
+      }
+      if (!initialPreflight.ok) {
+        throw new Error(`فشل فحص قاعدة البيانات قبل النسخة الاحتياطية: ${safeMigrationError(initialPreflight.error ?? 'اتصال غير صالح')}`);
+      }
+      emit({
+        level: 'info',
+        message: `فحص Read-only قبل النسخة: user=${initialPreflight.currentUser ?? '—'}, ownershipDrift=${initialPreflight.ownershipDrift.length}, roles=${initialPreflight.migratorRoleExists && initialPreflight.schemaOwnerRoleExists ? 'جاهزة' : 'تحتاج bootstrap'}`,
+        timestamp: now(),
+      });
+      if (initialPreflight.ledgerDrift.length > 0) {
+        throw new Error(`انحراف غير قابل للاستئناف في سجل migrations: ${initialPreflight.ledgerDrift.join('; ')}`);
+      }
+      if (initialPreflight.ownershipDrift.length > 0) {
+        logOwnershipViolations(this.diagnosticLogger, emit, initialPreflight.ownershipViolations);
+      }
+
+      const requiresRoleRepair =
+        !storedMigrationCredential ||
+        opts.forceRoleProvision === true ||
+        initialPreflight.ownershipDrift.length > 0 ||
+        !initialPreflight.migratorRoleExists ||
+        !initialPreflight.schemaOwnerRoleExists ||
+        !initialPreflight.canSetSchemaOwner;
+      const backupCredential = requiresRoleRepair
+        ? opts.adminDbOpts
+        : storedMigrationCredential;
+      const backupCredentialKind = requiresRoleRepair ? 'admin' as const : 'migrator' as const;
+      if (!backupCredential) {
+        throw new Error(
+          'تم اكتشاف Legacy ownership drift أو أدوار غير مكتملة، ولا يوجد اعتماد PostgreSQL إداري للنسخة الأولى — لم يتم تنفيذ أي تغيير',
+        );
+      }
+      if (backupCredentialKind === 'admin') {
+        await ensureAdminCredential();
+      }
+      successStage('preflight');
+
+      // 3. Mandatory first backup. It is the only database operation allowed
+      // before role bootstrap/ownership repair.
       startStage('backup');
       onStatus?.('backing-up');
-       const backupCredential = storedMigrationCredential ?? opts.adminDbOpts;
-       if (!backupCredential) {
-         throw new Error('لا يوجد اعتماد إداري صالح لإنشاء النسخة الاحتياطية قبل الترقية');
-       }
       backupDir = await this.backupManager.backup({
-         dbOpts: backupCredential,
+        dbOpts: backupCredential,
         backupsDir,
         currentVersion,
+        credential: backupCredentialKind,
       }, emit);
       successStage('backup');
 
-      // 3. إيقاف الخدمات
-      startStage('service-stop');
-      onStatus?.('stopping-services');
-      emit({ level: 'info', message: 'جارٍ إيقاف الخدمات...', timestamp: now() });
-      const svcMgr = this.serviceManager;
-      serverWasRunning = ['running', 'starting'].includes(svcMgr.getStatus('OneSoft-Server'));
-      svcMgr.stop('OneSoft-Server');
-      svcMgr.stop('OneSoft-Client');
-      emit({ level: 'success', message: 'تم إيقاف الخدمات', timestamp: now() });
-      successStage('service-stop');
-
-      // 4. لا نبدأ أي DDL قبل إثبات أن اعتماد الترحيل المحمي موجود وصالح.
-      // الاعتماد الإداري القديم يُستخدم مرة واحدة فقط لترميم الدور ثم يُزال من
-      // active config؛ لا يتم تمريره إلى الواجهة أو تسجيله.
+      // 4. Role Bootstrap → Ownership Repair → protected Migrator credential.
+      // This is deliberately after a verified first backup.
       let migrationCredential = storedMigrationCredential;
-      if ((!migrationCredential || opts.forceRoleProvision === true) && opts.adminDbOpts) {
+      if (requiresRoleRepair) {
+        if (!opts.adminDbOpts) {
+          throw new Error('لا يوجد اعتماد إداري لإصلاح أدوار وملكية قاعدة Legacy بعد النسخة الاحتياطية');
+        }
         startStage('role-bootstrap');
-        emit({ level: 'warning', message: 'اعتماد الترحيل المحمي غير موجود — جارٍ إنشاءه من اعتماد Legacy صالح مرة واحدة...', timestamp: now() });
+        emit({
+          level: 'warning',
+          message: 'تم حفظ النسخة الأولى بنجاح — جارٍ تنفيذ Role Bootstrap ثم Ownership Repair...',
+          timestamp: now(),
+        });
         const roleManager = this.roleManagerFactory();
         const provisioned = await provisionRepairThenSaveCredential(
           () => roleManager.provision(
@@ -213,19 +263,31 @@ export class UpgradeManager {
             this.saveMigrationCredential(credential);
           },
         );
-        if (activeStage === 'role-bootstrap') successStage('role-bootstrap');
         migrationCredential = provisioned.migration;
+        if (ownershipRepairPerformed) successStage('ownership-repair');
+        successStage('role-bootstrap');
         successStage('dpapi-credential-create');
       } else {
         successStage('role-bootstrap');
         successStage('dpapi-credential-create');
       }
       if (!migrationCredential) {
-        throw new Error('لا يوجد اعتماد ترحيل محمي صالح. أوقف التحديث بأمان، وأعد تشغيل المثبّت لإصلاح أدوار قاعدة البيانات أولاً.');
+        throw new Error('لا يوجد اعتماد ترحيل محمي بعد إصلاح الأدوار — لم يبدأ Migrations');
       }
 
+      // 5. إيقاف الخدمات بعد نجاح النسخة وإصلاح البنية الأمنية.
+      startStage('service-stop');
+      onStatus?.('stopping-services');
+      emit({ level: 'info', message: 'جارٍ إيقاف الخدمات...', timestamp: now() });
+      const svcMgr = this.serviceManager;
+      serverWasRunning = ['running', 'starting'].includes(svcMgr.getStatus('OneSoft-Server'));
+      svcMgr.stop('OneSoft-Server');
+      svcMgr.stop('OneSoft-Client');
+      emit({ level: 'success', message: 'تم إيقاف الخدمات', timestamp: now() });
+      successStage('service-stop');
+
+      // 6. Verify the post-repair read-only state before migrations.
       startStage('preflight');
-      const migrationTags = readMigrationTags(serverAppPath);
       let preflight = await preflightDatabase(migrationCredential, migrationTags);
       if (!preflight.ok) {
         throw new Error(`فشل فحص قاعدة البيانات قبل الترحيل: ${safeMigrationError(preflight.error ?? 'اتصال غير صالح')}`);
@@ -240,31 +302,9 @@ export class UpgradeManager {
       }
       if (preflight.ownershipDrift.length > 0) {
         logOwnershipViolations(this.diagnosticLogger, emit, preflight.ownershipViolations);
-        if (!opts.adminDbOpts) {
-          throw new Error('ملكية كائنات OneSoft غير صحيحة ولا يوجد اعتماد إداري Legacy لإصلاحها — لم يتم تنفيذ أي تغيير');
-        }
-        startStage('ownership-repair');
-        emit({
-          level: 'warning',
-          message: `تم اكتشاف انحراف ملكية في ${preflight.ownershipDrift.length} كائن OneSoft — إصلاح النطاق الموحّد فقط...`,
-          timestamp: now(),
-        });
-        await this.roleManagerFactory().adoptAllowlistedObjects({
-          ...opts.adminDbOpts,
-          database: dbOpts.database,
-        });
-        ownershipRepairPerformed = true;
-        startStage('preflight');
-        preflight = await preflightDatabase(migrationCredential, migrationTags);
-        if (!preflight.ok) {
-          throw new Error(`فشل فحص قاعدة البيانات بعد إصلاح الملكية: ${safeMigrationError(preflight.error ?? 'اتصال غير صالح')}`);
-        }
-        if (preflight.ownershipDrift.length > 0) {
-          logOwnershipViolations(this.diagnosticLogger, emit, preflight.ownershipViolations);
-          throw new Error(
-            `فشل preflight بعد إصلاح الملكية: ما زال ${preflight.ownershipDrift.length} كائن OneSoft خارج المالك المتوقع`,
-          );
-        }
+        throw new Error(
+          `فشل التحقق بعد Ownership Repair: ما زال ${preflight.ownershipDrift.length} كائن OneSoft خارج المالك المتوقع`,
+        );
       }
       if (!preflight.migratorRoleExists || !preflight.schemaOwnerRoleExists) {
         throw new Error('أدوار الترحيل المطلوبة غير موجودة — لم يتم تنفيذ أي تغيير');
@@ -272,7 +312,6 @@ export class UpgradeManager {
       if (!preflight.canSetSchemaOwner) {
         throw new Error('حساب الترحيل لا يستطيع SET ROLE onesoft_schema_owner — لم يتم تنفيذ أي تغيير');
       }
-      if (ownershipRepairPerformed) successStage('ownership-repair');
       successStage('preflight');
 
       // 5. تشغيل Migrations بحساب migrator ثم SET ROLE للمالك، وليس بحساب Runtime.

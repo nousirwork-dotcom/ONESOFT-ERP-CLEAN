@@ -170,11 +170,31 @@ assert(
 const backupGate = upgrade.indexOf('this.backupManager.backup(');
 const credentialGate = upgrade.indexOf('MigrationCredentialStore.load()');
 const noCredentialGuard = upgrade.indexOf('!storedMigrationCredential && !opts.adminDbOpts');
+const initialPreflightGate = upgrade.indexOf('let initialPreflight = await preflightDatabase(');
+const backupModeGate = upgrade.indexOf("const backupCredentialKind = requiresRoleRepair ? 'admin' as const : 'migrator' as const;");
+const roleBootstrapGate = upgrade.indexOf("startStage('role-bootstrap')");
+const ownershipRepairGate = upgrade.indexOf("startStage('ownership-repair')");
+const migratorCredentialGate = upgrade.indexOf('migrationCredential = provisioned.migration');
 assert(
   credentialGate >= 0 &&
     noCredentialGuard > credentialGate &&
     backupGate > noCredentialGuard,
   'missing administrative capability fails before backup and service stop',
+);
+assert(
+  initialPreflightGate >= 0 &&
+    backupModeGate > initialPreflightGate &&
+    backupGate > backupModeGate &&
+    roleBootstrapGate > backupGate &&
+    ownershipRepairGate > roleBootstrapGate &&
+    migratorCredentialGate > ownershipRepairGate &&
+    migrationsGate > migratorCredentialGate,
+  'Legacy preflight selects admin backup before role bootstrap, ownership repair, and migrations',
+);
+assert(
+  upgrade.includes('credential: backupCredentialKind') &&
+    upgrade.includes("const backupCredential = requiresRoleRepair"),
+  'first backup receives the selected admin or migrator credential mode explicitly',
 );
 assert(
   upgrade.includes('forceRoleProvision') &&
