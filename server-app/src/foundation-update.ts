@@ -106,6 +106,9 @@ export interface BackupResult {
   error?: string;
 }
 
+const FOUNDATION_MIGRATOR_ROLE = 'onesoft_migrator';
+const FOUNDATION_SCHEMA_OWNER_ROLE = 'onesoft_schema_owner';
+
 function parseDatabaseUrl(dbUrl: string): PostgreSQLServerConnection {
   const parsed = new URL(dbUrl);
   return {
@@ -126,14 +129,28 @@ export async function backupDatabase(dbUrl: string): Promise<BackupResult> {
   const backupDir = '/tmp/onesoft-backups';
   try {
     const connection = parseDatabaseUrl(dbUrl);
+    const isUpgradeMigrationCredential = connection.user === FOUNDATION_MIGRATOR_ROLE;
+    if (
+      process.env['ONESOFT_FOUNDATION_ONLY'] === '1' &&
+      !isUpgradeMigrationCredential
+    ) {
+      return {
+        ok: false,
+        error: `Foundation upgrade backup requires ${FOUNDATION_MIGRATOR_ROLE}; runtime credentials are not accepted`,
+      };
+    }
     const postgresTools = new PostgreSQLToolsResolver().resolveAll(connection);
     if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
 
     const timestamp  = new Date().toISOString().replace(/[:.]/g, '-');
     const backupPath = path.join(backupDir, `backup_${timestamp}.sql`);
+    const roleArgs = isUpgradeMigrationCredential
+      ? ['--role', FOUNDATION_SCHEMA_OWNER_ROLE]
+      : [];
 
     const result = spawnSync(postgresTools.pgDump, [
       ...buildPostgreSQLConnectionArgs(connection),
+      ...roleArgs,
       '-F', 'p',
       '-f', backupPath,
     ], {
@@ -807,6 +824,71 @@ export async function applyFoundationUpdate(
  *  - نجاح النسخة الاحتياطية مُسجَّل في info مع مسار الملف.
  */
 export async function runFoundationUpdateForAllOrgs(dbUrl?: string): Promise<FoundationRunSummary> {
+  if (process.env['ONESOFT_FOUNDATION_ONLY'] === '1') {
+    try {
+      const connection = parseDatabaseUrl(dbUrl ?? '');
+      if (connection.user !== FOUNDATION_MIGRATOR_ROLE) {
+        const error =
+          `Foundation upgrade requires ${FOUNDATION_MIGRATOR_ROLE}; ` +
+          `refusing runtime user ${connection.user || '(missing)'}`;
+        logger.error('foundation-update', 'FOUNDATION_ADMIN_CREDENTIAL_REQUIRED', { error });
+        return {
+          ok: false,
+          snapshotHash: null,
+          exportedAt: null,
+          recordsExpected: 0,
+          organizationsChecked: 0,
+          organizations: [],
+          error,
+        };
+      }
+
+      // The upgrade URL is opened as onesoft_migrator with the PostgreSQL
+      // startup option `role=onesoft_schema_owner`. Keep an explicit SET ROLE
+      // here as a defense-in-depth assertion for this administrative path.
+      await db.execute(sql`SET ROLE "onesoft_schema_owner"`);
+      const roleResult = await db.execute(sql`
+        SELECT current_user, session_user
+      `);
+      const roleRow = resultRows<{ current_user: string; session_user: string }>(roleResult)[0];
+      if (
+        roleRow?.current_user !== FOUNDATION_SCHEMA_OWNER_ROLE ||
+        roleRow.session_user !== FOUNDATION_MIGRATOR_ROLE
+      ) {
+        const error =
+          `Foundation upgrade role assertion failed: current_user=${roleRow?.current_user ?? 'unknown'} ` +
+          `session_user=${roleRow?.session_user ?? 'unknown'}`;
+        logger.error('foundation-update', 'FOUNDATION_SCHEMA_OWNER_REQUIRED', { error });
+        return {
+          ok: false,
+          snapshotHash: null,
+          exportedAt: null,
+          recordsExpected: 0,
+          organizationsChecked: 0,
+          organizations: [],
+          error,
+        };
+      }
+      logger.info('foundation-update', 'FOUNDATION_MIGRATION_ROLE_READY', {
+        sessionUser: roleRow.session_user,
+        currentUser: roleRow.current_user,
+      });
+    } catch (err: any) {
+      const cause = originalDatabaseError(err);
+      const error = `فشل تهيئة اعتماد Foundation الإداري: ${formatDatabaseError(cause)}`;
+      logger.error('foundation-update', 'FOUNDATION_ADMIN_ROLE_FAILED', { error });
+      return {
+        ok: false,
+        snapshotHash: null,
+        exportedAt: null,
+        recordsExpected: 0,
+        organizationsChecked: 0,
+        organizations: [],
+        error,
+      };
+    }
+  }
+
   const snapshot = loadFoundationSnapshot();
   if (!snapshot) {
     const error = 'foundation-data.json غير موجود أو غير صالح';
