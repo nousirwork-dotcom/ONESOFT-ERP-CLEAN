@@ -24,7 +24,13 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { db }        from './db.js';
 import { logger }    from './logger.js';
-import { eq, and, inArray, sql } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
+import {
+  buildPostgreSQLConnectionArgs,
+  buildPostgreSQLToolEnv,
+  PostgreSQLToolsResolver,
+  type PostgreSQLServerConnection,
+} from '../../installer/core/database/PostgreSQLToolsResolver.js';
 import {
   organizations,
   documentJournals,
@@ -100,6 +106,17 @@ export interface BackupResult {
   error?: string;
 }
 
+function parseDatabaseUrl(dbUrl: string): PostgreSQLServerConnection {
+  const parsed = new URL(dbUrl);
+  return {
+    host: parsed.hostname,
+    port: Number(parsed.port || 5432),
+    database: decodeURIComponent(parsed.pathname.replace(/^\/+/, '')),
+    user: decodeURIComponent(parsed.username),
+    password: decodeURIComponent(parsed.password),
+  };
+}
+
 /**
  * ينشئ نسخة احتياطية pg_dump للقاعدة المطلوبة.
  * إذا لم يكن pg_dump متاحاً يُعيد خطأ واضحاً.
@@ -108,22 +125,30 @@ export interface BackupResult {
 export async function backupDatabase(dbUrl: string): Promise<BackupResult> {
   const backupDir = '/tmp/onesoft-backups';
   try {
+    const connection = parseDatabaseUrl(dbUrl);
+    const postgresTools = new PostgreSQLToolsResolver().resolveAll(connection);
     if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
 
     const timestamp  = new Date().toISOString().replace(/[:.]/g, '-');
     const backupPath = path.join(backupDir, `backup_${timestamp}.sql`);
 
-    const result = spawnSync('pg_dump', [dbUrl, '-f', backupPath], {
+    const result = spawnSync(postgresTools.pgDump, [
+      ...buildPostgreSQLConnectionArgs(connection),
+      '-F', 'p',
+      '-f', backupPath,
+    ], {
+      env: buildPostgreSQLToolEnv(connection),
       encoding: 'utf8',
       timeout:  60_000,
+      windowsHide: true,
     });
 
     if (result.error) {
-      return { ok: false, error: `pg_dump غير متاح: ${result.error.message}` };
+      return { ok: false, error: `أداة النسخ الاحتياطي غير متاحة: ${result.error.message}` };
     }
     if (result.status !== 0) {
       const msg = (result.stderr || '').trim() || `exit code ${result.status}`;
-      return { ok: false, error: `pg_dump فشل: ${msg}` };
+      return { ok: false, error: `فشلت أداة النسخ الاحتياطي: ${msg}` };
     }
 
     logger.info('foundation-backup', `✅ نسخة احتياطية: ${backupPath}`);
@@ -333,6 +358,140 @@ export interface FoundationRunSummary {
   organizationsChecked: number;
   organizations: FoundationOrganizationResult[];
   error?: string;
+}
+
+interface OrganizationsSchema {
+  columns: string[];
+  hasCode: boolean;
+  hasFoundationSnapshotHash: boolean;
+  hasFoundationAppliedAt: boolean;
+  hasFoundationStatus: boolean;
+  hasFoundationLastError: boolean;
+}
+
+interface FoundationOrganization {
+  id: number;
+  code: string;
+  codeSource: 'code' | 'id-fallback';
+}
+
+interface PostgresCause {
+  message: string;
+  code: string | null;
+  detail: string | null;
+  column: string | null;
+  table: string | null;
+  schema: string | null;
+  constraint: string | null;
+  hint: string | null;
+}
+
+function resultRows<T>(result: unknown): T[] {
+  if (Array.isArray(result)) return result as T[];
+  if (result && typeof result === 'object' && 'rows' in result) {
+    const rows = (result as { rows?: unknown }).rows;
+    if (Array.isArray(rows)) return rows as T[];
+  }
+  return [];
+}
+
+function originalDatabaseError(error: unknown): PostgresCause {
+  let current = error as Record<string, any> | null;
+  const visited = new Set<unknown>();
+  while (
+    current?.cause &&
+    typeof current.cause === 'object' &&
+    current.cause !== current &&
+    !visited.has(current.cause)
+  ) {
+    visited.add(current);
+    current = current.cause;
+  }
+
+  const source = current ?? {};
+  return {
+    message: redactDatabaseText(
+      typeof source.message === 'string' ? source.message : String(error),
+    ) ?? String(error),
+    code: redactDatabaseText(typeof source.code === 'string' ? source.code : null),
+    detail: redactDatabaseText(typeof source.detail === 'string' ? source.detail : null),
+    column: redactDatabaseText(typeof source.column === 'string' ? source.column : null),
+    table: redactDatabaseText(typeof source.table === 'string' ? source.table : null),
+    schema: redactDatabaseText(typeof source.schema === 'string' ? source.schema : null),
+    constraint: redactDatabaseText(typeof source.constraint === 'string' ? source.constraint : null),
+    hint: redactDatabaseText(typeof source.hint === 'string' ? source.hint : null),
+  };
+}
+
+function redactDatabaseText(value: string | null): string | null {
+  if (!value) return value;
+  return value
+    .replace(/postgres(?:ql)?:\/\/[^\s)]+/gi, 'postgresql://[redacted]')
+    .replace(/((?:password|passwd|pwd)=)[^&\s]+/gi, '$1[redacted]');
+}
+
+function formatDatabaseError(cause: PostgresCause): string {
+  return [
+    `message=${redactDatabaseText(cause.message)}`,
+    `code=${redactDatabaseText(cause.code) ?? 'null'}`,
+    `detail=${redactDatabaseText(cause.detail) ?? 'null'}`,
+    `column=${redactDatabaseText(cause.column) ?? 'null'}`,
+    `table=${redactDatabaseText(cause.table) ?? 'null'}`,
+    `schema=${redactDatabaseText(cause.schema) ?? 'null'}`,
+    `constraint=${redactDatabaseText(cause.constraint) ?? 'null'}`,
+    `hint=${redactDatabaseText(cause.hint) ?? 'null'}`,
+  ].join(' | ');
+}
+
+async function inspectOrganizationsSchema(): Promise<OrganizationsSchema> {
+  const result = await db.execute(sql`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'organizations'
+    ORDER BY ordinal_position
+  `);
+  const columns = resultRows<{ column_name: string }>(result)
+    .map((row) => row.column_name)
+    .filter((column): column is string => typeof column === 'string');
+  const columnSet = new Set(columns);
+  const schema: OrganizationsSchema = {
+    columns,
+    hasCode: columnSet.has('code'),
+    hasFoundationSnapshotHash: columnSet.has('foundation_snapshot_hash'),
+    hasFoundationAppliedAt: columnSet.has('foundation_applied_at'),
+    hasFoundationStatus: columnSet.has('foundation_status'),
+    hasFoundationLastError: columnSet.has('foundation_last_error'),
+  };
+  if (!columnSet.has('id') || !columnSet.has('status')) {
+    throw new Error(
+      `organizations schema is missing required columns: ${['id', 'status']
+        .filter((column) => !columnSet.has(column)).join(', ')}`,
+    );
+  }
+  return schema;
+}
+
+async function findActiveOrganizations(schema: OrganizationsSchema): Promise<FoundationOrganization[]> {
+  const result = schema.hasCode
+    ? await db.execute(sql`
+        SELECT id, code
+        FROM organizations
+        WHERE status IN ('active', 'trial')
+      `)
+    : await db.execute(sql`
+        SELECT id
+        FROM organizations
+        WHERE status IN ('active', 'trial')
+      `);
+
+  return resultRows<{ id: number; code?: string | null }>(result).map((row) => ({
+    id: Number(row.id),
+    code: schema.hasCode && row.code
+      ? String(row.code)
+      : `org-${Number(row.id)}`,
+    codeSource: schema.hasCode && row.code ? 'code' : 'id-fallback',
+  }));
 }
 
 /**
@@ -561,7 +720,21 @@ async function saveFoundationStatus(
   snapshotHash: string,
   status: 'applied' | 'failed',
   error: string | null,
+  schema: OrganizationsSchema,
 ): Promise<void> {
+  if (
+    !schema.hasFoundationSnapshotHash ||
+    !schema.hasFoundationAppliedAt ||
+    !schema.hasFoundationStatus ||
+    !schema.hasFoundationLastError
+  ) {
+    logger.warn('foundation-update', 'FOUNDATION_STATUS_COLUMNS_NOT_AVAILABLE', {
+      organizationId: orgId,
+      availableColumns: schema.columns,
+      requiredMigration: '0090_foundation_reconcile_status',
+    });
+    return;
+  }
   await db.update(organizations).set({
     foundationSnapshotHash: snapshotHash,
     foundationAppliedAt: status === 'applied' ? new Date() : undefined,
@@ -670,16 +843,28 @@ export async function runFoundationUpdateForAllOrgs(dbUrl?: string): Promise<Fou
     logger.info('foundation-update', 'ℹ️ dbUrl غير متاح — تخطّى النسخ الاحتياطي');
   }
 
-  let orgs: { id: number; code: string }[] = [];
+  let organizationSchema: OrganizationsSchema;
+  let orgs: FoundationOrganization[];
   try {
-    orgs = await db
-      .select({ id: organizations.id, code: organizations.code })
-      .from(organizations)
-      // جميع المنظمات بغض النظر عن status (active, trial, ...)
-      // foundation-update يجب أن يطبق القالب على أي مؤسسة عميل جديدة
-      .where(inArray(organizations.status, ['active', 'trial']));
+    organizationSchema = await inspectOrganizationsSchema();
+    logger.info('foundation-update', 'ORGANIZATIONS_SCHEMA_DETECTED', {
+      columns: organizationSchema.columns,
+      hasCode: organizationSchema.hasCode,
+      hasFoundationStatusColumns:
+        organizationSchema.hasFoundationSnapshotHash &&
+        organizationSchema.hasFoundationAppliedAt &&
+        organizationSchema.hasFoundationStatus &&
+        organizationSchema.hasFoundationLastError,
+      compatibility: 'migrations-through-0092',
+    });
+    orgs = await findActiveOrganizations(organizationSchema);
   } catch (err: any) {
-    const error = `فشل جلب المنظمات: ${err.message}`;
+    const cause = originalDatabaseError(err);
+    const error = `فشل جلب المنظمات: ${formatDatabaseError(cause)}`;
+    logger.error('foundation-update', 'ORGANIZATIONS_QUERY_FAILED', {
+      originalCause: cause,
+      error,
+    });
     logger.error('foundation-update', 'FOUNDATION_INCOMPLETE', { error });
     return {
       ok: false,
@@ -704,15 +889,19 @@ export async function runFoundationUpdateForAllOrgs(dbUrl?: string): Promise<Fou
       logger.info('foundation-update', 'FOUNDATION_START', {
         organizationId: org.id,
         organizationCode: org.code,
+        organizationCodeSource: org.codeSource,
         snapshotHash: snapshot.hash,
         recordsExpected: snapshot.recordsExpected,
         recordsExisting,
       });
 
-      const current = await db.select({
-        foundationSnapshotHash: organizations.foundationSnapshotHash,
-        foundationStatus: organizations.foundationStatus,
-      }).from(organizations).where(eq(organizations.id, org.id)).limit(1);
+      const current = organizationSchema.hasFoundationSnapshotHash &&
+        organizationSchema.hasFoundationStatus
+        ? await db.select({
+            foundationSnapshotHash: organizations.foundationSnapshotHash,
+            foundationStatus: organizations.foundationStatus,
+          }).from(organizations).where(eq(organizations.id, org.id)).limit(1)
+        : [];
       const missingFoundationKeys = await findMissingFoundationKeys(org.id, snapshot.data);
       if (
         current[0]?.foundationSnapshotHash === snapshot.hash &&
@@ -753,7 +942,7 @@ export async function runFoundationUpdateForAllOrgs(dbUrl?: string): Promise<Fou
       const status = result.errors.length > 0 ? 'failed' : 'applied';
       const errorText = result.errors.length ? result.errors.join(' | ') : null;
       if (status === 'failed') allOk = false;
-      await saveFoundationStatus(org.id, snapshot.hash, status, errorText);
+      await saveFoundationStatus(org.id, snapshot.hash, status, errorText, organizationSchema);
       const organizationResult: FoundationOrganizationResult = {
         organizationId: org.id,
         organizationCode: org.code,
@@ -777,7 +966,7 @@ export async function runFoundationUpdateForAllOrgs(dbUrl?: string): Promise<Fou
       allOk = false;
       const errorText = err?.message ?? String(err);
       try {
-        await saveFoundationStatus(org.id, snapshot.hash, 'failed', errorText);
+        await saveFoundationStatus(org.id, snapshot.hash, 'failed', errorText, organizationSchema);
       } catch (statusErr: any) {
         logger.error('foundation-update', 'FOUNDATION_STATUS_SAVE_FAILED', {
           organizationId: org.id,

@@ -157,6 +157,44 @@ async function makeLegacyDatabase(name: string, tag: string): Promise<void> {
   await withClient(dbUrl(name), async (client) => {
     await applyThrough(client, tag);
     await seedLedgerAndStamp(client, tag);
+    // Reproduce the Windows Legacy shape: migrations through 0092 add the
+    // Foundation reconciliation columns, but no migration adds organizations.code.
+    // Keep an existing organization/user so bootstrap does not try to create
+    // a modern organization row before Foundation detection runs.
+    const organization = await client.query(`
+      INSERT INTO organizations (code, name, status)
+      VALUES ('LEGACY', 'Legacy Windows Organization', 'trial')
+      RETURNING id
+    `);
+    const organizationId = organization.rows[0]?.id;
+    if (!organizationId) throw new Error('Could not seed Legacy organization');
+    await client.query(`
+      INSERT INTO users (org_id, username, password_hash, name, role, is_active, password_status)
+      VALUES ($1, 'LEGACY_ADMIN', 'legacy-test-hash', 'Legacy Admin', 'admin', true, 'set')
+    `, [organizationId]);
+    await client.query(`
+      ALTER TABLE organizations
+        DROP CONSTRAINT IF EXISTS organizations_code_unique,
+        DROP CONSTRAINT IF EXISTS organizations_code_key
+    `);
+    await client.query(`ALTER TABLE organizations DROP COLUMN IF EXISTS code`);
+    const columns = await client.query(`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'organizations'
+      ORDER BY ordinal_position
+    `);
+    const actualColumns = columns.rows.map((row: { column_name: string }) => row.column_name);
+    if (actualColumns.includes('code')) {
+      throw new Error(`Legacy organizations.code still exists: ${actualColumns.join(', ')}`);
+    }
+    if (tag === latestTag && !actualColumns.includes('foundation_status')) {
+      throw new Error(`Legacy Foundation status columns missing after ${tag}`);
+    }
+    console.log(
+      `[legacy-test] ${name}: organizations schema after ${tag} has no code` +
+      `${actualColumns.includes('foundation_status') ? ' and has Foundation status columns' : ''}: PASS`,
+    );
     // Reproduce the Windows failure: invoice_type exists, but its owner is
     // an unrelated legacy role when migration 0069 tries ALTER TYPE.
     await client.query(`ALTER TYPE public.invoice_type OWNER TO ${quote(legacyOwner)}`);
@@ -497,22 +535,44 @@ async function assertRuntimeCannotDdl(runtime: DatabaseConnectionOptions): Promi
 
 async function assertFoundation(name: string, runtime: DatabaseConnectionOptions): Promise<void> {
   await withClient(dbUrl(name, runtime.user, runtime.password), async (client) => {
-    const orgs = await client.query(`SELECT id, code, foundation_status FROM organizations WHERE status IN ('active', 'trial')`);
+    const orgs = await client.query(`SELECT id, foundation_status FROM organizations WHERE status IN ('active', 'trial')`);
     if (!orgs.rowCount) throw new Error('No active/trial organization after upgrade');
+    const foundationTables = [
+      'branches',
+      'warehouses',
+      'document_types',
+      'document_journals',
+    ];
     for (const org of orgs.rows) {
+      if (org.foundation_status !== 'applied') {
+        throw new Error(
+          `Foundation status for Legacy organization ${org.id} is ${org.foundation_status ?? 'null'}`,
+        );
+      }
+      let foundationCount = 0;
+      for (const table of foundationTables) {
+        const count = await client.query(
+          `SELECT COUNT(*)::int AS count FROM ${table} WHERE org_id = $1 AND foundation_key IS NOT NULL`,
+          [org.id],
+        );
+        foundationCount += Number(count.rows[0]?.count ?? 0);
+      }
+      if (foundationCount !== 77) {
+        throw new Error(`Legacy organization ${org.id} has ${foundationCount} Foundation records; expected 77`);
+      }
       for (const key of ['wh.001', 'wh.002', 'wh.003', 'wh.004']) {
         const warehouse = await client.query(
           `SELECT id FROM warehouses WHERE org_id = $1 AND foundation_key = $2`,
           [org.id, key],
         );
-        if (warehouse.rowCount !== 1) throw new Error(`Missing/duplicate ${key} for ${org.code}`);
+        if (warehouse.rowCount !== 1) throw new Error(`Missing/duplicate ${key} for organization ${org.id}`);
       }
       for (const code of ['INV.01.', 'INV.02.', 'INV.03.', 'INV.04.']) {
         const journal = await client.query(
           `SELECT id FROM document_journals WHERE org_id = $1 AND UPPER(code) = $2`,
           [org.id, code],
         );
-        if (journal.rowCount !== 1) throw new Error(`Missing/duplicate ${code} for ${org.code}`);
+        if (journal.rowCount !== 1) throw new Error(`Missing/duplicate ${code} for organization ${org.id}`);
       }
     }
     const before = await client.query(
@@ -520,7 +580,7 @@ async function assertFoundation(name: string, runtime: DatabaseConnectionOptions
     );
     return { orgCount: orgs.rowCount, before: before.rows[0].count };
   });
-  console.log(`[legacy-test] Foundation wh.001..wh.004 + INV.01..INV.04: PASS`);
+  console.log('[legacy-test] migrations → Foundation → organizations detection without code → 77 records: PASS');
 }
 
 async function assertFoundationIdempotency(name: string, runtime: DatabaseConnectionOptions): Promise<void> {
