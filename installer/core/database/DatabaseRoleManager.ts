@@ -33,7 +33,12 @@ export const TABLE_ALLOWLIST = [
   'lc_clients','lc_devices','lc_licenses','lc_operations_log','lc_support_tickets','lc_support_ticket_messages',
   'lc_support_ticket_attachments','lc_support_ticket_notes','support_tickets_local','support_ticket_messages_local',
   'support_ticket_attachments_local',
+  'hs_tasks','hs_custody_entries','hs_custody_records','hs_link_sections','hs_links',
+  'user_branch_assignments','zatca_logs',
 ] as const;
+
+/** OneSoft sequences which are not owned automatically by a serial/identity column. */
+export const SEQUENCE_ALLOWLIST = ['support_ticket_seq'] as const;
 
 export const TYPE_ALLOWLIST = [
   'inventory_count_status','invoice_status','invoice_type','journal_status','org_status','payment_method',
@@ -44,6 +49,120 @@ export const TYPE_ALLOWLIST = [
 export const FUNCTION_ALLOWLIST = ['update_re_purchase_statements_timestamp'] as const;
 
 const quote = (value: string) => `"${value.replaceAll('"', '""')}"`;
+
+export type OwnershipObjectType = 'schema' | 'relation' | 'sequence' | 'type' | 'function';
+
+export interface OwnershipTarget {
+  schema: string;
+  objectName: string;
+  objectType: OwnershipObjectType;
+  currentOwner: string;
+  expectedOwner: typeof SCHEMA_OWNER_ROLE;
+  identityArguments?: string;
+}
+
+/**
+ * The ownership scope is deliberately allowlisted. PostgreSQL exposes many
+ * public objects which are not OneSoft objects (extension objects, catalog
+ * support objects, and composite row types generated for tables). Both the
+ * repair and the read-only preflight call this same discovery function so
+ * they cannot disagree about what should be owned by OneSoft.
+ */
+export async function getOneSoftOwnershipTargets(
+  client: TransactionClient,
+): Promise<OwnershipTarget[]> {
+  const result = await client.query<{
+    schema_name: string;
+    object_name: string;
+    object_type: OwnershipObjectType;
+    current_owner: string;
+    identity_arguments: string | null;
+  }>(`
+    SELECT schema_name, object_name, object_type, current_owner, identity_arguments
+      FROM (
+        SELECT n.nspname AS schema_name,
+               n.nspname AS object_name,
+               'schema'::text AS object_type,
+               pg_get_userbyid(n.nspowner) AS current_owner,
+               NULL::text AS identity_arguments
+          FROM pg_namespace n
+         WHERE n.nspname = 'public'
+
+        UNION ALL
+
+        SELECT n.nspname,
+               c.relname,
+               'relation'::text,
+               pg_get_userbyid(c.relowner),
+               NULL::text
+          FROM pg_class c
+          JOIN pg_namespace n ON n.oid = c.relnamespace
+         WHERE n.nspname = 'public'
+           AND c.relkind IN ('r', 'p')
+           AND c.relname = ANY($1::text[])
+
+        UNION ALL
+
+        SELECT n.nspname,
+               c.relname,
+               'sequence'::text,
+               pg_get_userbyid(c.relowner),
+               NULL::text
+          FROM pg_class c
+          JOIN pg_namespace n ON n.oid = c.relnamespace
+         WHERE n.nspname = 'public'
+           AND c.relkind = 'S'
+           AND (
+             c.relname = ANY($2::text[])
+             OR EXISTS (
+               SELECT 1
+                 FROM pg_depend dep
+                 JOIN pg_class table_obj ON table_obj.oid = dep.refobjid
+                WHERE dep.objid = c.oid
+                  AND dep.deptype = 'a'
+                  AND table_obj.relnamespace = n.oid
+                  AND table_obj.relkind IN ('r', 'p')
+                  AND table_obj.relname = ANY($1::text[])
+             )
+           )
+
+        UNION ALL
+
+        SELECT n.nspname,
+               t.typname,
+               'type'::text,
+               pg_get_userbyid(t.typowner),
+               NULL::text
+          FROM pg_type t
+          JOIN pg_namespace n ON n.oid = t.typnamespace
+         WHERE n.nspname = 'public'
+           AND t.typtype <> 'c'
+           AND t.typname = ANY($3::text[])
+
+        UNION ALL
+
+        SELECT n.nspname,
+               p.proname,
+               'function'::text,
+               pg_get_userbyid(p.proowner),
+               pg_get_function_identity_arguments(p.oid)
+          FROM pg_proc p
+          JOIN pg_namespace n ON n.oid = p.pronamespace
+         WHERE n.nspname = 'public'
+           AND p.proname = ANY($4::text[])
+      ) AS onesoft_objects
+     ORDER BY object_type, object_name, identity_arguments NULLS FIRST
+  `, [TABLE_ALLOWLIST, SEQUENCE_ALLOWLIST, TYPE_ALLOWLIST, FUNCTION_ALLOWLIST]);
+
+  return result.rows.map((row) => ({
+    schema: row.schema_name,
+    objectName: row.object_name,
+    objectType: row.object_type,
+    currentOwner: row.current_owner,
+    expectedOwner: SCHEMA_OWNER_ROLE,
+    ...(row.identity_arguments !== null ? { identityArguments: row.identity_arguments } : {}),
+  }));
+}
 
 function randomPassword(): string {
   return randomBytes(32).toString('base64url');
@@ -146,7 +265,11 @@ export async function runOwnershipRepairTransaction(
 ): Promise<void> {
   await client.query('BEGIN');
   try {
-    await client.query(`ALTER SCHEMA public OWNER TO ${quote(SCHEMA_OWNER_ROLE)}`);
+    const targets = await getOneSoftOwnershipTargets(client);
+    const schemaTarget = targets.find((target) => target.objectType === 'schema');
+    if (schemaTarget && schemaTarget.currentOwner !== SCHEMA_OWNER_ROLE) {
+      await client.query(`ALTER SCHEMA ${quote(schemaTarget.schema)} OWNER TO ${quote(SCHEMA_OWNER_ROLE)}`);
+    }
     await client.query(`REVOKE CREATE ON SCHEMA public FROM PUBLIC`);
     await client.query(`REVOKE CREATE ON DATABASE ${quote(admin.database)} FROM PUBLIC`);
     await client.query(`GRANT USAGE ON SCHEMA public TO ${quote(MIGRATOR_ROLE)}`);
@@ -159,49 +282,18 @@ export async function runOwnershipRepairTransaction(
     await client.query(`ALTER DEFAULT PRIVILEGES FOR ROLE ${quote(SCHEMA_OWNER_ROLE)} IN SCHEMA public
       GRANT USAGE, SELECT ON SEQUENCES TO ${quote(RUNTIME_ROLE)}`);
 
-    for (const table of TABLE_ALLOWLIST) {
-      const exists = await client.query(
-        `SELECT to_regclass($1) IS NOT NULL AS exists`, [`public.${table}`],
-      );
-      if (exists.rows[0]?.exists === true) {
-        await client.query(`ALTER TABLE public.${quote(table)} OWNER TO ${quote(SCHEMA_OWNER_ROLE)}`);
-      }
-    }
-
-    const sequences = await client.query<{ relname: string }>(
-      `SELECT seq.relname
-         FROM pg_class seq
-         JOIN pg_namespace seq_ns ON seq_ns.oid = seq.relnamespace
-         JOIN pg_depend dep ON dep.objid = seq.oid AND dep.deptype = 'a'
-         JOIN pg_class tbl ON tbl.oid = dep.refobjid
-         JOIN pg_namespace tbl_ns ON tbl_ns.oid = tbl.relnamespace
-        WHERE seq.relkind = 'S'
-          AND seq_ns.nspname = 'public'
-          AND tbl_ns.nspname = 'public'
-          AND tbl.relname = ANY($1::text[])`,
-      [TABLE_ALLOWLIST],
-    );
-    for (const row of sequences.rows) {
-      await client.query(`ALTER SEQUENCE public.${quote(row.relname)} OWNER TO ${quote(SCHEMA_OWNER_ROLE)}`);
-    }
-
-    for (const type of TYPE_ALLOWLIST) {
-      const exists = await client.query(
-        `SELECT to_regtype($1) IS NOT NULL AS exists`, [`public.${type}`],
-      );
-      if (exists.rows[0]?.exists === true) {
-        await client.query(`ALTER TYPE public.${quote(type)} OWNER TO ${quote(SCHEMA_OWNER_ROLE)}`);
-      }
-    }
-
-    for (const fn of FUNCTION_ALLOWLIST) {
-      const functions = await client.query<{ identity: string }>(
-        `SELECT pg_get_function_identity_arguments(p.oid) AS identity
-           FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-          WHERE n.nspname = 'public' AND p.proname = $1`, [fn],
-      );
-      for (const row of functions.rows) {
-        await client.query(`ALTER FUNCTION public.${quote(fn)}(${row.identity}) OWNER TO ${quote(SCHEMA_OWNER_ROLE)}`);
+    for (const target of targets) {
+      if (target.currentOwner === SCHEMA_OWNER_ROLE || target.objectType === 'schema') continue;
+      if (target.objectType === 'relation') {
+        await client.query(`ALTER TABLE ${quote(target.schema)}.${quote(target.objectName)} OWNER TO ${quote(SCHEMA_OWNER_ROLE)}`);
+      } else if (target.objectType === 'sequence') {
+        await client.query(`ALTER SEQUENCE ${quote(target.schema)}.${quote(target.objectName)} OWNER TO ${quote(SCHEMA_OWNER_ROLE)}`);
+      } else if (target.objectType === 'type') {
+        await client.query(`ALTER TYPE ${quote(target.schema)}.${quote(target.objectName)} OWNER TO ${quote(SCHEMA_OWNER_ROLE)}`);
+      } else if (target.objectType === 'function') {
+        await client.query(
+          `ALTER FUNCTION ${quote(target.schema)}.${quote(target.objectName)}(${target.identityArguments ?? ''}) OWNER TO ${quote(SCHEMA_OWNER_ROLE)}`,
+        );
       }
     }
     await client.query('COMMIT');
