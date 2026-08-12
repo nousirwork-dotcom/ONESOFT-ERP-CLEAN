@@ -20,6 +20,8 @@ export interface RollbackResult {
   roleBootstrapRollback: RollbackStageStatus;
   ownershipRollback: RollbackStageStatus;
   serviceRollback: RollbackStageStatus;
+  configRollback?: RollbackStageStatus;
+  errors?: Partial<Record<'database' | 'config' | 'service', string>>;
 }
 
 export class RollbackManager {
@@ -42,6 +44,7 @@ export class RollbackManager {
     let databaseRollback: RollbackStageStatus = 'not-attempted';
     let configRollback: RollbackStageStatus = 'not-attempted';
     let serviceRollback: RollbackStageStatus = 'not-attempted';
+    const errors: Partial<Record<'database' | 'config' | 'service', string>> = {};
 
     emit({ level: 'warning', message: 'جارٍ التراجع (Rollback)...', timestamp: now() });
 
@@ -67,7 +70,9 @@ export class RollbackManager {
         emit({ level: 'success', message: 'تم استعادة قاعدة البيانات', timestamp: now() });
         databaseRollback = 'success';
       } catch (e: unknown) {
-        emit({ level: 'error', message: `فشل استعادة قاعدة البيانات: ${e instanceof Error ? e.message : String(e)}`, timestamp: now() });
+        const message = e instanceof Error ? e.message : String(e);
+        errors.database = message;
+        emit({ level: 'error', message: `فشل استعادة قاعدة البيانات: ${message}`, timestamp: now() });
         databaseRollback = 'failed';
       }
     }
@@ -81,7 +86,9 @@ export class RollbackManager {
         emit({ level: 'success', message: 'تم استعادة ملف الإعدادات', timestamp: now() });
         configRollback = 'success';
       } catch (e: unknown) {
-        emit({ level: 'error', message: `فشل استعادة ملف الإعدادات: ${e instanceof Error ? e.message : String(e)}`, timestamp: now() });
+        const message = e instanceof Error ? e.message : String(e);
+        errors.config = message;
+        emit({ level: 'error', message: `فشل استعادة ملف الإعدادات: ${message}`, timestamp: now() });
         configRollback = 'failed';
       }
     }
@@ -101,9 +108,10 @@ export class RollbackManager {
           emit({ level: 'success', message: 'تم تشغيل OneSoft-Server القديم بعد التراجع', timestamp: now() });
         } catch (e: unknown) {
           serviceRollback = 'failed';
+          errors.service = e instanceof Error ? e.message : String(e);
           emit({
             level: 'error',
-            message: `فشل تشغيل OneSoft-Server القديم بعد التراجع: ${e instanceof Error ? e.message : String(e)}`,
+            message: `فشل تشغيل OneSoft-Server القديم بعد التراجع: ${errors.service}`,
             timestamp: now(),
           });
         }
@@ -120,6 +128,8 @@ export class RollbackManager {
       roleBootstrapRollback: opts.roleBootstrapRollback ?? 'not-attempted',
       ownershipRollback: opts.ownershipRollback ?? 'not-attempted',
       serviceRollback,
+      configRollback,
+      ...(Object.keys(errors).length ? { errors } : {}),
     };
     if (result.ok) {
       emit({ level: 'success', message: 'اكتمل التراجع (Rollback) بنجاح', timestamp: now() });
@@ -131,7 +141,14 @@ export class RollbackManager {
 }
 
 function isRollbackComplete(status: RollbackStageStatus): boolean {
-  return status === 'success' || status === 'atomic-rollback' || status === 'not-attempted';
+  // "preserved" is intentional: after a successful role/ownership repair,
+  // those changes remain valid and are covered by the restored application
+  // state. It must not turn an otherwise successful rollback into a false
+  // rollback-incomplete result.
+  return status === 'success'
+    || status === 'atomic-rollback'
+    || status === 'preserved'
+    || status === 'not-attempted';
 }
 
 /** يتحقق أن الاسم يحتوي فقط على أحرف وأرقام وشرطة سفلية */
