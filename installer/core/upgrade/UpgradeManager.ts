@@ -27,6 +27,7 @@ import { PostgreSQLToolsResolver } from '../database/PostgreSQLToolsResolver.js'
 import * as fs from 'fs';
 import * as path from 'path';
 import { spawnSync } from 'child_process';
+import { createHash } from 'crypto';
 
 type Emit = (e: ProgressEvent) => void;
 type StatusCb = (s: UpgradeStatus) => void;
@@ -293,7 +294,7 @@ export class UpgradeManager {
       startStage('foundation');
       onStatus?.('health-check');
       emit({ level: 'info', message: 'جارٍ تطبيق Foundation قبل تشغيل الخادم...', timestamp: now() });
-      runFoundationOnly(serverAppPath, databaseUrl, emit);
+      runFoundationOnly(serverAppPath, databaseUrl, emit, this.diagnosticLogger);
       successStage('foundation');
 
       const expectedSchemaVersion = APP_SCHEMA_VERSION;
@@ -392,7 +393,8 @@ export class UpgradeManager {
             successStage('rollback');
           } else {
             this.diagnosticLogger.record('rollback', 'failure', {
-              error: 'rollback-incomplete',
+              error: `rollback-incomplete: ${JSON.stringify(rollbackResult)}`,
+              rollbackStages: rollbackDiagnosticStages(rollbackResult),
             });
           }
         } catch (rollbackError: unknown) {
@@ -505,6 +507,7 @@ function runFoundationOnly(
   serverAppPath: string,
   databaseUrl: string,
   emit: Emit,
+  diagnosticLogger: UpgradeDiagnosticLogger,
 ): void {
   // Electron ships a Node-compatible runtime. ELECTRON_RUN_AS_NODE makes the
   // packaged executable run the bundled server entrypoint without depending
@@ -521,26 +524,115 @@ function runFoundationOnly(
   if (!entrypoint) {
     throw new Error(`ملف الخادم المبني غير موجود: ${serverEntry}`);
   }
+  const foundationDataPath = path.join(serverAppPath, 'src', 'foundation-data.json');
+  const foundationMetadata = readFoundationMetadata(foundationDataPath);
+  const command = [nodePath, ...entrypoint].map(quoteCommandArg).join(' ');
   const result = spawnSync(nodePath, entrypoint, {
     env: {
       ...process.env,
+      // Prevent an unrelated installer/session DATABASE_URL from being
+      // selected by fallback code. The foundation-only override is the sole
+      // connection source for this child.
+      DATABASE_URL: '',
       NODE_ENV: 'production',
       ELECTRON_RUN_AS_NODE: '1',
       ONESOFT_FOUNDATION_ONLY: '1',
       ONESOFT_UPGRADE_DATABASE_URL: databaseUrl,
+      ...(fs.existsSync(foundationDataPath)
+        ? { FOUNDATION_DATA_PATH: foundationDataPath }
+        : {}),
     },
     encoding: 'utf8',
     stdio: 'pipe',
     timeout: 300_000,
     windowsHide: true,
   });
-  const stdout = (result.stdout ?? '').trim();
-  const stderr = (result.stderr ?? '').trim();
-  if (stdout) emit({ level: 'info', message: `[foundation-only]\n${stdout.slice(-4000)}`, timestamp: now() });
-  if (stderr) emit({ level: 'warning', message: `[foundation-only stderr]\n${stderr.slice(-4000)}`, timestamp: now() });
-  if (result.error || result.status !== 0) {
-    throw new Error(
-      `فشل تطبيق Foundation قبل تشغيل الخادم: ${result.error?.message ?? `exit=${result.status ?? 'unknown'}`}`,
-    );
+  const stdout = String(result.stdout ?? '');
+  const stderr = String(result.stderr ?? '');
+  const stdoutTail = stdout.slice(-4000);
+  const stderrTail = stderr.slice(-4000);
+  const timedOut = (result.error as NodeJS.ErrnoException | undefined)?.code === 'ETIMEDOUT'
+    || result.status === null;
+  const exitCode = result.status;
+  const signal = result.signal ? String(result.signal) : null;
+  const childError = result.error
+    ? `${(result.error as NodeJS.ErrnoException).code ?? 'spawn-error'}: ${result.error.message}`
+    : null;
+  const foundation = {
+    executable: nodePath,
+    command,
+    exitCode,
+    signal,
+    timedOut,
+    schemaVersion: APP_SCHEMA_VERSION,
+    foundationHash: foundationMetadata.hash,
+    foundationVersion: foundationMetadata.version,
+    stdout,
+    stderr,
+    stdoutTail,
+    stderrTail,
+  };
+
+  if (stdout) emit({ level: 'info', message: `[foundation-only stdout]\n${stdoutTail}`, timestamp: now() });
+  if (stderr) emit({ level: 'warning', message: `[foundation-only stderr]\n${stderrTail}`, timestamp: now() });
+  emit({
+    level: result.error || exitCode !== 0 ? 'error' : 'success',
+    message: `[foundation-only] executable=${nodePath} exit=${exitCode ?? 'unknown'}`
+      + ` schema=${APP_SCHEMA_VERSION}`
+      + ` foundationHash=${foundationMetadata.hash ?? 'unknown'}`
+      + ` foundationVersion=${foundationMetadata.version ?? 'unknown'}`,
+    timestamp: now(),
+  });
+
+  const foundationFailed = Boolean(result.error || exitCode !== 0);
+  const diagnosticMessage = foundationFailed
+    ? [
+        `فشل تطبيق Foundation قبل تشغيل الخادم: ${
+          childError ?? (timedOut ? 'timeout after 300000ms' : `exit=${exitCode ?? 'unknown'}`)
+        }`,
+        `schema=${APP_SCHEMA_VERSION}`,
+        `foundationHash=${foundationMetadata.hash ?? 'unknown'}`,
+        `foundationVersion=${foundationMetadata.version ?? 'unknown'}`,
+        `stdoutTail=${stdoutTail || '(فارغ)'}`,
+        `stderrTail=${stderrTail || '(فارغ)'}`,
+      ].join('\n')
+    : undefined;
+  diagnosticLogger.record('foundation', foundationFailed ? 'failure' : 'success', {
+    ...(diagnosticMessage ? { error: diagnosticMessage } : {}),
+    foundation,
+  });
+
+  if (foundationFailed) {
+    throw new Error(diagnosticMessage!);
   }
+}
+
+function readFoundationMetadata(filePath: string): {
+  hash: string | null;
+  version: string | null;
+} {
+  try {
+    const raw = fs.readFileSync(filePath);
+    const parsed = JSON.parse(raw.toString('utf8')) as { exportedAt?: unknown };
+    return {
+      hash: createHash('sha256').update(raw).digest('hex'),
+      version: typeof parsed.exportedAt === 'string' ? parsed.exportedAt : null,
+    };
+  } catch {
+    return { hash: null, version: null };
+  }
+}
+
+function quoteCommandArg(value: string): string {
+  return `"${value.replaceAll('"', '\\"')}"`;
+}
+
+function rollbackDiagnosticStages(result: RollbackResult): Record<string, { status: string; error?: string }> {
+  return {
+    database: { status: result.databaseRollback, error: result.errors?.database },
+    config: { status: result.configRollback ?? 'unknown', error: result.errors?.config },
+    roleBootstrap: { status: result.roleBootstrapRollback },
+    ownership: { status: result.ownershipRollback },
+    service: { status: result.serviceRollback, error: result.errors?.service },
+  };
 }
