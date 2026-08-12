@@ -4,7 +4,13 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { spawn, type ChildProcess } from 'node:child_process';
 import pg from 'pg';
-import { DatabaseRoleManager, MIGRATOR_ROLE, RUNTIME_ROLE, SCHEMA_OWNER_ROLE } from '../core/database/DatabaseRoleManager.js';
+import {
+  DatabaseRoleManager,
+  MIGRATOR_ROLE,
+  RUNTIME_ROLE,
+  SCHEMA_OWNER_ROLE,
+  TABLE_ALLOWLIST,
+} from '../core/database/DatabaseRoleManager.js';
 import { preflightDatabase, migrationConnection } from '../core/database/DatabasePreflight.js';
 import { MigrationRunner } from '../core/database/MigrationRunner.js';
 import { RollbackManager } from '../core/upgrade/RollbackManager.js';
@@ -533,6 +539,103 @@ async function assertRuntimeCannotDdl(runtime: DatabaseConnectionOptions): Promi
   console.log('[legacy-test] onesoft_app runtime DDL denied: PASS');
 }
 
+function foundationMigrationUrl(credential: DatabaseConnectionOptions): string {
+  const url = new URL(migrationConnection(credential));
+  url.searchParams.set('options', '-c role=onesoft_schema_owner');
+  return url.toString();
+}
+
+async function assertOwnershipRepairAndRuntime(
+  name: string,
+  runtime: DatabaseConnectionOptions,
+): Promise<void> {
+  const ownership = await withClient(dbUrl(name), async (client) => {
+    const result = await client.query<{
+      relname: string;
+      owner: string;
+    }>(`
+      SELECT c.relname, pg_get_userbyid(c.relowner) AS owner
+      FROM pg_class c
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'public'
+        AND c.relkind IN ('r', 'p')
+        AND c.relname = ANY($1::text[])
+      ORDER BY c.relname
+    `, [TABLE_ALLOWLIST]);
+    return result.rows;
+  });
+  const drift = ownership.filter((row) => row.owner !== SCHEMA_OWNER_ROLE);
+  if (drift.length) {
+    throw new Error(
+      `Ownership repair left tables outside ${SCHEMA_OWNER_ROLE}: ` +
+      drift.map((row) => `${row.relname}=${row.owner}`).join(', '),
+    );
+  }
+
+  const runtimeIdentity = await withClient(
+    dbUrl(name, runtime.user, runtime.password),
+    (client) => client.query<{ current_user: string }>('SELECT current_user')
+      .then((result) => result.rows[0]?.current_user),
+  );
+  if (runtimeIdentity !== RUNTIME_ROLE) {
+    throw new Error(`Runtime credential did not connect as ${RUNTIME_ROLE}: ${runtimeIdentity ?? 'unknown'}`);
+  }
+  console.log(
+    `[legacy-test] ${name}: tables owned by ${SCHEMA_OWNER_ROLE}; runtime=${runtimeIdentity}: PASS`,
+  );
+}
+
+async function runFoundationUpgradeProcess(
+  name: string,
+  migration: DatabaseConnectionOptions,
+): Promise<void> {
+  const output: string[] = [];
+  const tsxEntry = path.join(serverRoot, 'node_modules', 'tsx', 'dist', 'cli.mjs');
+  const foundationDataPath = path.join(serverRoot, 'src', 'foundation-data.json');
+  const child = spawn(
+    process.execPath,
+    [tsxEntry, 'src/index.ts'],
+    {
+      cwd: serverRoot,
+      env: {
+        ...process.env,
+        DATABASE_URL: '',
+        NODE_ENV: 'production',
+        ELECTRON_RUN_AS_NODE: '1',
+        ONESOFT_FOUNDATION_ONLY: '1',
+        ONESOFT_UPGRADE_DATABASE_URL: foundationMigrationUrl(migration),
+        FOUNDATION_DATA_PATH: foundationDataPath,
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    },
+  );
+  child.stdout?.on('data', (chunk: Buffer) => output.push(chunk.toString()));
+  child.stderr?.on('data', (chunk: Buffer) => output.push(chunk.toString()));
+
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL');
+      reject(new Error(`Foundation-only process timed out for ${name}\n${output.slice(-20).join('')}`));
+    }, 300_000);
+    child.once('error', (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.once('exit', (code, signal) => {
+      clearTimeout(timer);
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(new Error(
+          `Foundation-only process failed for ${name}: exit=${code ?? 'null'} signal=${signal ?? 'none'}\n` +
+          output.slice(-30).join(''),
+        ));
+      }
+    });
+  });
+  console.log(`[legacy-test] ${name}: Foundation via migrator + SET ROLE ${SCHEMA_OWNER_ROLE}: PASS`);
+}
+
 async function assertFoundation(name: string, runtime: DatabaseConnectionOptions): Promise<void> {
   await withClient(dbUrl(name, runtime.user, runtime.password), async (client) => {
     const orgs = await client.query(`SELECT id, foundation_status FROM organizations WHERE status IN ('active', 'trial')`);
@@ -605,12 +708,13 @@ async function assertFoundationIdempotency(name: string, runtime: DatabaseConnec
   console.log('[legacy-test] Foundation second startup inserted no duplicates: PASS');
 }
 
-async function assertBackupReadable(name: string): Promise<void> {
+async function assertBackupReadable(name: string, migration: DatabaseConnectionOptions): Promise<void> {
   const backupPath = path.join(os.tmpdir(), `onesoft-test-${name}.sql`);
   tempFiles.push(backupPath);
-  const connection = { ...admin, database: name };
+  const connection = { ...migration, database: name };
   execFileSync(postgresTools.pgDump, [
     ...buildPostgreSQLConnectionArgs(connection),
+    '--role', SCHEMA_OWNER_ROLE,
     '-F', 'p',
     '-f', backupPath,
   ], {
@@ -652,7 +756,11 @@ async function main(): Promise<void> {
   // 0069 failure, 0024..0068 are present in the ledger and 0069 is pending.
   await assertPreflight(fullDb, fullRoles.migration, failingTag);
   await runMigrations(fullDb, fullRoles.migration);
+  await assertOwnershipRepairAndRuntime(fullDb, fullRoles.runtime);
   await assertRuntimeCannotDdl(fullRoles.runtime);
+  await runFoundationUpgradeProcess(fullDb, fullRoles.migration);
+  await assertFoundation(fullDb, fullRoles.runtime);
+  await assertBackupReadable(fullDb, fullRoles.migration);
 
   const fullPort = 38_500 + (process.pid % 400);
   if (process.platform === 'win32') {
@@ -669,9 +777,7 @@ async function main(): Promise<void> {
       await stop(fullServer.child);
     }
   }
-  await assertFoundation(fullDb, fullRoles.runtime);
   await assertFoundationIdempotency(fullDb, fullRoles.runtime);
-  await assertBackupReadable(fullDb);
 
   await makeLegacyDatabase(partialDb, partialTag);
   const partialRoles = await provisionRoles(partialDb);
@@ -700,6 +806,9 @@ async function main(): Promise<void> {
   }
 
   await runMigrations(partialDb, partialRoles.migration);
+  await assertOwnershipRepairAndRuntime(partialDb, partialRoles.runtime);
+  await runFoundationUpgradeProcess(partialDb, partialRoles.migration);
+  await assertFoundation(partialDb, partialRoles.runtime);
   const resumedPort = 39_000 + (process.pid % 400);
   const resumedServer = await startBackend(partialRoles.runtime, resumedPort);
   try {
@@ -709,7 +818,6 @@ async function main(): Promise<void> {
   } finally {
     await stop(resumedServer.child);
   }
-  await assertFoundation(partialDb, partialRoles.runtime);
   await assertFoundationIdempotency(partialDb, partialRoles.runtime);
 
   console.log('[legacy-test] ALL LEGACY UPGRADE ACCEPTANCE TESTS: PASS');
