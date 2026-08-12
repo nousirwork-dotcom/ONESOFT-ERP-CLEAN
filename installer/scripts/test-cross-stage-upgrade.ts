@@ -350,6 +350,7 @@ function createUpgradeDependencies(
         databaseRollback: 'not-attempted' as const,
         roleBootstrapRollback: opts.roleBootstrapRollback as 'preserved',
         ownershipRollback: opts.ownershipRollback as 'atomic-rollback',
+        serviceRollback: 'not-attempted' as const,
       };
     },
   };
@@ -365,6 +366,18 @@ function createUpgradeDependencies(
     rollbackManager,
     roleManagerFactory: () => roleManager,
     serviceManager,
+    postgresToolsResolver: {
+      resolveAll: () => ({
+        pgDump: 'pg_dump',
+        pgRestore: 'pg_restore',
+        psql: 'psql',
+        sourceByTool: {
+          pg_dump: 'path',
+          pg_restore: 'path',
+          psql: 'path',
+        },
+      }),
+    },
     loadMigrationCredential: () => savedCredential ?? null,
     saveMigrationCredential: (credential) => {
       saveCalls += 1;
