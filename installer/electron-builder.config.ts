@@ -70,9 +70,6 @@ const config: Configuration = {
     requestedExecutionLevel: 'requireAdministrator',
     // Windows version-info strings (visible in EXE properties)
     verifyUpdateCodeSignature: false,
-    // Authenticode signing — enable when you have a certificate
-    // certificateFile: 'cert.pfx',
-    // certificatePassword: process.env.CERT_PASSWORD,
   },
 
   nsis: {

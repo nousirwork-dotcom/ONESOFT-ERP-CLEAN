@@ -48,7 +48,7 @@
 | Config Format | JSON + .env | قابل للقراءة والتعديل |
 | IPC | Electron contextBridge | أمان كامل |
 | State Management | Zustand | خفيف، TypeScript-first |
-| Installer Package | electron-builder | `.exe` واحد موقّع |
+| Installer Package | electron-builder | `.exe` واحد غير موقّع |
 
 ---
 

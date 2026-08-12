@@ -145,17 +145,11 @@ magick convert logo.png -resize 256x256 onesoft.ico
 
 ---
 
-## التوقيع الرقمي (Authenticode)
+## حالة التوقيع الرقمي
 
-للتوزيع التجاري، أضف في `electron-builder.config.ts`:
-
-```typescript
-win: {
-  certificateFile: 'path/to/cert.pfx',
-  certificatePassword: process.env.CERT_PASSWORD,
-  signingHashAlgorithms: ['sha256'],
-}
-```
+يبني المشروع ملفات Windows بصيغة **Unsigned** عمدًا. لا توجد شهادة Code
+Signing أو إعدادات مفاتيح خاصة مطلوبة للبناء. يعتمد Release Gate بدلًا من ذلك
+على Security Pre-Check وفحص Microsoft Defender، ويفشل النشر عند اكتشاف تهديد.
 
 ---
 

@@ -61,11 +61,6 @@ win:
         - ia32
   icon: resources/icon.ico
   requestedExecutionLevel: requireAdministrator
-  # Authenticode: electron-builder consumes CSC_LINK and CSC_KEY_PASSWORD
-  # from the CI environment. The Windows app executable and NSIS installer
-  # are both signed when these variables point to a valid PFX certificate.
-  signingHashAlgorithms:
-    - sha256
   verifyUpdateCodeSignature: false
 
 nsis:
