@@ -163,8 +163,12 @@ export class UpgradeManager {
       // 2. نسخة احتياطية إلزامية
       startStage('backup');
       onStatus?.('backing-up');
+       const backupCredential = storedMigrationCredential ?? opts.adminDbOpts;
+       if (!backupCredential) {
+         throw new Error('لا يوجد اعتماد إداري صالح لإنشاء النسخة الاحتياطية قبل الترقية');
+       }
       backupDir = await this.backupManager.backup({
-        dbOpts: opts.adminDbOpts ?? dbOpts,
+         dbOpts: backupCredential,
         backupsDir,
         currentVersion,
       }, emit);
@@ -294,7 +298,12 @@ export class UpgradeManager {
       startStage('foundation');
       onStatus?.('health-check');
       emit({ level: 'info', message: 'جارٍ تطبيق Foundation قبل تشغيل الخادم...', timestamp: now() });
-      runFoundationOnly(serverAppPath, databaseUrl, emit, this.diagnosticLogger);
+      runFoundationOnly(
+        serverAppPath,
+        migrationFoundationConnection(migrationCredential),
+        emit,
+        this.diagnosticLogger,
+      );
       successStage('foundation');
 
       const expectedSchemaVersion = APP_SCHEMA_VERSION;
@@ -605,6 +614,15 @@ function runFoundationOnly(
   if (foundationFailed) {
     throw new Error(diagnosticMessage!);
   }
+}
+
+function migrationFoundationConnection(credential: MigrationCredential): string {
+  const url = new URL(migrationConnection(credential));
+  // pg establishes every pooled session as onesoft_migrator, then applies the
+  // schema-owner role before Foundation touches tables. This is intentionally
+  // scoped to the one-shot upgrade child; runtime config remains onesoft_app.
+  url.searchParams.set('options', '-c role=onesoft_schema_owner');
+  return url.toString();
 }
 
 function readFoundationMetadata(filePath: string): {
