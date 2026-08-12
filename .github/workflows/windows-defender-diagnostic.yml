@@ -1,0 +1,130 @@
+name: Windows Defender Diagnostic — v1.0.30
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  scan:
+    name: Defender, extraction and Authenticode
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: nousirwork-dotcom/ONESOFT-ERP-CLEAN
+      ARTIFACT_ID: '9124302202'
+      RELEASE_URL: https://github.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/releases/download/v1.0.30/OneSoftSetup-1.0.30-x64.exe
+    steps:
+      - name: Download published x64 installer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dir = Join-Path $env:RUNNER_TEMP 'onesoft-defender'
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          $setup = Join-Path $dir 'OneSoftSetup-1.0.30-x64.exe'
+          Invoke-WebRequest -Uri $env:RELEASE_URL -OutFile $setup
+          "SETUP=$setup" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "REPORT_DIR=$dir\report" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          New-Item -ItemType Directory -Force -Path (Join-Path $dir 'report') | Out-Null
+
+      - name: Verify SHA512 against release and update manifests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $latestPath = Join-Path $env:RUNNER_TEMP 'latest.yml'
+          $manifestPath = Join-Path $env:RUNNER_TEMP 'update-manifest.json'
+          Invoke-WebRequest -Uri 'https://github.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/releases/download/v1.0.30/latest.yml' -OutFile $latestPath
+          Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/main/update-manifest.json' -OutFile $manifestPath
+          $latest = Get-Content $latestPath -Raw
+          $m = [regex]::Match($latest, '(?m)^sha512:\s*(\S+)')
+          $sizeMatch = [regex]::Match($latest, '(?m)^\s*size:\s*(\d+)')
+          $hash = Get-FileHash $env:SETUP -Algorithm SHA512
+          $actualB64 = [Convert]::ToBase64String([Convert]::FromHexString($hash.Hash))
+          $actualSize = (Get-Item $env:SETUP).Length
+          $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
+          $latestPass = $m.Success -and ($m.Groups[1].Value -eq $actualB64) -and $sizeMatch.Success -and ([int64]$sizeMatch.Groups[1].Value -eq $actualSize)
+          $manifestPass = ($manifest.latestVersion -eq '1.0.30') -and ($manifest.downloadUrl -eq $env:RELEASE_URL) -and ($manifest.sha512 -eq $actualB64) -and ([int64]$manifest.fileSizeBytes -eq $actualSize)
+          @('PUBLISHED_FILE_SHA512_HEX=' + $hash.Hash,'PUBLISHED_FILE_SHA512_BASE64=' + $actualB64,'PUBLISHED_FILE_SIZE=' + $actualSize,'LATEST_YML_MATCH=' + $latestPass,'UPDATE_MANIFEST_MATCH=' + $manifestPass,'UPDATE_MANIFEST_VERSION=' + $manifest.latestVersion) | Set-Content (Join-Path $env:REPORT_DIR 'sha-verification.txt') -Encoding utf8
+          Get-Content (Join-Path $env:REPORT_DIR 'sha-verification.txt') | ForEach-Object { Write-Host $_ }
+
+      - name: Compare GitHub Actions installer artifact
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $zip = Join-Path $env:RUNNER_TEMP 'installer-artifact.zip'
+          $artifactDir = Join-Path $env:RUNNER_TEMP 'installer-artifact'
+          $headers = @{ Authorization = 'Bearer ' + $env:GH_TOKEN; Accept = 'application/vnd.github+json'; 'X-GitHub-Api-Version' = '2022-11-28' }
+          Invoke-WebRequest -Headers $headers -Uri ('https://api.github.com/repos/' + $env:REPO + '/actions/artifacts/' + $env:ARTIFACT_ID + '/zip') -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath $artifactDir -Force
+          $artifactExe = Get-ChildItem $artifactDir -Recurse -Filter 'OneSoftSetup-1.0.30-x64.exe' | Select-Object -First 1
+          if (-not $artifactExe) { throw 'x64 EXE not found in GitHub Actions artifact' }
+          $artifactHash = Get-FileHash $artifactExe.FullName -Algorithm SHA512
+          $publishedHash = Get-FileHash $env:SETUP -Algorithm SHA512
+          $pass = ($artifactHash.Hash -eq $publishedHash.Hash) -and ($artifactExe.Length -eq (Get-Item $env:SETUP).Length)
+          @('ARTIFACT_FILE=' + $artifactExe.FullName,'ARTIFACT_SHA512_HEX=' + $artifactHash.Hash,'ARTIFACT_SIZE=' + $artifactExe.Length,'ARTIFACT_EQUALS_PUBLISHED=' + $pass) | Set-Content (Join-Path $env:REPORT_DIR 'artifact-verification.txt') -Encoding utf8
+          Get-Content (Join-Path $env:REPORT_DIR 'artifact-verification.txt') | ForEach-Object { Write-Host $_ }
+
+      - name: Update Microsoft Defender signatures and scan installer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $mp = Get-ChildItem 'C:\ProgramData\Microsoft\Windows Defender\Platform\*\MpCmdRun.exe' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $mp) { throw 'MpCmdRun.exe not found' }
+          & $mp.FullName -SignatureUpdate 2>&1 | Tee-Object (Join-Path $env:REPORT_DIR 'defender-signature-update.txt')
+          $status = Get-MpComputerStatus
+          @('ANTISPYWARE_VERSION=' + $status.AntispywareSignatureVersion,'ANTIVIRUS_VERSION=' + $status.AntivirusSignatureVersion,'ENGINE_VERSION=' + $status.AMEngineVersion,'SIGNATURE_LAST_UPDATED=' + $status.AntivirusSignatureLastUpdated,'REALTIME_ENABLED=' + $status.RealTimeProtectionEnabled) | Set-Content (Join-Path $env:REPORT_DIR 'defender-status.txt') -Encoding utf8
+          & $mp.FullName -Scan -ScanType 3 -File $env:SETUP -DisableRemediation 2>&1 | Tee-Object (Join-Path $env:REPORT_DIR 'defender-installer-scan.txt')
+          ('MP_CMD_EXIT_CODE=' + $LASTEXITCODE) | Add-Content (Join-Path $env:REPORT_DIR 'defender-installer-scan.txt')
+          Get-MpThreatDetection -ErrorAction SilentlyContinue | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $env:REPORT_DIR 'defender-threat-detections.json') -Encoding utf8
+          Get-Content (Join-Path $env:REPORT_DIR 'defender-status.txt') | ForEach-Object { Write-Host $_ }
+
+      - name: Extract NSIS package and scan inner contents
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $extract = Join-Path $env:RUNNER_TEMP 'onesoft-defender\extracted'
+          New-Item -ItemType Directory -Force -Path $extract | Out-Null
+          $seven = Get-Command 7z.exe -ErrorAction SilentlyContinue
+          if (-not $seven) { $seven = Get-Command 7z -ErrorAction SilentlyContinue }
+          if (-not $seven) { throw '7-Zip is unavailable on Windows runner' }
+          & $seven.Source x $env:SETUP ('-o' + $extract) -y 2>&1 | Tee-Object (Join-Path $env:REPORT_DIR 'nsis-extraction.txt')
+          if ($LASTEXITCODE -ne 0) { throw 'NSIS extraction failed' }
+          $files = @(Get-ChildItem $extract -Recurse -File)
+          $files | ForEach-Object { $_.FullName.Substring($extract.Length).TrimStart('\') } | Set-Content (Join-Path $env:REPORT_DIR 'extracted-file-list.txt') -Encoding utf8
+          $mp = Get-ChildItem 'C:\ProgramData\Microsoft\Windows Defender\Platform\*\MpCmdRun.exe' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          $candidates = @($files | Where-Object { $_.Extension -in @('.exe','.dll','.ps1','.bat','.cmd','.js','.asar','.json','.mjs','.cjs','.bin') -or $_.Name -match 'OneSoft|nssm|upgrade|backup|restore|rollback|server' })
+          $scanLog = [System.Collections.Generic.List[string]]::new()
+          $scanLog.Add('CANDIDATE_COUNT=' + $candidates.Count)
+          foreach ($f in $candidates) {
+            $rel = $f.FullName.Substring($extract.Length).TrimStart('\')
+            $out = & $mp.FullName -Scan -ScanType 3 -File $f.FullName -DisableRemediation 2>&1
+            $code = $LASTEXITCODE
+            $text = ($out -join "`n")
+            if ($code -ne 0 -or $text -match '(?i)threat|wacatac|detected|malware|error') { $scanLog.Add(('RESULT code=' + $code + ' file=' + $rel)); $scanLog.Add($text) }
+          }
+          $scanLog | Set-Content (Join-Path $env:REPORT_DIR 'defender-inner-file-scans.txt') -Encoding utf8
+          Get-MpThreatDetection -ErrorAction SilentlyContinue | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $env:REPORT_DIR 'defender-inner-threat-detections.json') -Encoding utf8
+          Get-WinEvent -LogName 'Microsoft-Windows-Windows Defender/Operational' -MaxEvents 300 -ErrorAction SilentlyContinue | Where-Object { $_.Message -match '(?i)threat|wacatac|malware' } | Select-Object TimeCreated,Id,LevelDisplayName,Message | Format-List | Out-File (Join-Path $env:REPORT_DIR 'defender-operational-events.txt') -Encoding utf8
+
+      - name: Check Authenticode and classify detections
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $sig = Get-AuthenticodeSignature $env:SETUP
+          @('AUTHENTICODE_STATUS=' + $sig.Status,'AUTHENTICODE_STATUS_MESSAGE=' + $sig.StatusMessage,'SIGNER=' + ($sig.SignerCertificate.Subject ?? 'NONE'),'TIMESTAMP=' + ($sig.TimeStamperCertificate.Subject ?? 'NONE')) | Set-Content (Join-Path $env:REPORT_DIR 'authenticode.txt') -Encoding utf8
+          $threats = @()
+          foreach ($p in @((Join-Path $env:REPORT_DIR 'defender-threat-detections.json'),(Join-Path $env:REPORT_DIR 'defender-inner-threat-detections.json'))) { if (Test-Path $p) { $raw=Get-Content $p -Raw; if ($raw.Trim() -and $raw.Trim() -ne 'null') { $threats += $raw } } }
+          if ($threats.Count -eq 0) { 'NO_THREAT_RECORD_RETURNED' | Set-Content (Join-Path $env:REPORT_DIR 'detection-classification.txt') -Encoding utf8 } else { $threats -join "`n" | Set-Content (Join-Path $env:REPORT_DIR 'detection-classification.txt') -Encoding utf8 }
+          Get-Content (Join-Path $env:REPORT_DIR 'authenticode.txt') | ForEach-Object { Write-Host $_ }
+
+      - name: Upload diagnostic report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-defender-diagnostic-v1.0.30
+          path: ${{ env.REPORT_DIR }}
+          if-no-files-found: warn
+          retention-days: 14
