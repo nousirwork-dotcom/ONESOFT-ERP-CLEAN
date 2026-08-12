@@ -2,7 +2,12 @@ import { execFileSync } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 import type { ProgressEvent, DatabaseConnectionOptions } from '../types.js';
-import { PostgreSQLToolsResolver } from '../database/PostgreSQLToolsResolver.js';
+import {
+  buildMigratorPgDumpArgs,
+  POSTGRES_MIGRATOR_ROLE,
+  POSTGRES_SCHEMA_OWNER_PG_DUMP_ARG,
+  PostgreSQLToolsResolver,
+} from '../database/PostgreSQLToolsResolver.js';
 
 type Emit = (e: ProgressEvent) => void;
 
@@ -31,14 +36,36 @@ export class BackupBeforeUpgrade {
       const port     = validatePort(dbOpts.port);
       const user     = validateIdentifier(dbOpts.user);
       const database = validateIdentifier(dbOpts.database);
+      if (user !== POSTGRES_MIGRATOR_ROLE) {
+        throw new Error(
+          `نسخة ما قبل الترقية تتطلب ${POSTGRES_MIGRATOR_ROLE} ولا تقبل ${user}`,
+        );
+      }
 
       const pgDump = new PostgreSQLToolsResolver().resolveAll(dbOpts).pgDump;
       emit({ level: 'info', message: `تم اكتشاف pg_dump.exe: ${pgDump}`, timestamp: now() });
       const env = { ...process.env, PGPASSWORD: dbOpts.password };
+      const pgDumpArgs = buildMigratorPgDumpArgs({
+        host,
+        port,
+        user,
+        database,
+        password: dbOpts.password,
+      });
+      if (!pgDumpArgs.includes(POSTGRES_SCHEMA_OWNER_PG_DUMP_ARG)) {
+        throw new Error(
+          `تم رفض تشغيل pg_dump: argument مفقود ${POSTGRES_SCHEMA_OWNER_PG_DUMP_ARG}`,
+        );
+      }
+      emit({
+        level: 'info',
+        message: `تم التحقق من أمر pg_dump قبل الترقية: -U ${user} ${POSTGRES_SCHEMA_OWNER_PG_DUMP_ARG}`,
+        timestamp: now(),
+      });
 
       execFileSync(pgDump, [
-        '-h', host, '-p', String(port), '-U', user, '-d', database,
-        '-F', 'p', '-f', dumpFile, '--no-password',
+        ...pgDumpArgs,
+        '-F', 'p', '-f', dumpFile,
       ], { env, stdio: 'pipe', timeout: 300_000, windowsHide: true });
       const dumpStats = fs.statSync(dumpFile);
       if (!dumpStats.isFile() || dumpStats.size < 128) {

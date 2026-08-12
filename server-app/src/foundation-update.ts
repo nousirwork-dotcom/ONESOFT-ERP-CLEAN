@@ -28,6 +28,8 @@ import { eq, and, sql } from 'drizzle-orm';
 import {
   buildPostgreSQLConnectionArgs,
   buildPostgreSQLToolEnv,
+  buildMigratorPgDumpArgs,
+  POSTGRES_SCHEMA_OWNER_PG_DUMP_ARG,
   PostgreSQLToolsResolver,
   type PostgreSQLServerConnection,
 } from '../../installer/core/database/PostgreSQLToolsResolver.js';
@@ -144,13 +146,27 @@ export async function backupDatabase(dbUrl: string): Promise<BackupResult> {
 
     const timestamp  = new Date().toISOString().replace(/[:.]/g, '-');
     const backupPath = path.join(backupDir, `backup_${timestamp}.sql`);
-    const roleArgs = isUpgradeMigrationCredential
-      ? ['--role', FOUNDATION_SCHEMA_OWNER_ROLE]
-      : [];
+    const pgDumpArgs = isUpgradeMigrationCredential
+      ? buildMigratorPgDumpArgs(connection)
+      : buildPostgreSQLConnectionArgs(connection);
+    if (
+      isUpgradeMigrationCredential &&
+      !pgDumpArgs.includes(POSTGRES_SCHEMA_OWNER_PG_DUMP_ARG)
+    ) {
+      return {
+        ok: false,
+        error: `Foundation backup refused: missing ${POSTGRES_SCHEMA_OWNER_PG_DUMP_ARG}`,
+      };
+    }
+    if (isUpgradeMigrationCredential) {
+      logger.info(
+        'foundation-backup',
+        `pg_dump arguments verified: -U ${connection.user} ${POSTGRES_SCHEMA_OWNER_PG_DUMP_ARG}`,
+      );
+    }
 
     const result = spawnSync(postgresTools.pgDump, [
-      ...buildPostgreSQLConnectionArgs(connection),
-      ...roleArgs,
+      ...pgDumpArgs,
       '-F', 'p',
       '-f', backupPath,
     ], {

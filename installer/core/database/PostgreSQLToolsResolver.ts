@@ -28,6 +28,11 @@ export interface PostgreSQLServerConnection {
   password: string;
 }
 
+export const POSTGRES_MIGRATOR_ROLE = 'onesoft_migrator';
+export const POSTGRES_SCHEMA_OWNER_ROLE = 'onesoft_schema_owner';
+export const POSTGRES_SCHEMA_OWNER_PG_DUMP_ARG =
+  `--role=${POSTGRES_SCHEMA_OWNER_ROLE}`;
+
 export function buildPostgreSQLConnectionArgs(
   connection: PostgreSQLServerConnection,
   database = connection.database,
@@ -39,6 +44,34 @@ export function buildPostgreSQLConnectionArgs(
     '-d', database,
     '--no-password',
   ];
+}
+
+/**
+ * Build the administrative pg_dump command used by Upgrade/Foundation.
+ *
+ * The connection must remain authenticated as the migrator. The schema-owner
+ * role is only a PostgreSQL session role for the dump; it must never become
+ * the login/ownership credential.
+ */
+export function buildMigratorPgDumpArgs(
+  connection: PostgreSQLServerConnection,
+): string[] {
+  if (connection.user !== POSTGRES_MIGRATOR_ROLE) {
+    throw new Error(
+      `Administrative pg_dump requires ${POSTGRES_MIGRATOR_ROLE}; received ${connection.user}`,
+    );
+  }
+
+  const args = [
+    ...buildPostgreSQLConnectionArgs(connection),
+    POSTGRES_SCHEMA_OWNER_PG_DUMP_ARG,
+  ];
+  if (!args.includes(POSTGRES_SCHEMA_OWNER_PG_DUMP_ARG)) {
+    throw new Error(
+      `Administrative pg_dump arguments are missing ${POSTGRES_SCHEMA_OWNER_PG_DUMP_ARG}`,
+    );
+  }
+  return args;
 }
 
 export function buildPostgreSQLToolEnv(
