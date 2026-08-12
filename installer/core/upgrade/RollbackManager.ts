@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import type { ProgressEvent, DatabaseConnectionOptions } from '../types.js';
 import { PostgreSQLToolsResolver } from '../database/PostgreSQLToolsResolver.js';
+import { ServiceManager } from '../services/ServiceManager.js';
 
 type Emit = (e: ProgressEvent) => void;
 
@@ -18,18 +19,29 @@ export interface RollbackResult {
   databaseRollback: RollbackStageStatus;
   roleBootstrapRollback: RollbackStageStatus;
   ownershipRollback: RollbackStageStatus;
+  serviceRollback: RollbackStageStatus;
 }
 
 export class RollbackManager {
+  private readonly serviceManager: Pick<ServiceManager, 'start' | 'getStatus'>;
+
+  constructor(
+    serviceManager: Pick<ServiceManager, 'start' | 'getStatus'> = new ServiceManager(),
+  ) {
+    this.serviceManager = serviceManager;
+  }
+
   async rollback(opts: {
     backupDir: string;
     dbOpts: DatabaseConnectionOptions;
     roleBootstrapRollback?: RollbackStageStatus;
     ownershipRollback?: RollbackStageStatus;
+    restartServer?: boolean;
   }, emit: Emit): Promise<RollbackResult> {
     const { backupDir, dbOpts } = opts;
     let databaseRollback: RollbackStageStatus = 'not-attempted';
     let configRollback: RollbackStageStatus = 'not-attempted';
+    let serviceRollback: RollbackStageStatus = 'not-attempted';
 
     emit({ level: 'warning', message: 'جارٍ التراجع (Rollback)...', timestamp: now() });
 
@@ -74,14 +86,40 @@ export class RollbackManager {
       }
     }
 
+    if (opts.restartServer) {
+      if (databaseRollback === 'failed' || configRollback === 'failed') {
+        serviceRollback = 'not-attempted';
+      } else if (this.serviceManager.getStatus('OneSoft-Server') === 'not-installed') {
+        serviceRollback = 'not-attempted';
+      } else {
+        try {
+          const started = this.serviceManager.start('OneSoft-Server');
+          if (!started.success) {
+            throw new Error(started.error ?? 'sc start returned a failure');
+          }
+          serviceRollback = 'success';
+          emit({ level: 'success', message: 'تم تشغيل OneSoft-Server القديم بعد التراجع', timestamp: now() });
+        } catch (e: unknown) {
+          serviceRollback = 'failed';
+          emit({
+            level: 'error',
+            message: `فشل تشغيل OneSoft-Server القديم بعد التراجع: ${e instanceof Error ? e.message : String(e)}`,
+            timestamp: now(),
+          });
+        }
+      }
+    }
+
     const result: RollbackResult = {
       ok: databaseRollback !== 'failed' &&
         configRollback !== 'failed' &&
         isRollbackComplete(opts.roleBootstrapRollback ?? 'not-attempted') &&
-        isRollbackComplete(opts.ownershipRollback ?? 'not-attempted'),
+        isRollbackComplete(opts.ownershipRollback ?? 'not-attempted') &&
+        isRollbackComplete(serviceRollback),
       databaseRollback,
       roleBootstrapRollback: opts.roleBootstrapRollback ?? 'not-attempted',
       ownershipRollback: opts.ownershipRollback ?? 'not-attempted',
+      serviceRollback,
     };
     if (result.ok) {
       emit({ level: 'success', message: 'اكتمل التراجع (Rollback) بنجاح', timestamp: now() });
