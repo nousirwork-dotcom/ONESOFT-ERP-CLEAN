@@ -3,21 +3,28 @@ import * as path from 'path';
 import * as fs from 'fs';
 import type { ProgressEvent, DatabaseConnectionOptions } from '../types.js';
 import {
+  buildPostgreSQLConnectionArgs,
   buildMigratorPgDumpArgs,
-  POSTGRES_MIGRATOR_ROLE,
   POSTGRES_SCHEMA_OWNER_PG_DUMP_ARG,
   PostgreSQLToolsResolver,
 } from '../database/PostgreSQLToolsResolver.js';
 
 type Emit = (e: ProgressEvent) => void;
+export type PreUpgradeBackupCredential = 'admin' | 'migrator';
 
 export class BackupBeforeUpgrade {
   async backup(opts: {
     dbOpts: DatabaseConnectionOptions;
     backupsDir: string;
     currentVersion: string;
+    credential?: PreUpgradeBackupCredential;
   }, emit: Emit): Promise<string> {
-    const { dbOpts, backupsDir, currentVersion } = opts;
+    const {
+      dbOpts,
+      backupsDir,
+      currentVersion,
+      credential = 'migrator',
+    } = opts;
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     const backupName = `pre-upgrade-v${currentVersion}-${timestamp}`;
     const backupDir = path.join(backupsDir, backupName);
@@ -36,30 +43,35 @@ export class BackupBeforeUpgrade {
       const port     = validatePort(dbOpts.port);
       const user     = validateIdentifier(dbOpts.user);
       const database = validateIdentifier(dbOpts.database);
-      if (user !== POSTGRES_MIGRATOR_ROLE) {
-        throw new Error(
-          `نسخة ما قبل الترقية تتطلب ${POSTGRES_MIGRATOR_ROLE} ولا تقبل ${user}`,
-        );
-      }
 
       const pgDump = new PostgreSQLToolsResolver().resolveAll(dbOpts).pgDump;
       emit({ level: 'info', message: `تم اكتشاف pg_dump.exe: ${pgDump}`, timestamp: now() });
       const env = { ...process.env, PGPASSWORD: dbOpts.password };
-      const pgDumpArgs = buildMigratorPgDumpArgs({
-        host,
-        port,
-        user,
-        database,
-        password: dbOpts.password,
-      });
-      if (!pgDumpArgs.includes(POSTGRES_SCHEMA_OWNER_PG_DUMP_ARG)) {
+      const pgDumpArgs = credential === 'migrator'
+        ? buildMigratorPgDumpArgs({
+            host,
+            port,
+            user,
+            database,
+            password: dbOpts.password,
+          })
+        : buildPostgreSQLConnectionArgs({
+            host,
+            port,
+            user,
+            database,
+            password: dbOpts.password,
+          });
+      if (credential === 'migrator' && !pgDumpArgs.includes(POSTGRES_SCHEMA_OWNER_PG_DUMP_ARG)) {
         throw new Error(
           `تم رفض تشغيل pg_dump: argument مفقود ${POSTGRES_SCHEMA_OWNER_PG_DUMP_ARG}`,
         );
       }
       emit({
         level: 'info',
-        message: `تم التحقق من أمر pg_dump قبل الترقية: -U ${user} ${POSTGRES_SCHEMA_OWNER_PG_DUMP_ARG}`,
+        message: credential === 'migrator'
+          ? `تم التحقق من أمر pg_dump قبل الترقية: -U ${user} ${POSTGRES_SCHEMA_OWNER_PG_DUMP_ARG}`
+          : `تم التحقق من أمر pg_dump الإداري قبل إصلاح Legacy ownership: -U ${user} (بدون --role)`,
         timestamp: now(),
       });
 
