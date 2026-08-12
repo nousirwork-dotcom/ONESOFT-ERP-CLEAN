@@ -1,6 +1,6 @@
 {
   "name": "onesoft-erp-server",
-  "version": "1.0.29",
+  "version": "1.0.30",
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
@@ -18,7 +18,6 @@
     "check-fk": "tsx ../scripts/check-fk-delete-rules.ts",
     "check-fk:static": "tsx ../scripts/check-fk-delete-rules.ts --static",
     "check-fk:db": "tsx ../scripts/check-fk-delete-rules.ts --db",
-
     "test": "vitest run",
     "test:watch": "vitest"
   },
