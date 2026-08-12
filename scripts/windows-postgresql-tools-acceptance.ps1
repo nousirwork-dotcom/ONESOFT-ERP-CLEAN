@@ -41,6 +41,23 @@ function Invoke-Tool([string]$FilePath, [string[]]$Arguments) {
   return ($output -join "`n")
 }
 
+function Ensure-Nssm {
+  $nssm = Get-Command nssm.exe -ErrorAction SilentlyContinue
+  if (-not $nssm) {
+    if (-not (Get-Command choco.exe -ErrorAction SilentlyContinue)) {
+      Fail 'NSSM is missing and Chocolatey is unavailable'
+    }
+    Invoke-Tool 'choco.exe' @('install', 'nssm', '--yes', '--no-progress')
+    $chocolateyBin = 'C:\ProgramData\chocolatey\bin'
+    if (($env:Path -split ';') -notcontains $chocolateyBin) {
+      $env:Path = "$chocolateyBin;$env:Path"
+    }
+    $nssm = Get-Command nssm.exe -ErrorAction SilentlyContinue
+  }
+  Assert-True ($null -ne $nssm) 'NSSM is available for OneSoft-Server service acceptance'
+  Log "NSSM: $($nssm.Source)"
+}
+
 function Get-ServiceToolBin {
   $sc = Join-Path ($env:SystemRoot ?? 'C:\Windows') 'System32\sc.exe'
   $services = & $sc query state= all 2>$null
@@ -158,6 +175,7 @@ New-Item -ItemType Directory -Force -Path $ReportDir | Out-Null
 $reportFile = Join-Path $ReportDir 'postgresql-tools-acceptance.txt'
 try {
   Log 'Windows PostgreSQL tools acceptance started'
+  Ensure-Nssm
   $pgBinOnPath = ($env:Path -split ';' | Where-Object { $_ -match '\\PostgreSQL\\' })
   Assert-True ($pgBinOnPath.Count -eq 0) 'PostgreSQL bin is absent from PATH'
 
