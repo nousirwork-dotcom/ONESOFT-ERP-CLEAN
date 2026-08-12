@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {
   runOwnershipRepairTransaction,
   runRoleBootstrapTransaction,
@@ -6,6 +9,7 @@ import {
   type TransactionClient,
   type ProvisionedRoles,
 } from '../core/database/DatabaseRoleManager.js';
+import { RollbackManager } from '../core/upgrade/RollbackManager.js';
 import type { DatabaseConnectionOptions } from '../core/types.js';
 
 type FakeState = {
@@ -66,11 +70,39 @@ class FakeTransactionClient implements TransactionClient {
       return { rows: [] as T[] };
     }
     if (sql.startsWith('SELECT')) {
-      if (sql.includes('seq.relname')) {
-        return { rows: [{ relname: 'orders_id_seq' } as T] };
-      }
-      if (sql.includes('pg_get_function_identity_arguments')) {
-        return { rows: [{ identity: 'text' } as T] };
+      if (sql.includes('onesoft_objects')) {
+        return {
+          rows: [
+            {
+              schema_name: 'public',
+              object_name: 'orders',
+              object_type: 'relation',
+              current_owner: 'legacy-owner',
+              identity_arguments: null,
+            },
+            {
+              schema_name: 'public',
+              object_name: 'orders_id_seq',
+              object_type: 'sequence',
+              current_owner: 'legacy-owner',
+              identity_arguments: null,
+            },
+            {
+              schema_name: 'public',
+              object_name: 'invoice_type',
+              object_type: 'type',
+              current_owner: 'legacy-owner',
+              identity_arguments: null,
+            },
+            {
+              schema_name: 'public',
+              object_name: 'update_re_purchase_statements_timestamp',
+              object_type: 'function',
+              current_owner: 'legacy-owner',
+              identity_arguments: 'text',
+            },
+          ] as T[],
+        };
       }
       return { rows: [{ exists: true } as T] };
     }
@@ -202,6 +234,34 @@ async function testCredentialIsLast(): Promise<void> {
   assert.equal(saved, 1, 'DPAPI save is called once after both stages succeed');
 }
 
+async function testRollbackRestartsPreviouslyRunningServer(): Promise<void> {
+  const backupDir = fs.mkdtempSync(pathForTemp('onesoft-rollback-'));
+  let starts = 0;
+  const rollback = new RollbackManager({
+    getStatus: () => 'stopped',
+    start: () => {
+      starts += 1;
+      return { success: true };
+    },
+  });
+  try {
+    const result = await rollback.rollback({
+      backupDir,
+      dbOpts: admin,
+      restartServer: true,
+    }, () => {});
+    assert.equal(result.ok, true, 'rollback remains successful when database restore is not needed');
+    assert.equal(result.serviceRollback, 'success', 'rollback restarts the installed OneSoft-Server');
+    assert.equal(starts, 1, 'rollback starts OneSoft-Server exactly once');
+  } finally {
+    fs.rmSync(backupDir, { recursive: true, force: true });
+  }
+}
+
+function pathForTemp(prefix: string): string {
+  return path.join(os.tmpdir(), prefix);
+}
+
 async function main(): Promise<void> {
   await testRoleBootstrapAtomicity();
   console.log('PASS: atomic role bootstrap rollback and retry');
@@ -209,6 +269,8 @@ async function main(): Promise<void> {
   console.log('PASS: atomic ownership repair rollback and retry');
   await testCredentialIsLast();
   console.log('PASS: DPAPI credential persistence is last');
+  await testRollbackRestartsPreviouslyRunningServer();
+  console.log('PASS: rollback restarts the previously running OneSoft-Server');
   console.log('ALL ATOMIC UPGRADE TESTS: PASS');
 }
 
