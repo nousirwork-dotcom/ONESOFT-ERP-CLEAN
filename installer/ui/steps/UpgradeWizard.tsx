@@ -113,7 +113,7 @@ export default function UpgradeWizard() {
           : 'فشلت عملية الترقية — تم استعادة النسخة السابقة تلقائياً';
         setError(detail);
         if (result?.rollback && !result.rollback.ok) {
-          setError(`${detail} — حالة التراجع: قاعدة البيانات=${result.rollback.databaseRollback}، الأدوار=${result.rollback.roleBootstrapRollback}، الملكية=${result.rollback.ownershipRollback}`);
+          setError(`${detail} — حالة التراجع: قاعدة البيانات=${result.rollback.databaseRollback}، الأدوار=${result.rollback.roleBootstrapRollback}، الملكية=${result.rollback.ownershipRollback}، OneSoft-Server=${result.rollback.serviceRollback}`);
         }
         setPhase('failed');
       }
