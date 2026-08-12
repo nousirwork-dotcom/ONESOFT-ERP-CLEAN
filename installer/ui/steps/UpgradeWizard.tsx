@@ -32,44 +32,64 @@ export default function UpgradeWizard() {
 
   useEffect(() => {
     (async () => {
-      const [info, config] = await Promise.all([
-        window.installer?.detectVersion?.(),
-        window.installer?.getConfig?.(),
-      ]);
-      if (config?.database?.password && config.database.user === 'onesoft_app') {
-        setRuntimePassword(config.database.password);
-      }
-      if (config?.database) {
-        setDbOpts({
-          host: config.database.host,
-          port: config.database.port,
-          database: config.database.name,
-        });
-        const legacyUser = config.database.user?.trim();
-        if (legacyUser && legacyUser !== 'onesoft_app') {
-          setAdminUser(legacyUser);
-          setRuntimePassword(makeRuntimePassword());
-          setNeedsAdminCredential(true);
-        } else {
-          setNeedsAdminCredential(true);
+      try {
+        const [info, config] = await Promise.all([
+          window.installer?.detectVersion?.(),
+          window.installer?.getConfig?.(),
+        ]);
+        if (config?.database?.password && config.database.user === 'onesoft_app') {
+          setRuntimePassword(config.database.password);
         }
+        if (config?.database) {
+          setDbOpts({
+            host: config.database.host,
+            port: config.database.port,
+            database: config.database.name,
+          });
+          const legacyUser = config.database.user?.trim();
+          if (legacyUser && legacyUser !== 'onesoft_app') {
+            setAdminUser(legacyUser);
+            setRuntimePassword(makeRuntimePassword());
+            setNeedsAdminCredential(true);
+          } else {
+            setNeedsAdminCredential(true);
+          }
+        }
+        if (info) {
+          setCurrentVersion(info.version ?? null);
+        } else {
+          setCurrentVersion(null);
+        }
+        const configuredPort = config?.server?.backendPort;
+        if (typeof configuredPort === 'number' && configuredPort > 0) {
+          setBackendPort(configuredPort);
+        }
+        const installedVersion = await window.installer?.getVersion?.();
+        if (installedVersion) setTargetVersion(installedVersion);
+        if (config?.database?.user === 'onesoft_app') {
+          const credentialProbe = await window.installer?.hasMigrationCredential?.();
+          if (!credentialProbe) {
+            setNeedsAdminCredential(true);
+          } else {
+            const preflight = await window.installer?.upgradePreflight?.({
+              host: config.database.host,
+              port: config.database.port,
+              database: config.database.name,
+            });
+            if (preflight?.error) {
+              throw new Error(`تعذر فحص ملكية قاعدة البيانات قبل الترقية: ${preflight.error}`);
+            }
+            // A protected migration credential is sufficient only after the
+            // read-only preflight confirms that Legacy ownership is clean.
+            // Ownership drift still needs the one-time PostgreSQL admin.
+            setNeedsAdminCredential(preflight?.needsAdminCredential === true);
+          }
+        }
+        setPhase('confirm');
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : String(e));
+        setPhase('failed');
       }
-      if (info) {
-        setCurrentVersion(info.version ?? null);
-      } else {
-        setCurrentVersion(null);
-      }
-      const configuredPort = config?.server?.backendPort;
-      if (typeof configuredPort === 'number' && configuredPort > 0) {
-        setBackendPort(configuredPort);
-      }
-      const installedVersion = await window.installer?.getVersion?.();
-      if (installedVersion) setTargetVersion(installedVersion);
-      if (config?.database?.user === 'onesoft_app') {
-        const credentialProbe = await window.installer?.hasMigrationCredential?.();
-        setNeedsAdminCredential(!credentialProbe);
-      }
-      setPhase('confirm');
     })();
   }, [setDbOpts]);
 
@@ -106,6 +126,7 @@ export default function UpgradeWizard() {
 
       if (result?.success) {
         setBackupDir(result.backupDir ?? null);
+        setAdminPassword('');
         setPhase('done');
       } else {
         const detail = result?.error
@@ -121,6 +142,9 @@ export default function UpgradeWizard() {
       setError(e instanceof Error ? e.message : String(e));
       setPhase('failed');
     } finally {
+      // The admin password is intentionally never persisted and is cleared
+      // after the Upgrade Core has consumed it.
+      setAdminPassword('');
       if (typeof off === 'function') off();
     }
   };

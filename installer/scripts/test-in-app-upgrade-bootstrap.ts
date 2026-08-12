@@ -38,7 +38,7 @@ assert(
   'valid DPAPI or Legacy admin capability selects silent In-App upgrade',
 );
 
-const preflight = updater.indexOf('const launchMode = getUpgradeLaunchMode()');
+const preflight = updater.indexOf('const launchMode = await getUpgradeLaunchMode()');
 const stopServices = updater.indexOf("spawnSync('sc.exe', ['stop'");
 const launchInstaller = updater.indexOf('spawn(downloadedFilePath, installerArgs');
 assert(

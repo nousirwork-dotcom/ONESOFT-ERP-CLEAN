@@ -76,6 +76,12 @@ interface InstallerAPI {
   detectVersion: () => Promise<import('../core/types').VersionInfo | null>;
   getVersion:    () => Promise<string>;
   hasMigrationCredential: () => Promise<boolean>;
+  upgradePreflight: (opts: Pick<import('../core/types').DatabaseConnectionOptions, 'host' | 'port' | 'database'>) => Promise<{
+    migrationCredentialValid: boolean;
+    needsAdminCredential: boolean;
+    ownershipDriftCount: number;
+    error?: string;
+  }>;
   runUpgrade:    (opts: {
     backupsDir: string;
     dbOpts: import('../core/types').DatabaseConnectionOptions;

@@ -92,6 +92,18 @@ assert(
   'credential probe rejects missing or unreadable DPAPI credentials',
 );
 assert(
+  upgradeIpc.includes("ipc.handle('upgrade:preflight'") &&
+    upgradeIpc.includes('preflightDatabase') &&
+    upgradeIpc.includes('ownershipDriftCount'),
+  'interactive wizard can detect Legacy ownership drift with the protected migration credential',
+);
+assert(
+  wizard.includes('upgradePreflight') &&
+    wizard.includes('preflight?.needsAdminCredential === true') &&
+    wizard.includes('setAdminPassword(\'\')'),
+  'wizard asks for the one-time admin password only when preflight requires ownership repair and clears it afterwards',
+);
+assert(
   launchPolicy.includes('migrationCredentialValid') &&
     launchPolicy.includes('legacyAdminCredentialValid') &&
     launchPolicy.includes("return preflight.migrationCredentialValid || preflight.legacyAdminCredentialValid"),
@@ -99,6 +111,8 @@ assert(
 );
 assert(
   updaterSource.includes('getUpgradeLaunchMode') &&
+    updaterSource.includes('requiresInteractiveOwnershipRepair') &&
+    updaterSource.includes('preflightDatabase') &&
     updaterSource.includes('const installerArgs = launchMode === \'silent\' ? [\'/S\'] : []') &&
     updaterSource.includes("MigrationCredentialStore.load() !== null") &&
     updaterSource.includes('database.adminUser') &&
@@ -106,9 +120,9 @@ assert(
   'In-App updater preflights credentials before choosing silent or interactive NSIS',
 );
 assert(
-  updaterSource.indexOf('getUpgradeLaunchMode()') <
+  updaterSource.indexOf('await getUpgradeLaunchMode()') <
     updaterSource.indexOf("spawn(downloadedFilePath, installerArgs") &&
-    updaterSource.indexOf('getUpgradeLaunchMode()') <
+    updaterSource.indexOf('await getUpgradeLaunchMode()') <
       updaterSource.indexOf("spawnSync('sc.exe', ['stop'"),
   'In-App credential preflight runs before launching the downloaded installer',
 );

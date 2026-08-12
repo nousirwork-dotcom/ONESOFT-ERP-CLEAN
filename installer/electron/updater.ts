@@ -33,6 +33,7 @@ import { spawn, spawnSync } from 'child_process';
 import type { BrowserWindow } from 'electron';
 import { ConfigManager } from '../core/config/ConfigManager.js';
 import { MigrationCredentialStore } from '../core/security/MigrationCredentialStore.js';
+import { preflightDatabase, safeMigrationError } from '../core/database/DatabasePreflight.js';
 import { chooseUpgradeLaunchMode } from '../core/upgrade/UpgradeLaunchPolicy.js';
 
 // ─── روابط Manifest حسب قناة التحديث ─────────────────────────────────────────
@@ -202,11 +203,58 @@ function hasLegacyAdminCredential(): boolean {
   }
 }
 
-export function getUpgradeLaunchMode(): 'silent' | 'interactive' {
-  return chooseUpgradeLaunchMode({
-    migrationCredentialValid: MigrationCredentialStore.load() !== null,
-    legacyAdminCredentialValid: hasLegacyAdminCredential(),
+async function requiresInteractiveOwnershipRepair(): Promise<boolean> {
+  const migrationCredential = MigrationCredentialStore.load();
+  if (!migrationCredential || !ConfigManager.exists()) return false;
+
+  try {
+    const database = ConfigManager.load().database;
+    const credential = {
+      ...migrationCredential,
+      host: database.host,
+      port: database.port,
+      database: database.name,
+    };
+    const serverAppPath = path.join(
+      (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath ?? process.cwd(),
+      'app',
+      'server-app',
+    );
+    const journalPath = path.join(serverAppPath, 'drizzle', 'meta', '_journal.json');
+    const journal = JSON.parse(fs.readFileSync(journalPath, 'utf8')) as {
+      entries?: Array<{ tag: string }>;
+    };
+    const preflight = await preflightDatabase(
+      credential,
+      (journal.entries ?? []).map((entry) => entry.tag),
+    );
+    if (!preflight.ok) {
+      log('WARN', `upgrade-launch-preflight-failed — ${safeMigrationError(preflight.error ?? 'unknown error')}`);
+      return true;
+    }
+    return preflight.ownershipDrift.length > 0
+      || !preflight.migratorRoleExists
+      || !preflight.schemaOwnerRoleExists
+      || !preflight.canSetSchemaOwner;
+  } catch (error: unknown) {
+    log('WARN', `upgrade-launch-preflight-failed — ${safeMigrationError(error)}`);
+    // Never hide a repairable Legacy problem behind a silent installer.
+    return true;
+  }
+}
+
+export async function getUpgradeLaunchMode(): Promise<'silent' | 'interactive'> {
+  const migrationCredentialValid = MigrationCredentialStore.load() !== null;
+  const legacyAdminCredentialValid = hasLegacyAdminCredential();
+  const mode = chooseUpgradeLaunchMode({
+    migrationCredentialValid,
+    legacyAdminCredentialValid,
   });
+
+  if (mode === 'silent' && migrationCredentialValid && !legacyAdminCredentialValid) {
+    if (await requiresInteractiveOwnershipRepair()) return 'interactive';
+  }
+  return mode;
 }
 
 /** إلغاء التحميل الجاري — يُطلق من update:cancel-download */
@@ -441,7 +489,7 @@ export function setupUpdater(mainWindow: BrowserWindow): void {
     }
   }
 
-  function installDownloadedUpdate(): { ok: boolean; error?: string } {
+  async function installDownloadedUpdate(): Promise<{ ok: boolean; error?: string }> {
     if (!downloadedFilePath || !fs.existsSync(downloadedFilePath)) {
       log('WARN', 'update:install-now — file not found');
       return { ok: false, error: 'الملف غير موجود — حاول التحميل مجدداً' };
@@ -450,7 +498,7 @@ export function setupUpdater(mainWindow: BrowserWindow): void {
     // stopping the current application/services. A first Legacy bootstrap
     // needs the interactive wizard; otherwise the old app would stop and
     // leave the customer with a silent, non-actionable failure.
-    const launchMode = getUpgradeLaunchMode();
+    const launchMode = await getUpgradeLaunchMode();
     const installerArgs = launchMode === 'silent' ? ['/S'] : [];
     log('INFO', `update-installer-launch-mode  mode=${launchMode}`);
     send('update:log', {
@@ -603,7 +651,7 @@ export function setupUpdater(mainWindow: BrowserWindow): void {
         send('update:log', { event: 'acceptance-auto-update-start', version: pendingManifest.latestVersion });
         const download = await downloadPendingUpdate(pendingManifest);
         if (!download.ok) throw new Error(download.error ?? 'acceptance update download failed');
-        const install = installDownloadedUpdate();
+        const install = await installDownloadedUpdate();
         if (!install.ok) throw new Error(install.error ?? 'acceptance update install failed');
       }
     } catch (e) {
