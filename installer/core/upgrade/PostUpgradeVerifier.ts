@@ -123,21 +123,43 @@ async function verifyFoundation(
     throw new Error(`إصدار المخطط بعد الترقية غير صحيح: ${version.rows[0]?.version ?? 'مفقود'} (المطلوب ${expectedSchemaVersion})`);
   }
 
-  const organizations = await client.query<{
-    id: number;
-    code: string;
-    foundation_status: string;
-    foundation_snapshot_hash: string | null;
-  }>(`
-    SELECT id, code, foundation_status, foundation_snapshot_hash
-      FROM organizations
-     WHERE status IN ('active', 'trial')
+  const organizationColumns = await client.query<{ column_name: string }>(`
+    SELECT column_name
+      FROM information_schema.columns
+     WHERE table_schema = 'public'
+       AND table_name = 'organizations'
   `);
-  if (organizations.rowCount === 0) throw new Error('لا توجد مؤسسة قابلة للتحقق بعد الترقية');
+  const hasOrganizationCode = organizationColumns.rows.some(
+    (row) => row.column_name === 'code',
+  );
+  const organizationRows = hasOrganizationCode
+    ? await client.query<{
+        id: number;
+        code: string | null;
+        foundation_status: string;
+        foundation_snapshot_hash: string | null;
+      }>(`
+        SELECT id, code, foundation_status, foundation_snapshot_hash
+          FROM organizations
+         WHERE status IN ('active', 'trial')
+      `)
+    : await client.query<{
+        id: number;
+        foundation_status: string;
+        foundation_snapshot_hash: string | null;
+      }>(`
+        SELECT id, foundation_status, foundation_snapshot_hash
+          FROM organizations
+         WHERE status IN ('active', 'trial')
+      `);
+  if (organizationRows.rowCount === 0) throw new Error('لا توجد مؤسسة قابلة للتحقق بعد الترقية');
 
-  for (const org of organizations.rows) {
+  for (const org of organizationRows.rows) {
+    const organizationLabel = 'code' in org && org.code
+      ? org.code
+      : `org-${org.id}`;
     if (org.foundation_status !== 'applied' || org.foundation_snapshot_hash !== snapshotHash) {
-      throw new Error(`Foundation غير مكتمل للمؤسسة ${org.code}: status=${org.foundation_status}, hash=${org.foundation_snapshot_hash ?? 'مفقود'}`);
+      throw new Error(`Foundation غير مكتمل للمؤسسة ${organizationLabel}: status=${org.foundation_status}, hash=${org.foundation_snapshot_hash ?? 'مفقود'}`);
     }
 
     const duplicateRows = await client.query<{ foundation_key: string; count: number }>(`
@@ -159,7 +181,7 @@ async function verifyFoundation(
       HAVING COUNT(*) > 1
     `, [org.id]);
     if (duplicateRows.rowCount) {
-      throw new Error(`Foundation keys مكررة في ${org.code}: ${duplicateRows.rows.map((row: { foundation_key: string }) => row.foundation_key).join(', ')}`);
+      throw new Error(`Foundation keys مكررة في ${organizationLabel}: ${duplicateRows.rows.map((row: { foundation_key: string }) => row.foundation_key).join(', ')}`);
     }
 
     for (const key of ['wh.001', 'wh.002', 'wh.003', 'wh.004']) {
@@ -167,7 +189,7 @@ async function verifyFoundation(
         'SELECT id FROM warehouses WHERE org_id = $1 AND foundation_key = $2',
         [org.id, key],
       );
-      if (result.rowCount !== 1) throw new Error(`المخزن ${key} مفقود أو مكرر في ${org.code}`);
+      if (result.rowCount !== 1) throw new Error(`المخزن ${key} مفقود أو مكرر في ${organizationLabel}`);
     }
 
     for (const code of ['INV.01.', 'INV.02.', 'INV.03.', 'INV.04.']) {
@@ -177,19 +199,19 @@ async function verifyFoundation(
           WHERE org_id = $1 AND UPPER(code) = $2`,
         [org.id, code],
       );
-      if (result.rowCount !== 1) throw new Error(`دفتر ${code} مفقود أو مكرر في ${org.code}`);
+      if (result.rowCount !== 1) throw new Error(`دفتر ${code} مفقود أو مكرر في ${organizationLabel}`);
       const journal = result.rows[0]!;
       const warehouse = await client.query(
         'SELECT id FROM warehouses WHERE org_id = $1 AND id = $2',
         [org.id, journal.warehouse_id],
       );
-      if (warehouse.rowCount !== 1) throw new Error(`رابط دفتر ${code} إلى مخزن غير صالح في ${org.code}`);
+      if (warehouse.rowCount !== 1) throw new Error(`رابط دفتر ${code} إلى مخزن غير صالح في ${organizationLabel}`);
     }
   }
 
   const broken = await verifyForeignKeys(client);
   if (broken.length) throw new Error(`مفاتيح FK مكسورة: ${broken.slice(0, 10).join('; ')}`);
-  emit({ level: 'success', message: `✅ تحقق Foundation والمخطط والـFK ناجح (${organizations.rowCount} مؤسسة، hash=${snapshotHash.slice(0, 12)}...)`, timestamp: now() });
+  emit({ level: 'success', message: `✅ تحقق Foundation والمخطط والـFK ناجح (${organizationRows.rowCount} مؤسسة، hash=${snapshotHash.slice(0, 12)}...)`, timestamp: now() });
 }
 
 export async function verifyPostUpgrade(opts: {
