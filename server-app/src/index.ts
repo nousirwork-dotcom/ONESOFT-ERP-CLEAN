@@ -371,18 +371,35 @@ const _maxListenRetries = 6;
 // migrations and Foundation completion.
 if (process.env['ONESOFT_FOUNDATION_ONLY'] === '1') {
   try {
+    console.log(`[foundation-only] schemaVersion=${REQUIRED_SCHEMA_VERSION}`);
     const { runFoundationUpdateForAllOrgs } = await import('./foundation-update.js');
     const foundationResult = await runFoundationUpdateForAllOrgs(ENV.dbUrl);
+    console.log(
+      `[foundation-only] foundationHash=${foundationResult.snapshotHash ?? 'unknown'} ` +
+      `foundationVersion=${foundationResult.exportedAt ?? 'unknown'}`,
+    );
     if (!foundationResult.ok) {
       console.error('[foundation-only] FOUNDATION_INCOMPLETE', foundationResult);
-      process.exit(1);
+      await finishFoundationProcess(1);
     }
     console.log('[foundation-only] FOUNDATION_OK');
-    process.exit(0);
+    await finishFoundationProcess(0);
   } catch (error) {
     console.error('[foundation-only] FOUNDATION_INCOMPLETE', error);
-    process.exit(1);
+    await finishFoundationProcess(1);
   }
+}
+
+async function finishFoundationProcess(code: number): Promise<never> {
+  await pool.end().catch(() => {});
+  // console.log/error writes can be asynchronous when stdout/stderr are pipes
+  // (the installer captures both). Wait for both streams before exiting so the
+  // parent always receives the complete Foundation diagnostic.
+  await Promise.all([
+    new Promise<void>((resolve) => process.stdout.write('', () => resolve())),
+    new Promise<void>((resolve) => process.stderr.write('', () => resolve())),
+  ]);
+  process.exit(code);
 }
 
 const server = app.listen(ENV.port, () => {
