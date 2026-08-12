@@ -524,7 +524,10 @@ try {
 // يُضيف السجلات التأسيسية الجديدة فقط (idempotent — لا يُعدّل أو يحذف أي سجل).
 try {
   const { runFoundationUpdateForAllOrgs } = await import('./foundation-update.js');
-  const foundationResult = await runFoundationUpdateForAllOrgs(ENV.dbUrl);
+  // Normal Backend startup uses onesoft_app only. The upgrade-only process
+  // already completed the administrative Foundation pass with onesoft_migrator
+  // and SET ROLE onesoft_schema_owner before this service is started.
+  const foundationResult = await runFoundationUpdateForAllOrgs();
   if (!foundationResult.ok) {
     console.error('[startup] ❌ FOUNDATION_INCOMPLETE — server will not announce readiness.', foundationResult);
     process.exit(1);
