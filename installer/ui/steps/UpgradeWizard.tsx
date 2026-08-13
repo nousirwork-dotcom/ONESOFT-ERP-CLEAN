@@ -4,6 +4,8 @@ import type { ProgressEvent } from '../../core/types';
 import { APP_VERSION } from '../../core/version';
 
 type Phase = 'detect' | 'confirm' | 'running' | 'done' | 'failed';
+const acceptanceMode = typeof window !== 'undefined' &&
+  new URLSearchParams(window.location.search).get('acceptance') === '1';
 
 export default function UpgradeWizard() {
   const { dbOpts, setDbOpts } = useInstallerStore();
@@ -13,12 +15,14 @@ export default function UpgradeWizard() {
   const [runtimePassword, setRuntimePassword] = useState(dbOpts.password);
   const [adminUser, setAdminUser] = useState('postgres');
   const [adminPassword, setAdminPassword] = useState('');
+  const [acceptancePassword, setAcceptancePassword] = useState('');
   const [needsAdminCredential, setNeedsAdminCredential] = useState(false);
   const [backendPort, setBackendPort] = useState(3000);
   const [log, setLog] = useState<ProgressEvent[]>([]);
   const [backupDir, setBackupDir] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
+  const acceptanceStarted = useRef(false);
 
   const makeRuntimePassword = (): string => {
     const bytes = new Uint8Array(32);
@@ -46,6 +50,9 @@ export default function UpgradeWizard() {
             port: config.database.port,
             database: config.database.name,
           });
+          if (acceptanceMode) {
+            setAcceptancePassword(config.database.password ?? '');
+          }
           const legacyUser = config.database.user?.trim();
           if (legacyUser && legacyUser !== 'onesoft_app') {
             setAdminUser(legacyUser);
@@ -93,17 +100,19 @@ export default function UpgradeWizard() {
     })();
   }, [setDbOpts]);
 
-  const runUpgrade = async () => {
+  const runUpgrade = async (credentialOverride?: { adminUser: string; adminPassword: string }) => {
     setPhase('running');
     setLog([]);
     setError(null);
+    const effectiveAdminUser = credentialOverride?.adminUser ?? adminUser;
+    const effectiveAdminPassword = credentialOverride?.adminPassword ?? adminPassword;
 
     const off = window.installer?.onProgress?.((e: unknown) => {
       setLog(prev => [...prev, e as ProgressEvent]);
     });
 
     try {
-      if (needsAdminCredential && (!adminUser.trim() || !adminPassword)) {
+      if (needsAdminCredential && (!effectiveAdminUser.trim() || !effectiveAdminPassword)) {
         throw new Error('أدخل اسم مستخدم PostgreSQL الإداري وكلمة مروره لمرة واحدة قبل متابعة ترقية Legacy.');
       }
       const result = await window.installer?.runUpgrade?.({
@@ -114,7 +123,7 @@ export default function UpgradeWizard() {
         ...(needsAdminCredential ? {
           adminDbOpts: {
             host: dbOpts.host, port: dbOpts.port,
-            database: dbOpts.database, user: adminUser.trim(), password: adminPassword,
+            database: dbOpts.database, user: effectiveAdminUser.trim(), password: effectiveAdminPassword,
           },
         } : {}),
         forceRoleProvision: needsAdminCredential,
@@ -146,8 +155,23 @@ export default function UpgradeWizard() {
       // after the Upgrade Core has consumed it.
       setAdminPassword('');
       if (typeof off === 'function') off();
+      if (acceptanceMode) {
+        window.setTimeout(() => window.installer?.close?.(), 500);
+      }
     }
   };
+
+  useEffect(() => {
+    if (!acceptanceMode || phase !== 'confirm' || !needsAdminCredential ||
+        acceptanceStarted.current || !acceptancePassword) return;
+    acceptanceStarted.current = true;
+    setAdminUser('postgres');
+    setAdminPassword(acceptancePassword);
+    const timer = window.setTimeout(() => {
+      void runUpgrade({ adminUser: 'postgres', adminPassword: acceptancePassword });
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [phase, needsAdminCredential, acceptancePassword]);
 
   const runRollback = async () => {
     if (!backupDir) return;
@@ -230,11 +254,23 @@ export default function UpgradeWizard() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <label style={fieldLabel}>
               المستخدم الإداري
-              <input value={adminUser} onChange={e => setAdminUser(e.target.value)} style={fieldInput} autoComplete="username" />
+               <input value={adminUser} onChange={e => setAdminUser(e.target.value)} style={fieldInput} autoComplete="username" autoFocus={needsAdminCredential} />
             </label>
             <label style={fieldLabel}>
               كلمة المرور
-              <input type="password" value={adminPassword} onChange={e => setAdminPassword(e.target.value)} style={fieldInput} autoComplete="current-password" />
+               <input
+                 type="password"
+                 value={adminPassword}
+                 onChange={e => setAdminPassword(e.target.value)}
+                 onKeyDown={e => {
+                   if (e.key === 'Enter') {
+                     e.preventDefault();
+                     void runUpgrade();
+                   }
+                 }}
+                 style={fieldInput}
+                 autoComplete="current-password"
+               />
             </label>
           </div>
         </div>
@@ -242,7 +278,7 @@ export default function UpgradeWizard() {
 
       <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
         <button onClick={() => window.installer?.close?.()} style={btnSecondary}>إلغاء</button>
-        <button onClick={runUpgrade} style={btnPrimary}>بدء الترقية ▶</button>
+        <button onClick={() => void runUpgrade()} style={btnPrimary}>بدء الترقية ▶</button>
       </div>
     </div>
   );

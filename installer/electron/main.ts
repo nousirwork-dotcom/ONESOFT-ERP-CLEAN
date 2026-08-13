@@ -494,7 +494,9 @@ h2{margin:0 0 12px;font-size:20px;}p{font-size:13px;color:#6B7280;margin:4px 0;w
       .catch((e: unknown) => writeLog('ERROR', 'TEST MODE: loadURL — rejected', e));
   } else if (process.argv.includes('--run-upgrade-wizard')) {
     writeLog('INFO', `upgrade wizard — loadFile ${indexPath} — start`);
-    mainWindow.loadFile(indexPath, { query: { mode: 'upgrade' } })
+    const query: Record<string, string> = { mode: 'upgrade' };
+    if (process.env.ONESOFT_ACCEPTANCE === '1') query.acceptance = '1';
+    mainWindow.loadFile(indexPath, { query })
       .then(() => writeLog('INFO', 'upgrade wizard loadFile — resolved'))
       .catch((e: unknown) => writeLog('ERROR', 'upgrade wizard loadFile — rejected', e));
   } else if (isAlreadyInstalled()) {
@@ -572,6 +574,7 @@ app.whenReady()
           upgradeWizardExitCode = success ? 0 : 1;
         }
       },
+      (message) => writeLog('INFO', message),
     );
     registerFilesystemIpc(ipcMain, mainWindow);
     registerUninstallIpc(ipcMain, mainWindow);

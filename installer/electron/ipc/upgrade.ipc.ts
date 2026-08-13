@@ -20,6 +20,7 @@ export function registerUpgradeIpc(
   ipc: IpcMain,
   win: BrowserWindow | null,
   onCompleted?: (success: boolean) => void,
+  onDiagnostic?: (message: string) => void,
 ) {
   const emit = (e: unknown) => win?.webContents.send('installer:progress', e);
 
@@ -90,14 +91,21 @@ export function registerUpgradeIpc(
     adminDbOpts?: DatabaseConnectionOptions;
     forceRoleProvision?: boolean;
   }) => {
+    onDiagnostic?.(`upgrade:run received targetVersion=${opts.targetVersion} database=${opts.dbOpts.database} adminUser=${opts.adminDbOpts?.user ?? 'none'}`);
     // ✅ المسار الصحيح في حزمة electron-builder: resources/app/server-app
     const serverAppPath = path.join(process.resourcesPath ?? process.cwd(), 'app', 'server-app');
     const mgr = new UpgradeManager();
-    const result = await mgr.upgrade({ serverAppPath, ...opts }, emit as any, (status) => {
-      win?.webContents.send('installer:progress', { level: 'info', message: `status:${status}`, timestamp: new Date().toISOString() });
-    });
-    onCompleted?.(result.success);
-    return result;
+    try {
+      const result = await mgr.upgrade({ serverAppPath, ...opts }, emit as any, (status) => {
+        win?.webContents.send('installer:progress', { level: 'info', message: `status:${status}`, timestamp: new Date().toISOString() });
+      });
+      onDiagnostic?.(`upgrade:run completed success=${result.success} stage=${result.stage ?? 'none'} migration=${result.migration ?? 'none'}`);
+      onCompleted?.(result.success);
+      return result;
+    } catch (error: unknown) {
+      onDiagnostic?.(`upgrade:run rejected ${safeMigrationError(error)}`);
+      throw error;
+    }
   });
 
   ipc.handle('upgrade:rollback', async (_, opts: {

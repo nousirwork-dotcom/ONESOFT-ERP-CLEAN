@@ -37,10 +37,22 @@ jobs:
       - name: Install PostgreSQL 16
         shell: pwsh
         run: |
-          choco install postgresql16 --yes --no-progress --params '/Password:OneSoftAcceptance2026 /Port:5432'
-          $service = Get-Service -Name 'postgresql-x64-16' -ErrorAction SilentlyContinue
-          if (-not $service) { throw 'PostgreSQL 16 service was not installed' }
-          if ($service.Status -ne 'Running') { Start-Service $service.Name }
+          $installed = $false
+          for ($attempt = 1; $attempt -le 4; $attempt++) {
+            Write-Host "PostgreSQL Chocolatey attempt $attempt/4"
+            & choco install postgresql16 --yes --no-progress --execution-timeout=1800 --params '/Password:OneSoftAcceptance2026 /Port:5432'
+            $service = Get-Service -Name 'postgresql-x64-16' -ErrorAction SilentlyContinue
+            if ($LASTEXITCODE -eq 0 -and $service) {
+              if ($service.Status -ne 'Running') { Start-Service $service.Name }
+              $installed = $true
+              break
+            }
+            if ($attempt -lt 4) {
+              Write-Warning "PostgreSQL installation attempt $attempt failed; retrying after 20 seconds."
+              Start-Sleep -Seconds 20
+            }
+          }
+          if (-not $installed) { throw 'PostgreSQL 16 service was not installed after four attempts' }
 
       - name: Install NSSM
         shell: pwsh

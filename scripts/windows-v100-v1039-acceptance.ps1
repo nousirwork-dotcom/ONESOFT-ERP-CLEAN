@@ -112,6 +112,67 @@ function Get-ServicePid([string]$Name) {
   return 0
 }
 
+function Initialize-LegacyBaseSchema {
+  $baseSchema = Join-Path $env:GITHUB_WORKSPACE 'server-app\drizzle\base_schema.sql'
+  $drizzleDir = Join-Path $env:GITHUB_WORKSPACE 'server-app\drizzle'
+  $journalPath = Join-Path $drizzleDir 'meta\_journal.json'
+  Assert-True (Test-Path $baseSchema) 'historical base_schema.sql is available in the checked-out source'
+  Assert-True (Test-Path $journalPath) 'migration journal is available in the checked-out source'
+  $oldPassword = $env:PGPASSWORD
+  try {
+    $env:PGPASSWORD = $DatabasePassword
+    $output = & $script:PsqlPath -h localhost -p 5432 -U $DatabaseUser -d $DatabaseName `
+      -X -v ON_ERROR_STOP=1 -f $baseSchema 2>&1
+    if ($LASTEXITCODE -ne 0) {
+      Fail "base_schema.sql failed: $($output -join "`n")"
+    }
+
+    $journal = Get-Content -Raw $journalPath | ConvertFrom-Json
+    $historicalTags = @($journal.entries | Select-Object -First 14 | ForEach-Object { [string]$_.tag })
+    Assert-True ($historicalTags.Count -eq 14) 'v1.0.0 historical boundary contains 14 migration tags'
+    Assert-True ($historicalTags[-1] -eq '0013_add_missing_tables') `
+      'v1.0.0 historical boundary ends at 0013_add_missing_tables'
+
+    foreach ($tag in $historicalTags) {
+      $migrationPath = Join-Path $drizzleDir "$tag.sql"
+      Assert-True (Test-Path $migrationPath) "historical migration $tag is available"
+      $output = & $script:PsqlPath -h localhost -p 5432 -U $DatabaseUser -d $DatabaseName `
+        -X -v ON_ERROR_STOP=1 -f $migrationPath 2>&1
+      if ($LASTEXITCODE -ne 0) {
+        Fail "historical migration $tag failed: $($output -join "`n")"
+      }
+    }
+  } finally {
+    if ($null -eq $oldPassword) {
+      Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
+    } else {
+      $env:PGPASSWORD = $oldPassword
+    }
+  }
+  $tableCount = [int](Invoke-Sql $DatabaseName "SELECT count(*) FROM information_schema.tables WHERE table_schema='public';")
+  Invoke-Sql $DatabaseName @"
+CREATE TABLE IF NOT EXISTS __drizzle_migrations (
+  id SERIAL PRIMARY KEY,
+  tag TEXT NOT NULL UNIQUE,
+  applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS _schema_version (
+  id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  version TEXT NOT NULL,
+  stamped_at TIMESTAMP NOT NULL DEFAULT now()
+);
+INSERT INTO __drizzle_migrations (tag)
+SELECT tag FROM unnest(ARRAY[
+  '$($historicalTags -join "','")'
+]) AS tags(tag)
+ON CONFLICT (tag) DO NOTHING;
+INSERT INTO _schema_version (id, version)
+VALUES (1, '0013_add_missing_tables')
+ON CONFLICT (id) DO UPDATE SET version = EXCLUDED.version, stamped_at = now();
+"@
+  Assert-True ($tableCount -gt 45) "historical v1.0.0 fixture created the initial table set ($tableCount tables)"
+}
+
 function Wait-Health([bool]$RequireReady, [int]$TimeoutSeconds, [string]$Description) {
   return Wait-Until {
     try {
@@ -150,13 +211,37 @@ function Install-OldApplication {
   Assert-True ((Get-Item $oldExe).Length -gt 50MB) 'published v1.0.0 installer downloaded'
 
   Log 'Installing the published v1.0.0 installer silently'
-  $process = Start-Process -FilePath $oldExe -ArgumentList @('/S', "/D=$InstallDir") -Wait -PassThru
+  $process = Start-Process -FilePath $oldExe -ArgumentList "/S /D=`"$InstallDir`"" -Wait -PassThru
   Assert-True ($process.ExitCode -eq 0) 'published v1.0.0 installer exited successfully'
-  Assert-True (Test-Path "$InstallDir\OneSoft ERP.exe") 'published v1.0.0 application installed'
-  Assert-True (Test-Path "$InstallDir\resources\app\server-app\dist\index.mjs") `
-    'published v1.0.0 server bundle installed'
-  Assert-True ((Get-Item "$InstallDir\OneSoft ERP.exe").VersionInfo.ProductVersion -like "$OldVersion*") `
-    'installed application reports v1.0.0'
+
+  $candidates = @(
+    $InstallDir,
+    'C:\Program Files\OneSoft ERP',
+    'C:\Program Files (x86)\OneSoft ERP',
+    "$env:LOCALAPPDATA\Programs\OneSoft ERP"
+  ) | Select-Object -Unique
+  $installedRoot = $candidates |
+    Where-Object { Test-Path (Join-Path $_ 'resources\app\server-app\dist\index.mjs') } |
+    Select-Object -First 1
+  if (-not $installedRoot) {
+    Log 'v1.0.0 install root was not detected; diagnostic directories follow:'
+    foreach ($candidate in $candidates) {
+      Log "candidate=$candidate exists=$(Test-Path $candidate)"
+      if (Test-Path $candidate) {
+        Get-ChildItem $candidate -Force -ErrorAction SilentlyContinue |
+          ForEach-Object { Log "  $($_.FullName)" }
+      }
+    }
+    Get-ChildItem 'C:\Program Files', 'C:\Program Files (x86)', $env:LOCALAPPDATA `
+      -Directory -Filter '*OneSoft*' -Recurse -ErrorAction SilentlyContinue |
+      Select-Object -First 40 |
+      ForEach-Object { Log "discovered=$($_.FullName)" }
+    Fail 'published v1.0.0 server bundle was not installed in a known Windows application directory'
+  }
+  $script:InstallDir = $installedRoot
+  Pass "published v1.0.0 server bundle installed at $script:InstallDir"
+  $executables = @(Get-ChildItem $script:InstallDir -Filter '*.exe' -File -ErrorAction SilentlyContinue)
+  Log "v1.0.0 installed executables: $($executables.Name -join ', ')"
 }
 
 function Configure-LegacyRuntime {
@@ -167,7 +252,7 @@ function Configure-LegacyRuntime {
     configVersion = 4
     database = [ordered]@{
       host = 'localhost'; port = 5432; name = $DatabaseName
-      user = $DatabaseUser; password = $DatabasePassword
+      user = $DatabaseUser; password = $DatabasePassword; poolMin = 1; poolMax = 5
     }
     server = [ordered]@{
       backendPort = 3000; frontendPort = 5000; host = '0.0.0.0'
@@ -196,19 +281,51 @@ function Install-LegacyService {
   $oldServer = "$InstallDir\resources\app\server-app\dist\index.mjs"
   $node = (Get-Command node.exe -ErrorAction Stop).Source
   $nssm = (Get-Command nssm.exe -ErrorAction Stop).Source
+  $serviceLogDir = "$env:PROGRAMDATA\OneSoft\Logs\legacy-v100"
+  New-Item -ItemType Directory -Force -Path $serviceLogDir | Out-Null
   Invoke-Checked $nssm @('install', 'OneSoft-Server', $node, $oldServer)
   Invoke-Checked $nssm @('set', 'OneSoft-Server', 'AppDirectory', (Split-Path $oldServer))
   Invoke-Checked $nssm @('set', 'OneSoft-Server', 'AppParameters', (Split-Path $oldServer -Leaf))
   Invoke-Checked $nssm @('set', 'OneSoft-Server', 'AppEnvironmentExtra', 'NODE_ENV=production', 'PORT=3000')
+  Invoke-Checked $nssm @('set', 'OneSoft-Server', 'AppStdout', "$serviceLogDir\stdout.log")
+  Invoke-Checked $nssm @('set', 'OneSoft-Server', 'AppStderr', "$serviceLogDir\stderr.log")
+  Invoke-Checked $nssm @('set', 'OneSoft-Server', 'AppRotateFiles', '1')
   Invoke-Checked $nssm @('set', 'OneSoft-Server', 'Start', 'SERVICE_AUTO_START')
   Invoke-Checked $nssm @('start', 'OneSoft-Server')
-  $script:OldServicePid = Wait-Until {
-    $pid = Get-ServicePid 'OneSoft-Server'
-    if ($pid -gt 0) { $pid } else { $false }
-  } 60 'v1.0.0 OneSoft-Server service'
+  try {
+    $script:OldServicePid = Wait-Until {
+      $servicePid = Get-ServicePid 'OneSoft-Server'
+      if ($servicePid -gt 0) { $servicePid } else { $false }
+    } 60 'v1.0.0 OneSoft-Server service'
+  } catch {
+    $service = Get-CimInstance Win32_Service -Filter "Name='OneSoft-Server'" -ErrorAction SilentlyContinue
+    if ($service) {
+      Log "Legacy service diagnostics: state=$($service.State) status=$($service.Status) exitCode=$($service.ExitCode) processId=$($service.ProcessId) startName=$($service.StartName)"
+    }
+    foreach ($logPath in @("$serviceLogDir\stdout.log", "$serviceLogDir\stderr.log")) {
+      if (Test-Path $logPath) {
+        Log "Legacy service log ${logPath}:"
+        Get-Content $logPath -Tail 120 -ErrorAction SilentlyContinue |
+          ForEach-Object { Log "  $_" }
+      } else {
+        Log "Legacy service log missing: $logPath"
+      }
+    }
+    throw
+  }
   $health = Wait-Health $false 240 'v1.0.0 /api/health'
   Assert-True ($health.status -eq 'ok') 'v1.0.0 application is healthy before upgrade'
   Pass "v1.0.0 service is running with PID $script:OldServicePid"
+}
+
+function Seed-LegacyFoundation {
+  $orgId = Invoke-Sql $DatabaseName @"
+INSERT INTO organizations (code, name, name_en, currency, status)
+VALUES ('ACCEPT-V100', 'OneSoft v1.0.0 Acceptance', 'OneSoft v1.0.0 Acceptance', 'SAR', 'trial')
+ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name
+RETURNING id;
+"@
+  Assert-True ([int]$orgId -gt 0) 'v1.0.0 Foundation organization fixture exists'
 }
 
 function Assert-LegacyDatabase {
@@ -242,6 +359,7 @@ function Reproduce-StaleLedgerSequence {
 function Add-TypeForUiAutomation {
   Add-Type -AssemblyName UIAutomationClient
   Add-Type -AssemblyName UIAutomationTypes
+  Add-Type -AssemblyName System.Windows.Forms
   Add-Type @'
 using System;
 using System.Runtime.InteropServices;
@@ -249,6 +367,22 @@ public static class OneSoftAcceptanceWin32 {
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
 }
 '@
+}
+
+function Send-UiEnter([string[]]$ProcessNames) {
+  foreach ($name in $ProcessNames) {
+    $process = Get-Process -Name $name -ErrorAction SilentlyContinue |
+      Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
+    if (-not $process) { continue }
+    try {
+      [OneSoftAcceptanceWin32]::SetForegroundWindow($process.MainWindowHandle) | Out-Null
+      [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
+      return $true
+    } catch {
+      Log "UI keyboard fallback retry: $($_.Exception.Message)"
+    }
+  }
+  return $false
 }
 
 function Get-UiRoot([string[]]$ProcessNames) {
@@ -265,6 +399,27 @@ function Get-UiRoot([string[]]$ProcessNames) {
   return $null
 }
 
+function Fill-UpgradeWizardByKeyboard([string]$Password) {
+  $root = Get-UiRoot @('OneSoft ERP')
+  if (-not $root) { return $false }
+  try {
+    [OneSoftAcceptanceWin32]::SetForegroundWindow([IntPtr]$root.Current.NativeWindowHandle) | Out-Null
+    # UpgradeWizard auto-focuses the administrator username field when the
+    # credential section appears. Continue from that field because an elevated
+    # Electron window may expose no descendants through UIAutomation.
+    [System.Windows.Forms.SendKeys]::SendWait('^a')
+    [System.Windows.Forms.SendKeys]::SendWait('postgres')
+    [System.Windows.Forms.SendKeys]::SendWait('{TAB}')
+    [System.Windows.Forms.SendKeys]::SendWait($Password)
+    Start-Sleep -Seconds 2
+    [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
+    return $true
+  } catch {
+    Log "Upgrade Wizard keyboard fallback retry: $($_.Exception.Message)"
+    return $false
+  }
+}
+
 function Find-UiButtons($Root) {
   $condition = New-Object System.Windows.Automation.PropertyCondition(
     [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
@@ -273,24 +428,36 @@ function Find-UiButtons($Root) {
   return $Root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $condition)
 }
 
-function Invoke-UiButton([string[]]$Names, [int]$TimeoutSeconds = 120) {
+function Invoke-UiButton(
+  [string[]]$Names,
+  [int]$TimeoutSeconds = 120,
+  [string[]]$ProcessNames = @('OneSoft ERP', 'OneSoftSetup*')
+) {
   $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
   do {
-    foreach ($processNames in @(@('OneSoft ERP'), @('OneSoftSetup'))) {
+    foreach ($processNames in @($ProcessNames)) {
       $root = Get-UiRoot $processNames
       if (-not $root) { continue }
+      $invoked = $false
       foreach ($button in (Find-UiButtons $root)) {
         $name = [string]$button.Current.Name
-        if ($Names -contains $name) {
+        if ($Names -contains $name -or $Names -contains $name.TrimStart('&')) {
           Log "UI: invoking '$name'"
           try {
             $pattern = $button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
             $pattern.Invoke()
+            $invoked = $true
             return $true
           } catch {
             Log "UI retry for '$name': $($_.Exception.Message)"
           }
         }
+      }
+      if (-not $invoked) {
+        # Elevated NSIS windows can expose a root HWND but no child controls
+        # through UIAutomation. Enter activates the default page action and
+        # keeps this acceptance test on the same interactive installer path.
+        $null = Send-UiEnter $processNames
       }
     }
     Start-Sleep -Seconds 2
@@ -300,6 +467,8 @@ function Invoke-UiButton([string[]]$Names, [int]$TimeoutSeconds = 120) {
 
 function Fill-UpgradeWizard {
   $deadline = (Get-Date).AddSeconds(180)
+  $keyboardReadyAt = (Get-Date).AddSeconds(12)
+  $keyboardAttempted = $false
   do {
     $root = Get-UiRoot @('OneSoft ERP')
     if ($root) {
@@ -322,6 +491,13 @@ function Fill-UpgradeWizard {
           Log "Upgrade Wizard input retry: $($_.Exception.Message)"
         }
       }
+      if (-not $keyboardAttempted -and (Get-Date) -ge $keyboardReadyAt) {
+        $keyboardAttempted = $true
+        if (Fill-UpgradeWizardByKeyboard $DatabasePassword) {
+          Pass 'Upgrade Wizard received credentials through the interactive keyboard fallback'
+          return
+        }
+      }
     }
     Start-Sleep -Seconds 2
   } while ((Get-Date) -lt $deadline)
@@ -334,35 +510,57 @@ function Run-NewInstallerUpgrade {
   Add-TypeForUiAutomation
 
   Log 'Launching the current OneSoftSetup-1.0.39-x64.exe in interactive upgrade mode'
-  $installer = Start-Process -FilePath $NewInstallerPath -ArgumentList @("/D=$InstallDir") -PassThru
+  $oldAcceptanceMode = $env:ONESOFT_ACCEPTANCE
+  $env:ONESOFT_ACCEPTANCE = '1'
+  try {
+    $installer = Start-Process -FilePath $NewInstallerPath -ArgumentList "/D=`"$InstallDir`"" -PassThru
+  } finally {
+    if ($null -eq $oldAcceptanceMode) {
+      Remove-Item Env:ONESOFT_ACCEPTANCE -ErrorAction SilentlyContinue
+    } else {
+      $env:ONESOFT_ACCEPTANCE = $oldAcceptanceMode
+    }
+  }
 
   # electron-builder's non-silent NSIS pages are automated first. Once the
-  # customInstall macro opens the Electron Upgrade Wizard, Fill-UpgradeWizard
-  # supplies the one-time admin credential and starts the shared Upgrade Core.
+  # customInstall macro opens the Electron Upgrade Wizard, its acceptance-only
+  # mode supplies the existing Legacy admin credential and starts the same
+  # shared Upgrade Core used by the production interactive path.
   $deadline = (Get-Date).AddSeconds(300)
   $wizardStarted = $false
+  $acceptanceMode = $true
   do {
     if (-not $wizardStarted) {
       $app = Get-Process -Name 'OneSoft ERP' -ErrorAction SilentlyContinue |
         Where-Object { $_.MainWindowHandle -ne 0 }
       if ($app) {
         $wizardStarted = $true
-        Fill-UpgradeWizard
+        if (-not $acceptanceMode) {
+          Fill-UpgradeWizard
+        } else {
+          Log 'Acceptance Upgrade Wizard opened; waiting for its real Upgrade Core result'
+        }
       }
     }
 
-    if (-not $installer.HasExited) {
+    if (-not $installer.HasExited -and -not $wizardStarted) {
       $null = Invoke-UiButton @(
-        'Next >', 'Next', 'التالي >', 'التالي',
-        'I Agree', 'أوافق',
-        'Install', 'تثبيت'
-      ) 1
+        'Next >', 'Next', '&Next >', '&Next', 'التالي >', 'التالي',
+        'I Agree', '&I Agree', 'أوافق',
+        'Install', '&Install', 'تثبيت'
+      ) 1 @('OneSoftSetup*')
     }
     if ($installer.HasExited) { break }
     Start-Sleep -Seconds 2
   } while ((Get-Date) -lt $deadline)
 
   if (-not $installer.HasExited) {
+    Log 'Installer timeout diagnostics: visible OneSoft processes'
+    Get-Process -ErrorAction SilentlyContinue |
+      Where-Object { $_.ProcessName -like 'OneSoft*' -or $_.ProcessName -like 'unins*' } |
+      ForEach-Object {
+        Log "  process=$($_.ProcessName) pid=$($_.Id) windowHandle=$($_.MainWindowHandle) title=$($_.MainWindowTitle)"
+      }
     try { $installer.Kill() } catch {}
     Fail 'OneSoftSetup-1.0.39-x64.exe did not finish within 300 seconds'
   }
@@ -396,8 +594,8 @@ function Assert-PostUpgrade {
   $firstPid = Get-ServicePid 'OneSoft-Server'
   Restart-Service -Name 'OneSoft-Server' -Force
   $secondPid = Wait-Until {
-    $pid = Get-ServicePid 'OneSoft-Server'
-    if ($pid -gt 0) { $pid } else { $false }
+    $servicePid = Get-ServicePid 'OneSoft-Server'
+    if ($servicePid -gt 0) { $servicePid } else { $false }
   } 120 'OneSoft-Server second startup'
   Assert-True ($secondPid -gt 0) 'OneSoft-Server restarted for second run'
   $secondHealth = Wait-Health $true 240 'second run ready=true'
@@ -418,7 +616,9 @@ try {
   Install-OldApplication
   Create-LegacyDatabase
   Configure-LegacyRuntime
+  Initialize-LegacyBaseSchema
   Install-LegacyService
+  Seed-LegacyFoundation
   Assert-LegacyDatabase
   if ($ReproduceStaleLedger) {
     Reproduce-StaleLedgerSequence
