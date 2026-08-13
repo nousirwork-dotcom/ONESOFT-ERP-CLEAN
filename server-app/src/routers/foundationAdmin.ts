@@ -32,6 +32,8 @@ import {
   documentTemplates,
   postingDefinitions,
   chartOfAccounts,
+  users,
+  userGroups,
   appSettings,
   organizations,
 } from '../schema.js';
@@ -108,6 +110,8 @@ async function buildExportFkMaps(orgId: number) {
   const accountSkMap     = new Map<number, string>();
   const accountCodeMap   = new Map<number, string>();
   const documentTypeFkMap = new Map<number, string>(); // document_types.id → foundationKey
+  const userLoginMap     = new Map<number, string>();
+  const userGroupCodeMap = new Map<number, string>();
 
   // للتحقق من ربط docType (string) في document_journals بأنواع المستندات المُصدَّرة
   const docTypeIncludedTypeIds = new Set<string>(); // typeId لأنواع المستندات مع includeInFoundation=true
@@ -132,6 +136,22 @@ async function buildExportFkMaps(orgId: number) {
   for (const r of acctRows) {
     if (r.systemKey) accountSkMap.set(r.id, r.systemKey);
     if (r.code) accountCodeMap.set(r.id, r.code);
+  }
+
+  const userRows = await db.select({
+    id: users.id,
+    username: users.username,
+  }).from(users).where(eq(users.orgId, orgId));
+  for (const r of userRows) {
+    if (r.username?.trim()) userLoginMap.set(r.id, r.username.trim());
+  }
+
+  const userGroupRows = await db.select({
+    id: userGroups.id,
+    code: userGroups.code,
+  }).from(userGroups).where(eq(userGroups.orgId, orgId));
+  for (const r of userGroupRows) {
+    if (r.code?.trim()) userGroupCodeMap.set(r.id, r.code.trim());
   }
 
   // بناء خريطة أنواع المستندات — لفحص أي FK يُشير إلى document_types بدون foundationKey
@@ -159,7 +179,39 @@ async function buildExportFkMaps(orgId: number) {
     documentTypeFkMap,
     docTypeIncludedTypeIds,
     docTypeAllTypeIds,
+    userLoginMap,
+    userGroupCodeMap,
   };
+}
+
+/**
+ * يحوّل علاقات المستخدم/المجموعة المحلية إلى مراجع مستقرة قبل كتابة القالب.
+ * لا يُسمح بتصدير users.id أو user_groups.id؛ إذا تعذر استخراج login/code
+ * مستقر يبقى الحقل NULL.
+ */
+function normalizeUserReferencesForExport(
+  row: Record<string, unknown>,
+  fkMaps: {
+    userLoginMap: Map<number, string>;
+    userGroupCodeMap: Map<number, string>;
+  },
+): void {
+  if ('allowedUserId' in row) {
+    const rawUserId = row.allowedUserId;
+    if (typeof rawUserId === 'number') {
+      const login = fkMaps.userLoginMap.get(rawUserId);
+      if (login) row.allowedUserLogin = login;
+    }
+    row.allowedUserId = null;
+  }
+
+  if ('allowedUserGroup' in row) {
+    const rawGroup = row.allowedUserGroup;
+    if (typeof rawGroup === 'number' || (typeof rawGroup === 'string' && /^\d+$/.test(rawGroup.trim()))) {
+      const code = fkMaps.userGroupCodeMap.get(Number(rawGroup));
+      row.allowedUserGroup = code ?? null;
+    }
+  }
 }
 
 /**
@@ -661,9 +713,7 @@ export const foundationAdminRouter = router({
           for (const [k, v] of Object.entries(row)) {
             if (!STRIP_KEYS.has(k)) cleaned[k] = v;
           }
-          // User IDs are scoped to the source organization. Never export a
-          // raw user FK into a snapshot that may be applied to another org.
-          if ('allowedUserId' in cleaned) cleaned.allowedUserId = null;
+          normalizeUserReferencesForExport(cleaned, fkMaps);
           return enrichWithFkRefs(cleaned, tableName, fkMaps);
         });
         totalRecords += rows.length;

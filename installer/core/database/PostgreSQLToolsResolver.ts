@@ -338,7 +338,7 @@ export class PostgreSQLToolsResolver {
 
   private pathDirectories(): string[] {
     const pathValue = this.env['PATH'] ?? this.env['Path'] ?? '';
-    const delimiter = this.platform === 'win32' ? ';' : this.filePath.delimiter;
+    const delimiter = this.platform === 'win32' ? ';' : path.delimiter;
     return pathValue.split(delimiter).filter(Boolean);
   }
 
