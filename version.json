@@ -1,8 +1,8 @@
 {
-  "version": "1.0.38",
-  "build": "20260811.001",
-  "releaseDate": "2026-08-12",
-  "schemaVersion": "0092_repair_legacy_migration_drift",
+  "version": "1.0.39",
+  "build": "20260813.001",
+  "releaseDate": "2026-08-13",
+  "schemaVersion": "0093_schema_compatibility_repair",
   "product": "OneSoft ERP",
   "channel": "stable"
 }

@@ -37,6 +37,13 @@ const latestTag = migrations.at(-1)!.tag;
 const legacyStartTag = '0023_custody_records';
 const partialTag = '0068_zatca_compliance_secret';
 const failingTag = '0069_credit_debit_notes';
+const schemaRepairTag = '0093_schema_compatibility_repair';
+const requiredSystemAccounts = [
+  { code: '110101', name: 'نقدية بالصندوق فرع 1' },
+  { code: '110103', name: 'نقدية بالصندوق فرع 3' },
+  { code: '210501', name: 'ضريبة مخرجات' },
+  { code: '410101', name: 'مبيعات فرع 1' },
+] as const;
 
 const adminUrl = process.env.DATABASE_URL ?? (() => {
   throw new Error('DATABASE_URL is required');
@@ -162,6 +169,21 @@ async function makeLegacyDatabase(name: string, tag: string): Promise<void> {
   await createLegacyOwner();
   await withClient(dbUrl(name), async (client) => {
     await applyThrough(client, tag);
+    // Reproduce the schema drift found by the Fresh-vs-Legacy diff. These
+    // columns are present in the current Fresh bootstrap, but historical
+    // Legacy databases can reach 0092 without ever receiving them.
+    await client.query(`
+      ALTER TABLE document_journals
+        DROP COLUMN IF EXISTS customers_journal,
+        DROP COLUMN IF EXISTS suppliers_journal,
+        DROP COLUMN IF EXISTS payment_types_config,
+        DROP COLUMN IF EXISTS issuance_config,
+        DROP COLUMN IF EXISTS options_config
+    `);
+    await client.query(`
+      ALTER TABLE purchase_invoices
+        DROP COLUMN IF EXISTS zatca_invoice_type
+    `);
     await seedLedgerAndStamp(client, tag);
     // Reproduce the Windows Legacy shape: migrations through 0092 add the
     // Foundation reconciliation columns, but no migration adds organizations.code.
@@ -180,17 +202,20 @@ async function makeLegacyDatabase(name: string, tag: string): Promise<void> {
         (41001, $1, 'LEGACY_ADMIN', 'legacy-test-hash', 'Legacy Admin', 'admin', true, 'set'),
         (42002, $1, 'LEGACY_OPERATOR', 'legacy-test-hash', 'Legacy Operator', 'cashier', true, 'set')
     `, [organizationId]);
-    // Foundation payment accountLinks use stable account codes. Seed those
-    // codes in the Legacy target; never seed the source database's numeric IDs.
-    await client.query(`
-      INSERT INTO chart_of_accounts
-        (org_id, code, name, account_type, level, is_active)
-      VALUES
-        ($1, '110101', 'Legacy Cash', 'asset', 1, true),
-        ($1, '110103', 'Legacy Bank', 'asset', 1, true),
-        ($1, '210501', 'Legacy Tax', 'liability', 1, true),
-        ($1, '410101', 'Legacy Sales', 'revenue', 1, true)
-    `, [organizationId]);
+    const missingSystemAccounts = await client.query(
+      `SELECT code
+         FROM chart_of_accounts
+        WHERE org_id = $1
+          AND code = ANY($2::text[])`,
+      [organizationId, requiredSystemAccounts.map((account) => account.code)],
+    );
+    if (missingSystemAccounts.rowCount !== 0) {
+      throw new Error(
+        `Legacy fixture unexpectedly contains system accounts before Foundation: ` +
+        `${missingSystemAccounts.rows.map((row: { code: string }) => row.code).join(', ')}`,
+      );
+    }
+    console.log('[legacy-test] Legacy fixture starts without the four system accounts: PASS');
     await client.query(`
       ALTER TABLE organizations
         DROP CONSTRAINT IF EXISTS organizations_code_unique,
@@ -312,7 +337,59 @@ async function runMigrations(name: string, migration: DatabaseConnectionOptions)
   if (row.version !== latestTag || !row.failingApplied) {
     throw new Error(`Migration resume verification failed: ${JSON.stringify(row)}`);
   }
-  console.log(`[legacy-test] ${name === fullDb ? '0023' : 'partial'} → 0092, SET ROLE, ${failingTag}, ledger: PASS`);
+  console.log(`[legacy-test] ${name === fullDb ? '0023' : 'partial'} → ${latestTag}, SET ROLE, ${failingTag}, ledger: PASS`);
+}
+
+async function assertSchemaCompatibility(name: string): Promise<void> {
+  await withClient(dbUrl(name), async (client) => {
+    const expectedColumns = [
+      ['document_journals', 'customers_journal'],
+      ['document_journals', 'suppliers_journal'],
+      ['document_journals', 'payment_types_config'],
+      ['document_journals', 'issuance_config'],
+      ['document_journals', 'options_config'],
+      ['purchase_invoices', 'zatca_invoice_type'],
+    ] as const;
+    const missing: string[] = [];
+    for (const [tableName, columnName] of expectedColumns) {
+      const result = await client.query(
+        `SELECT 1
+           FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = $1
+            AND column_name = $2`,
+        [tableName, columnName],
+      );
+      if (!result.rowCount) missing.push(`${tableName}.${columnName}`);
+    }
+    if (missing.length) {
+      throw new Error(`Schema repair ${schemaRepairTag} left missing columns: ${missing.join(', ')}`);
+    }
+
+    const constraints = await client.query<{ conname: string }>(
+      `SELECT conname
+         FROM pg_constraint
+        WHERE conname = ANY($1::text[])`,
+      [[
+        'products_tax_id_tax_definitions_id_fk',
+        'sales_invoice_items_tax_id_tax_definitions_id_fk',
+        'stock_vouchers_receiver_user_id_users_id_fk',
+        'tax_definitions_org_id_organizations_id_fk',
+      ]],
+    );
+    const actual = new Set(constraints.rows.map((row) => row.conname));
+    const required = [
+      'products_tax_id_tax_definitions_id_fk',
+      'sales_invoice_items_tax_id_tax_definitions_id_fk',
+      'stock_vouchers_receiver_user_id_users_id_fk',
+      'tax_definitions_org_id_organizations_id_fk',
+    ];
+    const missingConstraints = required.filter((name) => !actual.has(name));
+    if (missingConstraints.length) {
+      throw new Error(`Schema repair ${schemaRepairTag} left missing constraints: ${missingConstraints.join(', ')}`);
+    }
+  });
+  console.log(`[legacy-test] ${name}: schema compatibility after ${schemaRepairTag}: PASS`);
 }
 
 async function assertMigrationFailsAtForeignOwner(
@@ -717,7 +794,58 @@ async function assertFoundation(name: string, runtime: DatabaseConnectionOptions
   console.log('[legacy-test] migrations → Foundation → organizations detection without code → 77 records, no user FK violations: PASS');
 }
 
+type RequiredSystemAccountSnapshot = {
+  id: number;
+  code: string;
+  name: string;
+  systemKey: string | null;
+};
+
+async function readRequiredSystemAccounts(
+  name: string,
+  runtime: DatabaseConnectionOptions,
+  phase: string,
+): Promise<RequiredSystemAccountSnapshot[]> {
+  return withClient(dbUrl(name, runtime.user, runtime.password), async (client) => {
+    const result = await client.query(
+      `SELECT coa.id, coa.code, coa.name, coa.system_key AS "systemKey"
+         FROM chart_of_accounts AS coa
+         JOIN organizations AS org ON org.id = coa.org_id
+        WHERE org.name = $1
+          AND coa.code = ANY($2::text[])
+        ORDER BY coa.code`,
+      ['Legacy Windows Organization', requiredSystemAccounts.map((account) => account.code)],
+    );
+    if (result.rowCount !== requiredSystemAccounts.length) {
+      throw new Error(
+        `${phase}: expected ${requiredSystemAccounts.length} system accounts, found ${result.rowCount}`,
+      );
+    }
+
+    const expectedByCode = new Map(requiredSystemAccounts.map((account) => [account.code, account.name]));
+    const snapshots = result.rows.map((row: RequiredSystemAccountSnapshot) => ({
+      id: Number(row.id),
+      code: row.code,
+      name: row.name,
+      systemKey: row.systemKey,
+    }));
+    for (const account of snapshots) {
+      if (
+        expectedByCode.get(account.code) !== account.name ||
+        account.systemKey !== `acct.${account.code}`
+      ) {
+        throw new Error(`${phase}: invalid system account row ${JSON.stringify(account)}`);
+      }
+    }
+    console.log(
+      `[legacy-test] ${phase}: ${snapshots.map((account) => `${account.code}=${account.name}`).join(', ')}: PASS`,
+    );
+    return snapshots;
+  });
+}
+
 async function assertFoundationIdempotency(name: string, runtime: DatabaseConnectionOptions): Promise<void> {
+  const beforeAccounts = await readRequiredSystemAccounts(name, runtime, 'before second run');
   const before = await withClient(dbUrl(name, runtime.user, runtime.password), async (client) => (
     client.query(
       `SELECT COUNT(*)::int AS count FROM warehouses WHERE foundation_key IN ('wh.001','wh.002','wh.003','wh.004')`,
@@ -736,7 +864,15 @@ async function assertFoundationIdempotency(name: string, runtime: DatabaseConnec
     ).then((result) => result.rows[0].count)
   ));
   if (before !== after) throw new Error(`Foundation second run changed warehouse count: ${before} -> ${after}`);
+  const afterAccounts = await readRequiredSystemAccounts(name, runtime, 'after second run');
+  if (JSON.stringify(beforeAccounts) !== JSON.stringify(afterAccounts)) {
+    throw new Error(
+      `Foundation second run changed system accounts: ` +
+      `${JSON.stringify(beforeAccounts)} -> ${JSON.stringify(afterAccounts)}`,
+    );
+  }
   console.log('[legacy-test] Foundation second startup inserted no duplicates: PASS');
+  console.log('[legacy-test] Foundation second startup preserved system account codes and IDs: PASS');
 }
 
 async function assertBackupReadable(name: string, migration: DatabaseConnectionOptions): Promise<void> {
@@ -790,7 +926,9 @@ async function main(): Promise<void> {
   await assertOwnershipRepairAndRuntime(fullDb, fullRoles.runtime);
   await assertRuntimeCannotDdl(fullRoles.runtime);
   await runFoundationUpgradeProcess(fullDb, fullRoles.migration);
+  await assertSchemaCompatibility(fullDb);
   await assertFoundation(fullDb, fullRoles.runtime);
+  await readRequiredSystemAccounts(fullDb, fullRoles.runtime, 'Legacy upgrade created four system accounts');
   await assertBackupReadable(fullDb, fullRoles.migration);
 
   const fullPort = 38_500 + (process.pid % 400);
@@ -839,7 +977,9 @@ async function main(): Promise<void> {
   await runMigrations(partialDb, partialRoles.migration);
   await assertOwnershipRepairAndRuntime(partialDb, partialRoles.runtime);
   await runFoundationUpgradeProcess(partialDb, partialRoles.migration);
+  await assertSchemaCompatibility(partialDb);
   await assertFoundation(partialDb, partialRoles.runtime);
+  await readRequiredSystemAccounts(partialDb, partialRoles.runtime, 'Partial Legacy upgrade created four system accounts');
   const resumedPort = 39_000 + (process.pid % 400);
   const resumedServer = await startBackend(partialRoles.runtime, resumedPort);
   try {

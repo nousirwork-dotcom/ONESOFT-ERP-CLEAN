@@ -50,6 +50,7 @@ import {
   users,
   foundationTombstones,
 } from './schema.js';
+import { seedFoundationAccounts } from './seed-foundation.js';
 
 // ─── حقول FK التي تشير إلى جداول التأسيس أو الحسابات ──────────────────────
 // المفتاح = اسم الحقل في السجل، القيمة = نوع التبعية
@@ -1025,7 +1026,7 @@ export async function runFoundationUpdateForAllOrgs(dbUrl?: string): Promise<Fou
         organizationSchema.hasFoundationAppliedAt &&
         organizationSchema.hasFoundationStatus &&
         organizationSchema.hasFoundationLastError,
-      compatibility: 'migrations-through-0092',
+      compatibility: 'migrations-through-0093',
     });
     orgs = await findActiveOrganizations(organizationSchema);
   } catch (err: any) {
@@ -1055,6 +1056,21 @@ export async function runFoundationUpdateForAllOrgs(dbUrl?: string): Promise<Fou
   for (const org of orgs) {
     let recordsExisting = 0;
     try {
+      // Existing Legacy installations already have users, so bootstrap.ts is
+      // intentionally a no-op for them. Seed the system chart in the
+      // administrative Foundation pass instead; this keeps the upgrade
+      // self-contained and idempotent without touching customer accounts.
+      if (process.env['ONESOFT_FOUNDATION_ONLY'] === '1') {
+        const accountSeed = await seedFoundationAccounts(org.id);
+        if (accountSeed.inserted === 0 && accountSeed.skipped === 0) {
+          throw new Error('فشل بذر الحسابات النظامية الأساسية');
+        }
+        logger.info('foundation-update', 'SYSTEM_ACCOUNTS_RECONCILED', {
+          organizationId: org.id,
+          inserted: accountSeed.inserted,
+          skipped: accountSeed.skipped,
+        });
+      }
       recordsExisting = await countExistingFoundationRecords(org.id);
       logger.info('foundation-update', 'FOUNDATION_START', {
         organizationId: org.id,

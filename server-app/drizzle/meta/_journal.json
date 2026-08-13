@@ -652,6 +652,13 @@
       "when": 1786324661775,
       "tag": "0092_repair_legacy_migration_drift",
       "breakpoints": true
+    },
+    {
+      "idx": 93,
+      "version": "7",
+      "when": 1786581464575,
+      "tag": "0093_schema_compatibility_repair",
+      "breakpoints": true
     }
   ]
 }

@@ -626,6 +626,7 @@ $CriticalBundleFiles = @(
     "$AppRes\server-app\dist\build-manifest.json",
     "$AppRes\server-app\src\foundation-data.json",
     "$AppRes\server-app\drizzle\0092_repair_legacy_migration_drift.sql",
+    "$AppRes\server-app\drizzle\0093_schema_compatibility_repair.sql",
     "$InstallerDir\dist-ui\build-manifest.json",
     "$ProjectRoot\client-app\dist\build-manifest.json"
 )
