@@ -248,6 +248,56 @@ FROM __drizzle_migrations
     }
 }
 
+function Write-MigrationLedgerDiagnostics([string]$Phase) {
+    try {
+        $summary = Invoke-ReadOnlySql @"
+WITH seq AS (
+    SELECT
+        pg_get_serial_sequence('public.__drizzle_migrations', 'id') AS qualified_name,
+        regexp_replace(
+            replace(pg_get_serial_sequence('public.__drizzle_migrations', 'id'), '"', ''),
+            '^.*\.',
+            ''
+        ) AS sequence_name
+),
+state AS (
+    SELECT
+        seq.qualified_name,
+        seq.sequence_name,
+        pg_sequences.last_value::text AS sequence_last_value,
+        (SELECT MAX(id)::text FROM __drizzle_migrations) AS max_id
+    FROM seq
+    LEFT JOIN pg_sequences
+      ON pg_sequences.schemaname = 'public'
+     AND pg_sequences.sequencename = seq.sequence_name
+)
+SELECT COALESCE(qualified_name, '<none>') || '|' ||
+       COALESCE(sequence_last_value, '<null>') || '|' ||
+       COALESCE(max_id, '<null>') || '|' ||
+       COALESCE((
+           SELECT id::text || '|' || tag
+           FROM __drizzle_migrations
+           WHERE id = state.sequence_last_value::bigint
+       ), '<none>')
+FROM state
+"@
+        foreach ($row in @($summary) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) {
+            Info "$Phase migration ledger sequence/name|last_value|max_id|row_at_last_value: $row"
+        }
+
+        $rows = Invoke-ReadOnlySql @"
+SELECT id::text || '|' || tag
+FROM __drizzle_migrations
+ORDER BY id
+"@
+        foreach ($row in @($rows) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) {
+            Info "$Phase migration ledger row: $row"
+        }
+    } catch {
+        Info "$Phase migration ledger diagnostics unavailable: $($_.Exception.Message)"
+    }
+}
+
 function Assert-0093AndCompatibility {
     $ledger = Get-LedgerSignature
     if ($ledger.SchemaVersion -eq "0093_schema_compatibility_repair") {
@@ -646,6 +696,14 @@ try {
     if ($null -ne $oldConfig.database -and $oldConfig.database.user) {
         Info "Pre-upgrade runtime role: $($oldConfig.database.user)"
     }
+    # Keep a read-only connection description available for diagnostics if the
+    # in-app migration fails before the post-upgrade assertions initialize it.
+    $PsqlPath = Find-Psql
+    $DbHost = [string]$oldConfig.database.host
+    $DbPort = [string]$oldConfig.database.port
+    $DbName = [string]$oldConfig.database.name
+    $DbUser = [string]$oldConfig.database.user
+    $DbPassword = [string]$oldConfig.database.password
 
     if (-not (Wait-UpgradeCompleted)) {
         throw "The real in-app upgrade did not complete"
@@ -707,6 +765,7 @@ try {
 
     $ExitCode = if ($Fail -eq 0) { 0 } else { 1 }
 } catch {
+    Write-MigrationLedgerDiagnostics "Failure snapshot"
     if ($_.Exception.Message) {
         Fail "Test aborted: $($_.Exception.Message)"
     } else {

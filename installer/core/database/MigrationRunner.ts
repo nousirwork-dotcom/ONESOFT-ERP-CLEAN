@@ -1,8 +1,74 @@
 import * as path from 'path';
 import * as fs from 'fs';
+import type { PoolClient } from 'pg';
 import type { MigrationResult, ProgressEvent } from '../types.js';
 
 type Emit = (e: ProgressEvent) => void;
+
+/**
+ * Legacy databases can carry a valid migration ledger whose SERIAL sequence
+ * was not preserved by an old backup/import path. The next INSERT then reuses
+ * an existing surrogate id even though the migration tag is new.
+ *
+ * The numeric id is only a surrogate ordering key; migration identity is the
+ * unique tag. Repair the sequence metadata, never the ledger rows, before
+ * inserting a new tag.
+ */
+async function synchronizeMigrationLedgerSequence(
+  client: PoolClient,
+  emit: Emit,
+): Promise<void> {
+  const sequenceResult = await client.query<{ sequence_name: string | null }>(`
+    SELECT pg_get_serial_sequence('public.__drizzle_migrations', 'id') AS sequence_name
+  `);
+  const sequenceName = sequenceResult.rows[0]?.sequence_name;
+  if (!sequenceName) {
+    throw new Error(
+      '__drizzle_migrations.id has no PostgreSQL sequence; cannot safely append a Legacy migration ledger row',
+    );
+  }
+
+  const maxResult = await client.query<{ max_id: string | null }>(`
+    SELECT MAX(id)::text AS max_id
+    FROM public.__drizzle_migrations
+  `);
+  const maxIdText = maxResult.rows[0]?.max_id ?? null;
+  const maxId = maxIdText === null ? 1 : Number(maxIdText);
+  if (!Number.isInteger(maxId) || maxId < 1) {
+    throw new Error(`Invalid __drizzle_migrations MAX(id): ${maxIdText ?? 'null'}`);
+  }
+
+  const stateResult = await client.query<{ last_value: string | null }>(`
+    SELECT last_value::text AS last_value
+    FROM pg_sequences
+    WHERE schemaname = 'public'
+      AND sequencename = regexp_replace(
+        replace(pg_get_serial_sequence('public.__drizzle_migrations', 'id'), '"', ''),
+        '^.*\.',
+        ''
+      )
+  `);
+  const lastValueText = stateResult.rows[0]?.last_value ?? null;
+  const lastValue = lastValueText === null ? null : Number(lastValueText);
+  if (lastValue !== null && Number.isSafeInteger(lastValue) && lastValue > maxId) {
+    emit({
+      level: 'info',
+      message: `sequence سجل migrations متقدم (${lastValue}) — تم الحفاظ عليه`,
+      timestamp: now(),
+    });
+    return;
+  }
+
+  await client.query(
+    'SELECT setval($1::regclass, $2::bigint, $3::boolean)',
+    [sequenceName, maxId, maxIdText !== null],
+  );
+  emit({
+    level: 'info',
+    message: `تمت مزامنة sequence سجل migrations مع MAX(id)=${maxIdText ?? '0'}`,
+    timestamp: now(),
+  });
+}
 
 /** يحمي أسماء الجداول/المستخدمين عند حقنها داخل نص SQL (معرّفات، لا قيم) */
 function quoteIdent(id: string): string {
@@ -132,6 +198,7 @@ export class MigrationRunner {
             applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
           )
         `);
+        await synchronizeMigrationLedgerSequence(client, emit);
 
         // تثبيتات OneSoft القديمة كانت تملك ختم _schema_version قبل إنشاء
         // ledger. عند ترقية مثل هذه القاعدة نعيد بناء البادئة المنجزة فقط،
@@ -157,6 +224,7 @@ export class MigrationRunner {
           : -1;
         if (ledgerWasEmpty && stampedIndex >= 0) {
           for (const entry of entries.slice(0, stampedIndex + 1)) {
+            await synchronizeMigrationLedgerSequence(client, emit);
             await client.query(
               'INSERT INTO __drizzle_migrations (tag) VALUES ($1) ON CONFLICT (tag) DO NOTHING',
               [entry.tag],
@@ -195,8 +263,9 @@ export class MigrationRunner {
           await client.query('BEGIN');
           try {
             await client.query(sql);
+            await synchronizeMigrationLedgerSequence(client, emit);
             await client.query(
-              'INSERT INTO __drizzle_migrations (tag) VALUES ($1)',
+              'INSERT INTO __drizzle_migrations (tag) VALUES ($1) ON CONFLICT (tag) DO NOTHING',
               [entry.tag],
             );
             await client.query('COMMIT');

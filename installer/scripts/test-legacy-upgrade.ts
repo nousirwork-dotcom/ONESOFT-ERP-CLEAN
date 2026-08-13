@@ -34,6 +34,10 @@ const migrations = journal.entries.map(({ tag }) => ({
   sql: fs.readFileSync(path.join(drizzleRoot, `${tag}.sql`), 'utf8'),
 }));
 const latestTag = migrations.at(-1)!.tag;
+const v100LedgerTag = migrations[13]!.tag;
+if (v100LedgerTag !== '0013_add_missing_tables') {
+  throw new Error(`Unexpected v1.0.0 ledger boundary: ${v100LedgerTag}`);
+}
 const legacyStartTag = '0023_custody_records';
 const partialTag = '0068_zatca_compliance_secret';
 const failingTag = '0069_credit_debit_notes';
@@ -60,6 +64,7 @@ const admin: DatabaseConnectionOptions = {
 const suffix = `${process.pid}_${Date.now()}`;
 const fullDb = `onesoft_legacy_full_${suffix}`;
 const partialDb = `onesoft_legacy_partial_${suffix}`;
+const historicalDb = `onesoft_legacy_v100_${suffix}`;
 const restoreDb = `onesoft_backup_restore_${suffix}`;
 const appPassword = `runtime_${suffix}`;
 const legacyOwner = `onesoft_legacy_owner_${process.pid}`;
@@ -154,6 +159,67 @@ async function seedLedgerAndStamp(client: pg.Client, tag: string): Promise<void>
   );
 }
 
+async function desynchronizeLegacyLedgerSequence(name: string): Promise<void> {
+  await withClient(dbUrl(name), async (client) => {
+    const rows = await client.query<{ id: number; tag: string }>(
+      `SELECT id, tag FROM __drizzle_migrations ORDER BY id`,
+    );
+    const expected = migrations.slice(0, 14).map((migration) => migration.tag);
+    if (
+      rows.rows.length !== expected.length ||
+      rows.rows.some((row, index) => Number(row.id) !== index + 1 || row.tag !== expected[index])
+    ) {
+      throw new Error(
+        `v1.0.0 ledger fixture is not the expected 14-row prefix: ${JSON.stringify(rows.rows)}`,
+      );
+    }
+
+    const sequence = await client.query<{ sequence_name: string | null }>(`
+      SELECT pg_get_serial_sequence('public.__drizzle_migrations', 'id') AS sequence_name
+    `);
+    const sequenceName = sequence.rows[0]?.sequence_name;
+    if (!sequenceName) throw new Error('v1.0.0 ledger fixture has no id sequence');
+
+    // Simulate a historical backup/import that preserved the rows but left the
+    // SERIAL sequence at its initial, not-yet-called value. This is test-only;
+    // no customer ledger row is changed or deleted.
+    await client.query(
+      'SELECT setval($1::regclass, 1, false)',
+      [sequenceName],
+    );
+    const maxId = await client.query<{ max_id: string }>(
+      `SELECT MAX(id)::text AS max_id FROM __drizzle_migrations`,
+    );
+    if (maxId.rows[0]?.max_id !== '14') {
+      throw new Error(`Unexpected v1.0.0 ledger MAX(id): ${maxId.rows[0]?.max_id}`);
+    }
+  });
+  console.log('[legacy-test] v1.0.0 ledger with stale SERIAL sequence reproduced: PASS');
+}
+
+async function assertMigrationLedger(name: string): Promise<void> {
+  await withClient(dbUrl(name), async (client) => {
+    const rows = await client.query<{ id: number; tag: string }>(
+      `SELECT id, tag FROM __drizzle_migrations ORDER BY id`,
+    );
+    if (rows.rows.length !== migrations.length) {
+      throw new Error(
+        `Migration ledger count mismatch: ${rows.rows.length} != ${migrations.length}`,
+      );
+    }
+    rows.rows.forEach((row, index) => {
+      const expectedTag = migrations[index]!.tag;
+      if (Number(row.id) !== index + 1 || row.tag !== expectedTag) {
+        throw new Error(
+          `Migration ledger order mismatch at ${index + 1}: ` +
+          `${JSON.stringify(row)} != ${JSON.stringify({ id: index + 1, tag: expectedTag })}`,
+        );
+      }
+    });
+  });
+  console.log(`[legacy-test] ${name}: migration ledger rows and surrogate IDs preserved: PASS`);
+}
+
 async function createLegacyOwner(): Promise<void> {
   await withClient(adminUrl, async (client) => {
     const exists = await client.query(`SELECT 1 FROM pg_roles WHERE rolname = $1`, [legacyOwner]);
@@ -164,7 +230,12 @@ async function createLegacyOwner(): Promise<void> {
   });
 }
 
-async function makeLegacyDatabase(name: string, tag: string): Promise<void> {
+async function makeLegacyDatabase(
+  name: string,
+  tag: string,
+  options: { preserveOrganizationsCode?: boolean } = {},
+): Promise<void> {
+  const preserveOrganizationsCode = options.preserveOrganizationsCode === true;
   await createDb(name);
   await createLegacyOwner();
   await withClient(dbUrl(name), async (client) => {
@@ -216,12 +287,14 @@ async function makeLegacyDatabase(name: string, tag: string): Promise<void> {
       );
     }
     console.log('[legacy-test] Legacy fixture starts without the four system accounts: PASS');
-    await client.query(`
-      ALTER TABLE organizations
-        DROP CONSTRAINT IF EXISTS organizations_code_unique,
-        DROP CONSTRAINT IF EXISTS organizations_code_key
-    `);
-    await client.query(`ALTER TABLE organizations DROP COLUMN IF EXISTS code`);
+    if (!preserveOrganizationsCode) {
+      await client.query(`
+        ALTER TABLE organizations
+          DROP CONSTRAINT IF EXISTS organizations_code_unique,
+          DROP CONSTRAINT IF EXISTS organizations_code_key
+      `);
+      await client.query(`ALTER TABLE organizations DROP COLUMN IF EXISTS code`);
+    }
     const columns = await client.query(`
       SELECT column_name
       FROM information_schema.columns
@@ -229,14 +302,15 @@ async function makeLegacyDatabase(name: string, tag: string): Promise<void> {
       ORDER BY ordinal_position
     `);
     const actualColumns = columns.rows.map((row: { column_name: string }) => row.column_name);
-    if (actualColumns.includes('code')) {
+    if (!preserveOrganizationsCode && actualColumns.includes('code')) {
       throw new Error(`Legacy organizations.code still exists: ${actualColumns.join(', ')}`);
     }
-    if (tag === latestTag && !actualColumns.includes('foundation_status')) {
+    if (!preserveOrganizationsCode && tag === latestTag && !actualColumns.includes('foundation_status')) {
       throw new Error(`Legacy Foundation status columns missing after ${tag}`);
     }
     console.log(
-      `[legacy-test] ${name}: organizations schema after ${tag} has no code` +
+      `[legacy-test] ${name}: organizations schema after ${tag} ` +
+      `${preserveOrganizationsCode ? 'preserves code' : 'has no code'}` +
       `${actualColumns.includes('foundation_status') ? ' and has Foundation status columns' : ''}: PASS`,
     );
     // Reproduce the Windows failure: invoice_type exists, but its owner is
@@ -337,6 +411,7 @@ async function runMigrations(name: string, migration: DatabaseConnectionOptions)
   if (row.version !== latestTag || !row.failingApplied) {
     throw new Error(`Migration resume verification failed: ${JSON.stringify(row)}`);
   }
+  await assertMigrationLedger(name);
   console.log(`[legacy-test] ${name === fullDb ? '0023' : 'partial'} → ${latestTag}, SET ROLE, ${failingTag}, ledger: PASS`);
 }
 
@@ -948,6 +1023,22 @@ async function main(): Promise<void> {
   }
   await assertFoundationIdempotency(fullDb, fullRoles.runtime);
 
+  // v1.0.0 shipped a 14-entry journal (0000..0013). Verify that an old
+  // ledger with a stale SERIAL sequence can still traverse the complete
+  // current journal without changing its historical rows.
+  await makeLegacyDatabase(historicalDb, v100LedgerTag, { preserveOrganizationsCode: true });
+  const historicalRoles = await provisionRoles(historicalDb);
+  await assertLegacyOwnershipDrift(historicalDb, historicalRoles.migration);
+  await adoptOwnership(historicalDb);
+  await assertPreflight(
+    historicalDb,
+    historicalRoles.migration,
+    migrations[14]!.tag,
+  );
+  await desynchronizeLegacyLedgerSequence(historicalDb);
+  await runMigrations(historicalDb, historicalRoles.migration);
+  await assertSchemaCompatibility(historicalDb);
+
   await makeLegacyDatabase(partialDb, partialTag);
   const partialRoles = await provisionRoles(partialDb);
   await assertLegacyOwnershipDrift(partialDb, partialRoles.migration);
@@ -998,6 +1089,7 @@ async function cleanup(): Promise<void> {
   for (const file of tempFiles) fs.rmSync(file, { force: true });
   await dropDb(fullDb);
   await dropDb(partialDb);
+  await dropDb(historicalDb);
   await dropDb(restoreDb);
   await withClient(adminUrl, async (client) => {
     if (createdRoles.has(legacyOwner)) await client.query(`DROP ROLE IF EXISTS ${quote(legacyOwner)}`);
