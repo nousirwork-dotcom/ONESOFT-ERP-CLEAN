@@ -190,10 +190,10 @@ if ($null -eq $psql) {
     $env:PGPASSWORD = [string]$postConfig.database.password
     Info "Using the persisted Runtime database credential for read-only verification."
     $schema = & $psql.FullName -h $dbHost -p $dbPort -d $dbName -U "onesoft_app" -tAc "SELECT version FROM _schema_version WHERE id = 1" 2>&1
-    if ($schema.Trim() -eq "0092_repair_legacy_migration_drift") {
-        Pass "Schema ledger is 0092_repair_legacy_migration_drift"
+    if ($schema.Trim() -eq "0093_schema_compatibility_repair") {
+        Pass "Schema ledger is 0093_schema_compatibility_repair"
     } else {
-        Fail "Schema ledger is '$($schema.Trim())', expected 0092_repair_legacy_migration_drift"
+        Fail "Schema ledger is '$($schema.Trim())', expected 0093_schema_compatibility_repair"
     }
     $roles = & $psql.FullName -h $dbHost -p $dbPort -d $dbName -U "onesoft_app" -tAc "SELECT COUNT(*) FROM pg_roles WHERE rolname IN ('onesoft_schema_owner','onesoft_migrator')" 2>&1
     if ($roles.Trim() -eq "2") { Pass "onesoft_schema_owner and onesoft_migrator exist" }

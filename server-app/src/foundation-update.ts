@@ -1025,7 +1025,7 @@ export async function runFoundationUpdateForAllOrgs(dbUrl?: string): Promise<Fou
         organizationSchema.hasFoundationAppliedAt &&
         organizationSchema.hasFoundationStatus &&
         organizationSchema.hasFoundationLastError,
-      compatibility: 'migrations-through-0092',
+      compatibility: 'migrations-through-0093',
     });
     orgs = await findActiveOrganizations(organizationSchema);
   } catch (err: any) {

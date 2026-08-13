@@ -31,7 +31,7 @@ function readVersionFile(): CurrentVersionInfo {
     version:       APP_VERSION,
     build:         '20260630.001',
     releaseDate:   '2026-06-30',
-    schemaVersion: '0092_repair_legacy_migration_drift',
+    schemaVersion: '0093_schema_compatibility_repair',
     product:       'OneSoft ERP',
     channel:       'stable',
   };
