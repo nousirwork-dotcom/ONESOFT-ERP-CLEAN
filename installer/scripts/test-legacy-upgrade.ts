@@ -175,8 +175,21 @@ async function makeLegacyDatabase(name: string, tag: string): Promise<void> {
     const organizationId = organization.rows[0]?.id;
     if (!organizationId) throw new Error('Could not seed Legacy organization');
     await client.query(`
-      INSERT INTO users (org_id, username, password_hash, name, role, is_active, password_status)
-      VALUES ($1, 'LEGACY_ADMIN', 'legacy-test-hash', 'Legacy Admin', 'admin', true, 'set')
+      INSERT INTO users (id, org_id, username, password_hash, name, role, is_active, password_status)
+      VALUES
+        (41001, $1, 'LEGACY_ADMIN', 'legacy-test-hash', 'Legacy Admin', 'admin', true, 'set'),
+        (42002, $1, 'LEGACY_OPERATOR', 'legacy-test-hash', 'Legacy Operator', 'cashier', true, 'set')
+    `, [organizationId]);
+    // Foundation payment accountLinks use stable account codes. Seed those
+    // codes in the Legacy target; never seed the source database's numeric IDs.
+    await client.query(`
+      INSERT INTO chart_of_accounts
+        (org_id, code, name, account_type, level, is_active)
+      VALUES
+        ($1, '110101', 'Legacy Cash', 'asset', 1, true),
+        ($1, '110103', 'Legacy Bank', 'asset', 1, true),
+        ($1, '210501', 'Legacy Tax', 'liability', 1, true),
+        ($1, '410101', 'Legacy Sales', 'revenue', 1, true)
     `, [organizationId]);
     await client.query(`
       ALTER TABLE organizations
@@ -235,7 +248,7 @@ async function assertLegacyOwnershipDrift(
   if (result.invoiceTypeOwner !== legacyOwner) {
     throw new Error(`Legacy invoice_type owner was not preserved: ${result.invoiceTypeOwner}`);
   }
-  if (!result.ownershipDrift.some((item) => item.startsWith('invoice_type owned by '))) {
+  if (!result.ownershipDrift.some((item) => item.includes('invoice_type [type]'))) {
     throw new Error(`Preflight did not report invoice_type ownership drift: ${result.ownershipDrift.join('; ')}`);
   }
   console.log(
@@ -663,6 +676,24 @@ async function assertFoundation(name: string, runtime: DatabaseConnectionOptions
       if (foundationCount !== 77) {
         throw new Error(`Legacy organization ${org.id} has ${foundationCount} Foundation records; expected 77`);
       }
+      for (const table of ['document_journals', 'warehouses']) {
+        const brokenUserFks = await client.query(
+          `SELECT COUNT(*)::int AS count
+             FROM ${table} AS foundation_record
+             LEFT JOIN users AS target_user
+               ON target_user.id = foundation_record.allowed_user_id
+            WHERE foundation_record.org_id = $1
+              AND foundation_record.foundation_key IS NOT NULL
+              AND foundation_record.allowed_user_id IS NOT NULL
+              AND target_user.id IS NULL`,
+          [org.id],
+        );
+        if (Number(brokenUserFks.rows[0]?.count ?? 0) !== 0) {
+          throw new Error(
+            `Foundation ${table} contains broken allowed_user_id FK(s): ${brokenUserFks.rows[0]?.count}`,
+          );
+        }
+      }
       for (const key of ['wh.001', 'wh.002', 'wh.003', 'wh.004']) {
         const warehouse = await client.query(
           `SELECT id FROM warehouses WHERE org_id = $1 AND foundation_key = $2`,
@@ -683,7 +714,7 @@ async function assertFoundation(name: string, runtime: DatabaseConnectionOptions
     );
     return { orgCount: orgs.rowCount, before: before.rows[0].count };
   });
-  console.log('[legacy-test] migrations → Foundation → organizations detection without code → 77 records: PASS');
+  console.log('[legacy-test] migrations → Foundation → organizations detection without code → 77 records, no user FK violations: PASS');
 }
 
 async function assertFoundationIdempotency(name: string, runtime: DatabaseConnectionOptions): Promise<void> {

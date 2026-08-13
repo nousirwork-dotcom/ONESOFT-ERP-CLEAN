@@ -47,6 +47,7 @@ import {
   documentTemplates,
   postingDefinitions,
   chartOfAccounts,
+  users,
   foundationTombstones,
 } from './schema.js';
 
@@ -110,6 +111,12 @@ export interface BackupResult {
 
 const FOUNDATION_MIGRATOR_ROLE = 'onesoft_migrator';
 const FOUNDATION_SCHEMA_OWNER_ROLE = 'onesoft_schema_owner';
+const USER_REFERENCE_METADATA_FIELDS = [
+  'allowedUserKey',
+  'allowedUserLogin',
+  'allowedUserGroupKey',
+  'allowedUserGroupCode',
+] as const;
 
 function parseDatabaseUrl(dbUrl: string): PostgreSQLServerConnection {
   const parsed = new URL(dbUrl);
@@ -241,6 +248,68 @@ async function buildAccountReferenceMap(orgId: number): Promise<Map<string, numb
 }
 
 /**
+ * يبني خريطة login → users.id للمنظمة الهدف.
+ *
+ * لا يُسمح لقالب Foundation بحمل users.id من منظمة المصدر؛ الـ id يُحل
+ * هنا فقط بعد العثور على login ثابت موجود فعلياً في المنظمة الهدف.
+ */
+async function buildUserReferenceMap(orgId: number): Promise<Map<string, number>> {
+  const userMap = new Map<string, number>();
+  const rows = await db.select({
+    id: users.id,
+    username: users.username,
+  })
+    .from(users)
+    .where(eq(users.orgId, orgId));
+
+  for (const row of rows) {
+    const username = row.username?.trim();
+    if (!username) continue;
+    userMap.set(username, row.id);
+    userMap.set(username.toLowerCase(), row.id);
+  }
+  return userMap;
+}
+
+/**
+ * يطبع علاقات المستخدم/المجموعة داخل سجل Foundation.
+ *
+ * allowedUserId هو FK محلي للمنظمة، لذلك لا نثق بأي قيمة رقمية قادمة من
+ * snapshot. إذا وُجد allowedUserLogin/allowedUserKey نحلّه في المنظمة الهدف؛
+ * وإلا يكون allowedUserId = NULL. كما نرفض numeric group IDs الخام.
+ */
+function resolveUserReferences(
+  record: Record<string, unknown>,
+  out: Record<string, unknown>,
+  userMap: Map<string, number>,
+): void {
+  for (const metadataField of USER_REFERENCE_METADATA_FIELDS) {
+    delete out[metadataField];
+  }
+
+  if ('allowedUserId' in record || 'allowedUserLogin' in record || 'allowedUserKey' in record) {
+    const stableUserKey = [record.allowedUserLogin, record.allowedUserKey]
+      .find((value): value is string => typeof value === 'string' && value.trim().length > 0)
+      ?.trim();
+    const resolvedUserId = stableUserKey
+      ? (userMap.get(stableUserKey) ?? userMap.get(stableUserKey.toLowerCase()) ?? null)
+      : null;
+    out.allowedUserId = resolvedUserId;
+  }
+
+  if ('allowedUserGroup' in record || 'allowedUserGroupKey' in record || 'allowedUserGroupCode' in record) {
+    const stableGroupKey = [record.allowedUserGroupKey, record.allowedUserGroupCode]
+      .find((value): value is string => typeof value === 'string' && value.trim().length > 0)
+      ?.trim();
+    const rawGroup = record.allowedUserGroup;
+    out.allowedUserGroup = stableGroupKey
+      ?? (typeof rawGroup === 'string' && rawGroup.trim() !== '' && !/^\d+$/.test(rawGroup.trim())
+        ? rawGroup.trim()
+        : null);
+  }
+}
+
+/**
  * accountLinks lives inside paymentTypesConfig JSONB, so PostgreSQL cannot
  * enforce its organization boundary. Never carry the source organization's
  * numeric accountId through a foundation snapshot. Resolve it using the
@@ -305,6 +374,7 @@ function resolveRecordFks(
   record: Record<string, unknown>,
   fkMap:  Map<string, number>,
   acctMap: Map<string, number>,
+  userMap: Map<string, number>,
 ): { data: Record<string, unknown>; unresolvedFks: string[] } {
   const out: Record<string, unknown> = {};
   const unresolvedFks: string[] = [];
@@ -313,6 +383,7 @@ function resolveRecordFks(
     if (key.startsWith('_') && key.endsWith('_fk')) continue; // نحذف حقول التوثيق
     out[key] = value;
   }
+  resolveUserReferences(record, out, userMap);
 
   // نحل FK fields باستخدام المرجع المُضمَّن في _xxx_fk
   for (const [fkField, fkDef] of Object.entries(FK_FIELD_MAP)) {
@@ -551,6 +622,7 @@ export async function applyFoundationRecords(
   // نبني خرائط الحسابات والـ foundationKeys مسبقاً
   const fkMap   = await buildFoundationKeyIdMap(orgId);
   const acctMap = await buildAccountReferenceMap(orgId);
+  const userMap = await buildUserReferenceMap(orgId);
 
   // نحمل Tombstones للسجلات التي حذفها المستخدم عمداً
   const tombstoneRows = await db.select({
@@ -591,7 +663,7 @@ export async function applyFoundationRecords(
       }
 
       try {
-        const { data: resolved, unresolvedFks } = resolveRecordFks(record, fkMap, acctMap);
+        const { data: resolved, unresolvedFks } = resolveRecordFks(record, fkMap, acctMap, userMap);
 
         // سياسة صارمة: لا null صامت — إذا كانت هناك FKs غير محلولة نتخطى السجل
         if (unresolvedFks.length > 0) {

@@ -17,6 +17,7 @@
  *  FT-6   لا تكرار (docType, code)
  *  FT-7   جميع الدفاتر لها foundationKey
  *  FT-8   جميع الدفاتر لها recordPolicy
+ *  FT-9   لا توجد علاقات user/group رقمية محلية داخل القالب
  * ════════════════════════════════════════════════════════
  */
 
@@ -125,5 +126,28 @@ describe('FT-8: جميع دفاتر القالب لها recordPolicy', () => {
       }
     }
     expect(missing).toEqual([]);
+  });
+});
+
+// ─── FT-9: لا تُصدَّر IDs محلية للمستخدمين/المجموعات ─────────────────────────
+describe('FT-9: علاقات المستخدمين والمجموعات لا تحمل raw IDs', () => {
+  it('يجب أن تكون allowedUserId وallowedUserGroup مستقلة عن IDs المصدر', () => {
+    const violations: string[] = [];
+    for (const [tableName, records] of Object.entries(foundationData)) {
+      if (!Array.isArray(records)) continue;
+      for (const record of records as Array<Record<string, unknown>>) {
+        const key = String(record.foundationKey ?? record.code ?? '');
+        if (typeof record.allowedUserId === 'number') {
+          violations.push(`${tableName}[${key}].allowedUserId=${record.allowedUserId}`);
+        }
+        if (
+          typeof record.allowedUserGroup === 'string' &&
+          /^\d+$/.test(record.allowedUserGroup.trim())
+        ) {
+          violations.push(`${tableName}[${key}].allowedUserGroup=${record.allowedUserGroup}`);
+        }
+      }
+    }
+    expect(violations).toEqual([]);
   });
 });

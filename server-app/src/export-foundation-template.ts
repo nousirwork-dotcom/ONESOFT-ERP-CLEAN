@@ -115,10 +115,17 @@ function rowToCamel(row: Record<string, unknown>): Record<string, unknown> {
 // into a foundation snapshot for another organization. A null value keeps the
 // journal/warehouse available while leaving user assignment to the target org.
 function clearOrganizationLocalReferences(row: Record<string, unknown>): Record<string, unknown> {
-  return {
+  const cleaned: Record<string, unknown> = {
     ...row,
     allowedUserId: null,
   };
+  if (
+    typeof cleaned.allowedUserGroup === 'number' ||
+    (typeof cleaned.allowedUserGroup === 'string' && /^\d+$/.test(cleaned.allowedUserGroup.trim()))
+  ) {
+    cleaned.allowedUserGroup = null;
+  }
+  return cleaned;
 }
 
 // ─── helper: حقن مراجع FK في السجل ──────────────────────────────────────────
