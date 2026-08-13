@@ -26,6 +26,10 @@
       .\TEST-IN-APP-UPGRADE-WINDOWS.ps1 `
         -InstallerExe "C:\Build\OneSoftSetup-1.0.39-x64.exe"
 
+    InstallerExe is optional. When omitted, the script automatically locates
+    OneSoftSetup-1.0.39-x64.exe next to this script, in Downloads, or on the
+    Desktop.
+
     ExpectedOldVersion is optional. When supplied, it is checked against the
     installed version. When omitted, any installed Legacy version is accepted
     and recorded in upgrade.log.
@@ -33,8 +37,7 @@
 
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory=$true)]
-    [string]$InstallerExe,
+    [string]$InstallerExe = "",
 
     [string]$InstallDir = "C:\OneSoft-ERP",
     [string]$ExpectedOldVersion = "",
@@ -60,6 +63,11 @@ $DbPort = $null
 $DbName = $null
 $DbUser = $null
 $DbPassword = $null
+$ScriptDirectory = if (-not [string]::IsNullOrWhiteSpace($PSScriptRoot)) {
+    $PSScriptRoot
+} else {
+    Split-Path -Parent $MyInvocation.MyCommand.Definition
+}
 
 $ExpectedAccounts = @(
     [pscustomobject]@{ Code = "110101"; Name = "نقدية بالصندوق فرع 1"; SystemKey = "acct.110101" },
@@ -109,6 +117,27 @@ function Find-Psql {
         Select-Object -First 1
     if ($null -ne $candidate) {
         return $candidate.FullName
+    }
+    return $null
+}
+
+function Resolve-Installer {
+    if (-not [string]::IsNullOrWhiteSpace($InstallerExe)) {
+        return $InstallerExe
+    }
+
+    $searchDirectories = @(
+        $ScriptDirectory,
+        (Join-Path $env:USERPROFILE "Downloads"),
+        (Join-Path $env:USERPROFILE "Desktop")
+    ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+        Select-Object -Unique
+
+    foreach ($directory in $searchDirectories) {
+        $candidate = Join-Path $directory "OneSoftSetup-1.0.39-x64.exe"
+        if (Test-Path $candidate -PathType Leaf) {
+            return $candidate
+        }
     }
     return $null
 }
@@ -574,10 +603,11 @@ $Log.Add("Expected new version: $ExpectedNewVersion")
 
 try {
     Write-Host "`n=== Preconditions ===" -ForegroundColor Cyan
-    if (Test-Path $InstallerExe) {
+    $InstallerExe = Resolve-Installer
+    if (-not [string]::IsNullOrWhiteSpace($InstallerExe) -and (Test-Path $InstallerExe -PathType Leaf)) {
         Pass "Installer exists: $InstallerExe"
     } else {
-        Fail "Installer is missing: $InstallerExe"
+        Fail "OneSoftSetup-1.0.39-x64.exe was not found next to the script, in Downloads, or on the Desktop"
     }
     if (Test-Path $ConfigPath) {
         Pass "OneSoft config exists"
