@@ -611,38 +611,36 @@ function Run-NewInstallerUpgrade {
     Start-Sleep -Seconds 5
   }
 
+  # ── Shared helper: tail all failure logs ──────────────────────────────────
+  $installerLog = Join-Path $env:APPDATA 'onesoft-installer.log'
+  $failureLogs  = @($upgLog, $installerLog)
+  function Emit-FailureLogs {
+    foreach ($lp in $failureLogs) {
+      if (Test-Path $lp) {
+        Log "── $lp (last 60 lines) ──"
+        Get-Content $lp -Tail 60 -ErrorAction SilentlyContinue | ForEach-Object { Log "  $_" }
+      }
+    }
+  }
+
   # ── Post-loop handling ────────────────────────────────────────────────────
 
   # Case 1: upgrade-core failed and rolled back — already killed above
   if ($upgFailed) {
-    if (Test-Path $upgLog) {
-      Log "── upgrade.log (last 60 lines) ──"
-      Get-Content $upgLog -Tail 60 -ErrorAction SilentlyContinue | ForEach-Object { Log "  $_" }
-    }
+    Emit-FailureLogs
     Fail "OneSoftSetup-$NewVersion-x64.exe: upgrade-core failed — $upgFailMsg"
   }
 
   # Case 2: deadline reached but installer still alive
   if (-not $installer.HasExited) {
-    if (Test-Path $upgLog) {
-      Log "── upgrade.log (last 60 lines) ──"
-      Get-Content $upgLog -Tail 60 -ErrorAction SilentlyContinue | ForEach-Object { Log "  $_" }
-    }
+    Emit-FailureLogs
     try { $installer.Kill() } catch {}
     Fail "OneSoftSetup-$NewVersion-x64.exe did not finish within 600 seconds"
   }
 
   # Case 3: installer exited normally — check exit code
   if ($installer.ExitCode -ne 0) {
-    foreach ($logPath in @(
-      $upgLog,
-      (Join-Path $env:APPDATA 'onesoft-installer.log')
-    )) {
-      if (Test-Path $logPath) {
-        Log "── $logPath (last 60 lines) ──"
-        Get-Content $logPath -Tail 60 -ErrorAction SilentlyContinue | ForEach-Object { Log "  $_" }
-      }
-    }
+    Emit-FailureLogs
   }
   Assert-True ($installer.ExitCode -eq 0) `
     "OneSoftSetup-$NewVersion-x64.exe exited successfully (exit_code=$($installer.ExitCode))"

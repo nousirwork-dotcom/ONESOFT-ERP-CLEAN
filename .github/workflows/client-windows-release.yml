@@ -675,7 +675,8 @@ jobs:
     if: >
       needs.security-precheck.result == 'success' &&
       github.event.inputs.source_run_id != '' &&
-      github.event.inputs.source_run_id != null
+      github.event.inputs.source_run_id != null &&
+      github.event.inputs.dry_run == 'true'
 
     steps:
       - name: Download installer-exe from source run
@@ -936,6 +937,14 @@ jobs:
           echo ""
 
           FAIL=0
+
+          # Guard: source_run_id is only valid when dry_run=true
+          SRC="${{ github.event.inputs.source_run_id }}"
+          DRY="${{ github.event.inputs.dry_run }}"
+          if [[ -n "$SRC" && "$DRY" != "true" ]]; then
+            echo "❌ INVALID: source_run_id='$SRC' requires dry_run=true — cannot certify a release built from a reused artifact"
+            FAIL=1
+          fi
 
           if [[ "${{ needs.security-precheck.result }}" != "success" ]]; then
             echo "❌ BLOCKED: security-precheck failed"
