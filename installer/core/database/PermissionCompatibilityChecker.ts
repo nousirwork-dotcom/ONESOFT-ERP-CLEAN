@@ -119,7 +119,7 @@ async function collectMissingPrivileges(
   for (const fn of functions.rows) {
     const fnIdent = `public.${fn.proname}(${fn.identity_args})`;
     const check = await adminClient.query<{ ok: boolean }>(`
-      SELECT has_function_privilege(${quoteIdent(runtimeRole)}, ${fn.oid}::oid, 'EXECUTE') AS ok
+      SELECT has_function_privilege(${sqlLiteral(runtimeRole)}, ${fn.oid}::oid, 'EXECUTE') AS ok
     `);
     if (!check.rows[0]?.ok) {
       missing.push({ objectType: 'function', objectName: fnIdent, privilege: 'EXECUTE' });

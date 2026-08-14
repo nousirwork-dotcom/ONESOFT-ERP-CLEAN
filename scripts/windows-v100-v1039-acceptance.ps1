@@ -326,7 +326,22 @@ function Install-LegacyService {
   Invoke-Checked $nssm @('set', 'OneSoft-Server', 'AppStderr', "$serviceLogDir\stderr.log")
   Invoke-Checked $nssm @('set', 'OneSoft-Server', 'AppRotateFiles', '1')
   Invoke-Checked $nssm @('set', 'OneSoft-Server', 'Start', 'SERVICE_AUTO_START')
-  Invoke-Checked $nssm @('start', 'OneSoft-Server')
+  # nssm start exits with code 1 and prints "SERVICE_START_PENDING" when the
+  # service manager has accepted the start request but the process has not yet
+  # reached Running state.  This is expected on GitHub Windows runners where
+  # Node.js startup takes a moment.  We log the output and let the Wait-Until
+  # loop below wait for an actual PID (i.e. Running state) before proceeding.
+  Log "EXEC: $nssm start OneSoft-Server"
+  $nssmStartOutput = & $nssm 'start' 'OneSoft-Server' 2>&1
+  $nssmStartExit   = $LASTEXITCODE
+  Log "  nssm start exit=$nssmStartExit output=$($nssmStartOutput -join ' ')"
+  if ($nssmStartExit -ne 0) {
+    $outStr = $nssmStartOutput -join ' '
+    if ($outStr -notmatch 'START_PENDING') {
+      Fail "nssm start OneSoft-Server failed (exit=$nssmStartExit): $outStr"
+    }
+    Log "  START_PENDING is transient — waiting for Running state..."
+  }
   try {
     $script:OldServicePid = Wait-Until {
       $servicePid = Get-ServicePid 'OneSoft-Server'
