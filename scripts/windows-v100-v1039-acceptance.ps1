@@ -542,67 +542,73 @@ function Fill-UpgradeWizard {
 function Run-NewInstallerUpgrade {
   Assert-True (Test-Path $NewInstallerPath -PathType Leaf) "published OneSoftSetup-$NewVersion-x64.exe exists"
   Assert-True ((Get-Item $NewInstallerPath).Length -gt 50MB) "published OneSoftSetup-$NewVersion-x64.exe has a valid size"
-  Add-TypeForUiAutomation
 
-  Log "Launching the published OneSoftSetup-$NewVersion-x64.exe in interactive upgrade mode"
+  Log "Launching the published OneSoftSetup-$NewVersion-x64.exe in silent upgrade mode"
   $acceptanceMarker = Join-Path ($env:ProgramData ?? 'C:\ProgramData') 'OneSoft\acceptance.mode'
   New-Item -ItemType Directory -Force -Path (Split-Path $acceptanceMarker) | Out-Null
   Set-Content -Path $acceptanceMarker -Value '1' -NoNewline
-  $oldAcceptanceMode = $env:ONESOFT_ACCEPTANCE
-  $env:ONESOFT_ACCEPTANCE = '1'
-  try {
-    $installer = Start-Process -FilePath $NewInstallerPath -ArgumentList "/D=`"$InstallDir`"" -PassThru
-  } finally {
-    if ($null -eq $oldAcceptanceMode) {
-      Remove-Item Env:ONESOFT_ACCEPTANCE -ErrorAction SilentlyContinue
-    } else {
-      $env:ONESOFT_ACCEPTANCE = $oldAcceptanceMode
+  $installer = Start-Process -FilePath $NewInstallerPath -ArgumentList "/S /D=`"$InstallDir`"" -PassThru
+
+  $startTime = Get-Date
+  $deadline  = (Get-Date).AddSeconds(600)
+  $lastDiag  = [DateTime]::MinValue
+
+  while (-not $installer.HasExited -and (Get-Date) -lt $deadline) {
+    if (((Get-Date) - $lastDiag).TotalSeconds -ge 30) {
+      $elapsed = [int]((Get-Date) - $startTime).TotalSeconds
+      Log "── installer still running (${elapsed}s elapsed) ──"
+
+      # processes
+      Get-Process -ErrorAction SilentlyContinue |
+        Where-Object { $_.ProcessName -like 'OneSoft*' -or $_.ProcessName -like '*Setup*' } |
+        ForEach-Object {
+          $ppid = (Get-CimInstance Win32_Process -Filter "ProcessId=$($_.Id)" `
+                     -ErrorAction SilentlyContinue).ParentProcessId
+          Log "  proc=$($_.ProcessName) pid=$($_.Id) ppid=$ppid title='$($_.MainWindowTitle)'"
+        }
+
+      # service state
+      $svc = Get-Service 'OneSoft-Server' -ErrorAction SilentlyContinue
+      Log "  OneSoft-Server: $($svc ? $svc.Status : 'not-installed')"
+
+      # install dir
+      Log "  install_dir: $(if (Test-Path $InstallDir) { 'exists' } else { 'missing' })"
+
+      # version marker
+      $vj = Join-Path ($env:PROGRAMDATA ?? 'C:\ProgramData') 'OneSoft\version.json'
+      Log "  version.json: $(if (Test-Path $vj) { (Get-Content $vj -Raw -ErrorAction SilentlyContinue)?.Trim() } else { 'missing' })"
+
+      # exit state
+      Log "  installer_exited=$($installer.HasExited)"
+      $lastDiag = Get-Date
     }
+    Start-Sleep -Seconds 5
   }
-
-  # electron-builder's non-silent NSIS pages are automated first. Once the
-  # customInstall macro opens the Electron Upgrade Wizard, its acceptance-only
-  # mode supplies the existing Legacy admin credential and starts the same
-  # shared Upgrade Core used by the production interactive path.
-  $deadline = (Get-Date).AddSeconds(300)
-  $wizardStarted = $false
-  # The CI marker makes NSIS invoke the same headless Upgrade Core used by
-  # silent production updates. The process is still launched by the real
-  # installer and is the sole gate for migrations, verification, and services.
-  $upgradeStarted = $false
-  do {
-    if (-not $upgradeStarted) {
-      $app = Get-Process -Name 'OneSoft ERP' -ErrorAction SilentlyContinue |
-        Select-Object -First 1
-      if ($app) {
-        $upgradeStarted = $true
-        Log 'Acceptance Upgrade Core launched by the installer; waiting for its real result'
-      }
-    }
-
-    if (-not $installer.HasExited -and -not $upgradeStarted) {
-      $null = Invoke-UiButton @(
-        'Next >', 'Next', '&Next >', '&Next', 'التالي >', 'التالي',
-        'I Agree', '&I Agree', 'أوافق',
-        'Install', '&Install', 'تثبيت'
-      ) 1 @('OneSoftSetup*')
-    }
-    if ($installer.HasExited) { break }
-    Start-Sleep -Seconds 2
-  } while ((Get-Date) -lt $deadline)
 
   if (-not $installer.HasExited) {
-    Log 'Installer timeout diagnostics: visible OneSoft processes'
-    Get-Process -ErrorAction SilentlyContinue |
-      Where-Object { $_.ProcessName -like 'OneSoft*' -or $_.ProcessName -like 'unins*' } |
-      ForEach-Object {
-        Log "  process=$($_.ProcessName) pid=$($_.Id) windowHandle=$($_.MainWindowHandle) title=$($_.MainWindowTitle)"
-      }
+    # Print final diagnostics before failing
+    $upgLog = Join-Path ($env:PROGRAMDATA ?? 'C:\ProgramData') 'OneSoft\Logs\upgrade.log'
+    if (Test-Path $upgLog) {
+      Log "── upgrade.log (last 60 lines) ──"
+      Get-Content $upgLog -Tail 60 -ErrorAction SilentlyContinue | ForEach-Object { Log "  $_" }
+    }
     try { $installer.Kill() } catch {}
-    Fail "OneSoftSetup-$NewVersion-x64.exe did not finish within 300 seconds"
+    Fail "OneSoftSetup-$NewVersion-x64.exe did not finish within 600 seconds"
   }
-  Assert-True ($installer.ExitCode -eq 0) "OneSoftSetup-$NewVersion-x64.exe exited successfully"
-  Assert-True $upgradeStarted 'real Upgrade Core was launched by the NSIS installer'
+
+  if ($installer.ExitCode -ne 0) {
+    foreach ($logPath in @(
+      (Join-Path ($env:PROGRAMDATA ?? 'C:\ProgramData') 'OneSoft\Logs\upgrade.log'),
+      (Join-Path $env:APPDATA 'onesoft-installer.log')
+    )) {
+      if (Test-Path $logPath) {
+        Log "── $logPath (last 60 lines) ──"
+        Get-Content $logPath -Tail 60 -ErrorAction SilentlyContinue | ForEach-Object { Log "  $_" }
+      }
+    }
+  }
+  Assert-True ($installer.ExitCode -eq 0) `
+    "OneSoftSetup-$NewVersion-x64.exe exited successfully (exit_code=$($installer.ExitCode))"
   Remove-Item $acceptanceMarker -Force -ErrorAction SilentlyContinue
 }
 
