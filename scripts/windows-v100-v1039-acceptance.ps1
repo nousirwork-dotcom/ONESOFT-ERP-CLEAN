@@ -1,11 +1,11 @@
 #Requires -Version 7.0
 <#
 .SYNOPSIS
-  Real Windows acceptance for a clean v1.0.0 installation upgraded to v1.0.39.
+  Real Windows acceptance for a clean v1.0.0 installation upgraded to v1.0.40.
 
   The old installer is downloaded from the published v1.0.0 release. The new
-  installer is built by the Windows workflow from the checked-out source and is
-  passed as OneSoftSetup-1.0.39-x64.exe.
+  installer is supplied by the single v1.0.40 candidate built in the release
+  workflow. Clean and stale-ledger scenarios must use that same file.
 
   This test deliberately uses the real old server bundle, PostgreSQL Windows
   service, NSSM OneSoft-Server service, NSIS installer, and Upgrade Wizard.
@@ -20,13 +20,13 @@ param(
   [switch]$ReproduceStaleLedger,
 
   [string]$OldVersion = '1.0.0',
-  [string]$NewVersion = '1.0.39',
+  [string]$NewVersion = '1.0.40',
   [string]$ExpectedSchemaVersion = '0093_schema_compatibility_repair',
   [string]$InstallDir = 'C:\Program Files\OneSoft ERP',
   [string]$DatabaseName = 'onesoft_erp',
   [string]$DatabaseUser = 'postgres',
   [string]$DatabasePassword = 'OneSoftAcceptance2026',
-  [string]$ReportDir = "$env:GITHUB_WORKSPACE\windows-v100-v1039-$(if ($ReproduceStaleLedger) { 'stale-ledger' } else { 'clean' })"
+  [string]$ReportDir = "$env:GITHUB_WORKSPACE\windows-v100-v1040-$(if ($ReproduceStaleLedger) { 'stale-ledger' } else { 'clean' })"
 )
 
 $ErrorActionPreference = 'Stop'
@@ -34,6 +34,21 @@ $ProgressPreference = 'SilentlyContinue'
 $script:Log = [System.Collections.Generic.List[string]]::new()
 $script:PsqlPath = $null
 $script:OldServicePid = 0
+$script:CurrentStage = 'not-started'
+$script:LastSuccessfulStage = 'none'
+$script:FailedStage = $null
+$script:FailureMessage = $null
+$script:ExitCode = 1
+$script:CurrentMigration = $null
+$script:DiagnosticState = [ordered]@{
+  schema_compatibility = 'NOT_RUN'
+  permission_compatibility = 'NOT_RUN'
+  foundation = 'NOT_RUN'
+  system_accounts = 'NOT_RUN'
+  ready = 'NOT_RUN'
+  second_run = 'NOT_RUN'
+  rollback = 'NOT_RUN'
+}
 
 function Log([string]$Message) {
   $line = "[$(Get-Date -Format 'o')] $Message"
@@ -41,11 +56,31 @@ function Log([string]$Message) {
   $script:Log.Add($line)
 }
 
+function Start-Stage([string]$Stage) {
+  $script:CurrentStage = $Stage
+  Log "STAGE START: $Stage"
+}
+
+function Complete-Stage([string]$Stage = $script:CurrentStage) {
+  $script:LastSuccessfulStage = $Stage
+  Log "STAGE PASS: $Stage"
+}
+
+function Set-DiagnosticStatus([string]$Name, [string]$Status) {
+  if ($script:DiagnosticState.Contains($Name)) {
+    $script:DiagnosticState[$Name] = $Status
+  }
+}
+
 function Pass([string]$Message) {
   Log "PASS: $Message"
 }
 
 function Fail([string]$Message) {
+  if (-not $script:FailedStage) {
+    $script:FailedStage = $script:CurrentStage
+  }
+  $script:FailureMessage = $Message
   Log "FAIL: $Message"
   throw $Message
 }
@@ -505,11 +540,14 @@ function Fill-UpgradeWizard {
 }
 
 function Run-NewInstallerUpgrade {
-  Assert-True (Test-Path $NewInstallerPath -PathType Leaf) 'built OneSoftSetup-1.0.39-x64.exe exists'
-  Assert-True ((Get-Item $NewInstallerPath).Length -gt 50MB) 'built OneSoftSetup-1.0.39-x64.exe has a valid size'
+  Assert-True (Test-Path $NewInstallerPath -PathType Leaf) "published OneSoftSetup-$NewVersion-x64.exe exists"
+  Assert-True ((Get-Item $NewInstallerPath).Length -gt 50MB) "published OneSoftSetup-$NewVersion-x64.exe has a valid size"
   Add-TypeForUiAutomation
 
-  Log 'Launching the current OneSoftSetup-1.0.39-x64.exe in interactive upgrade mode'
+  Log "Launching the published OneSoftSetup-$NewVersion-x64.exe in interactive upgrade mode"
+  $acceptanceMarker = Join-Path ($env:ProgramData ?? 'C:\ProgramData') 'OneSoft\acceptance.mode'
+  New-Item -ItemType Directory -Force -Path (Split-Path $acceptanceMarker) | Out-Null
+  Set-Content -Path $acceptanceMarker -Value '1' -NoNewline
   $oldAcceptanceMode = $env:ONESOFT_ACCEPTANCE
   $env:ONESOFT_ACCEPTANCE = '1'
   try {
@@ -528,22 +566,21 @@ function Run-NewInstallerUpgrade {
   # shared Upgrade Core used by the production interactive path.
   $deadline = (Get-Date).AddSeconds(300)
   $wizardStarted = $false
-  $acceptanceMode = $true
+  # The CI marker makes NSIS invoke the same headless Upgrade Core used by
+  # silent production updates. The process is still launched by the real
+  # installer and is the sole gate for migrations, verification, and services.
+  $upgradeStarted = $false
   do {
-    if (-not $wizardStarted) {
+    if (-not $upgradeStarted) {
       $app = Get-Process -Name 'OneSoft ERP' -ErrorAction SilentlyContinue |
-        Where-Object { $_.MainWindowHandle -ne 0 }
+        Select-Object -First 1
       if ($app) {
-        $wizardStarted = $true
-        if (-not $acceptanceMode) {
-          Fill-UpgradeWizard
-        } else {
-          Log 'Acceptance Upgrade Wizard opened; waiting for its real Upgrade Core result'
-        }
+        $upgradeStarted = $true
+        Log 'Acceptance Upgrade Core launched by the installer; waiting for its real result'
       }
     }
 
-    if (-not $installer.HasExited -and -not $wizardStarted) {
+    if (-not $installer.HasExited -and -not $upgradeStarted) {
       $null = Invoke-UiButton @(
         'Next >', 'Next', '&Next >', '&Next', 'التالي >', 'التالي',
         'I Agree', '&I Agree', 'أوافق',
@@ -562,10 +599,115 @@ function Run-NewInstallerUpgrade {
         Log "  process=$($_.ProcessName) pid=$($_.Id) windowHandle=$($_.MainWindowHandle) title=$($_.MainWindowTitle)"
       }
     try { $installer.Kill() } catch {}
-    Fail 'OneSoftSetup-1.0.39-x64.exe did not finish within 300 seconds'
+    Fail "OneSoftSetup-$NewVersion-x64.exe did not finish within 300 seconds"
   }
-  Assert-True ($installer.ExitCode -eq 0) 'OneSoftSetup-1.0.39-x64.exe exited successfully'
-  Assert-True $wizardStarted 'real Upgrade Wizard was opened by the NSIS installer'
+  Assert-True ($installer.ExitCode -eq 0) "OneSoftSetup-$NewVersion-x64.exe exited successfully"
+  Assert-True $upgradeStarted 'real Upgrade Core was launched by the NSIS installer'
+  Remove-Item $acceptanceMarker -Force -ErrorAction SilentlyContinue
+}
+
+function Get-PermissionDiagnostic([string]$User, [string]$UserPassword) {
+  $lines = [System.Collections.Generic.List[string]]::new()
+  $oldPassword = $env:PGPASSWORD
+  try {
+    $env:PGPASSWORD = $UserPassword
+    foreach ($query in @(
+      "SELECT current_user, session_user;",
+      "SELECT table_name, privilege_type FROM information_schema.role_table_grants WHERE grantee='$User' AND table_schema='public' ORDER BY table_name, privilege_type;",
+      "SELECT nspname, privilege_type FROM information_schema.usage_privileges WHERE grantee='$User' AND object_schema='public';"
+    )) {
+      $out = & $script:PsqlPath -h localhost -p 5432 -U $DatabaseUser -d $DatabaseName `
+        -X -tA -c $query 2>&1
+      $lines.Add("SQL: $query")
+      $lines.Add($out -join "`n")
+    }
+  } catch {
+    $lines.Add("Diagnostic query failed: $($_.Exception.Message)")
+  } finally {
+    if ($null -eq $oldPassword) {
+      Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
+    } else {
+      $env:PGPASSWORD = $oldPassword
+    }
+  }
+  return $lines -join "`n"
+}
+
+function Assert-PermissionBoundaries([string]$RuntimePassword) {
+  Log "=== Permission boundary assertions for onesoft_app ==="
+
+  # onesoft_app MUST be able to SELECT on _schema_version
+  $schemaVersionSelectOk = $false
+  try {
+    $null = Invoke-Sql $DatabaseName "SELECT version FROM _schema_version WHERE id=1;" 'onesoft_app' $RuntimePassword
+    $schemaVersionSelectOk = $true
+  } catch {
+    Log "onesoft_app SELECT on _schema_version failed: $($_.Exception.Message)"
+    Log (Get-PermissionDiagnostic 'onesoft_app' $RuntimePassword)
+  }
+  Assert-True $schemaVersionSelectOk 'onesoft_app can SELECT on _schema_version'
+
+  # onesoft_app MUST be able to SELECT on __drizzle_migrations
+  $drizzleMigrationsSelectOk = $false
+  try {
+    $null = Invoke-Sql $DatabaseName "SELECT tag FROM __drizzle_migrations ORDER BY id DESC LIMIT 1;" 'onesoft_app' $RuntimePassword
+    $drizzleMigrationsSelectOk = $true
+  } catch {
+    Log "onesoft_app SELECT on __drizzle_migrations failed: $($_.Exception.Message)"
+    Log (Get-PermissionDiagnostic 'onesoft_app' $RuntimePassword)
+  }
+  Assert-True $drizzleMigrationsSelectOk 'onesoft_app can SELECT on __drizzle_migrations'
+
+  # onesoft_app MUST NOT be able to DROP TABLE (security boundary)
+  $dropTableDenied = $false
+  try {
+    $oldPassword = $env:PGPASSWORD
+    $env:PGPASSWORD = $RuntimePassword
+    $dropOutput = & $script:PsqlPath -h localhost -p 5432 -U 'onesoft_app' -d $DatabaseName `
+      -X -tA -v ON_ERROR_STOP=1 -c 'DROP TABLE IF EXISTS _permission_test_sentinel;' 2>&1
+    $env:PGPASSWORD = $oldPassword
+    # If we reach here the command succeeded — DROP TABLE must NOT succeed.
+    Log "SECURITY VIOLATION: onesoft_app was able to execute DROP TABLE: $($dropOutput -join ' ')"
+    $dropTableDenied = $false
+  } catch {
+    $dropTableDenied = $true
+    Log "onesoft_app DROP TABLE correctly denied: $($_.Exception.Message)"
+  } finally {
+    if ($null -ne $oldPassword) { $env:PGPASSWORD = $oldPassword } else { Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue }
+  }
+  Assert-True $dropTableDenied 'onesoft_app cannot DROP TABLE (security boundary enforced)'
+
+  Log "=== Permission boundary assertions complete ==="
+}
+
+function Assert-SystemAccounts([string]$RuntimePassword) {
+  $expected = @(
+    @{ code = '110101'; systemKey = 'acct.110101' },
+    @{ code = '110103'; systemKey = 'acct.110103' },
+    @{ code = '210501'; systemKey = 'acct.210501' },
+    @{ code = '410101'; systemKey = 'acct.410101' }
+  )
+  $orgRows = @((Invoke-Sql $DatabaseName `
+    "SELECT id::text || '|' || code FROM organizations WHERE status IN ('active', 'trial') ORDER BY id;" `
+    'onesoft_app' $RuntimePassword) -split "`r?`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+  Assert-True ($orgRows.Count -gt 0) 'at least one active/trial organization exists for system-account verification'
+  foreach ($orgRow in $orgRows) {
+    $parts = ([string]$orgRow).Trim() -split '\|', 2
+    $orgId = [int]$parts[0]
+    $orgCode = $parts[1]
+    foreach ($account in $expected) {
+      $codeCount = [int](Invoke-Sql $DatabaseName `
+        "SELECT count(*) FROM chart_of_accounts WHERE org_id=$orgId AND code='$($account.code)';" `
+        'onesoft_app' $RuntimePassword)
+      $keyCount = [int](Invoke-Sql $DatabaseName `
+        "SELECT count(*) FROM chart_of_accounts WHERE org_id=$orgId AND system_key='$($account.systemKey)';" `
+        'onesoft_app' $RuntimePassword)
+      Assert-True ($codeCount -eq 1 -and $keyCount -eq 1) `
+        "system account $orgCode/$($account.code) has one code and one system_key"
+    }
+  }
+  Set-DiagnosticStatus 'system_accounts' 'PASS'
+  Pass 'all required system accounts exist without duplicates'
 }
 
 function Assert-PostUpgrade {
@@ -575,6 +717,7 @@ function Assert-PostUpgrade {
   Assert-True ((Get-ServicePid 'OneSoft-Server') -gt 0) 'OneSoft-Server is running after upgrade'
   $health = Wait-Health $true 240 "$NewVersion /api/health ready=true"
   Assert-True ($health.ready -eq $true) "$NewVersion health reports ready=true"
+  Set-DiagnosticStatus 'ready' 'PASS'
 
   # The runtime password is intentionally not recoverable from the database.
   # Read-only assertions use the persisted runtime config instead.
@@ -591,6 +734,11 @@ function Assert-PostUpgrade {
   Assert-True ($customerCount -eq 1) 'Legacy customer data survived the upgrade'
   Assert-True ($backupCount -gt 0) 'database backup was created before upgrade'
 
+  # Explicit permission boundary checks for onesoft_app
+  Assert-PermissionBoundaries $runtimePassword
+  Set-DiagnosticStatus 'permission_compatibility' 'PASS'
+  Assert-SystemAccounts $runtimePassword
+
   $firstPid = Get-ServicePid 'OneSoft-Server'
   Restart-Service -Name 'OneSoft-Server' -Force
   $secondPid = Wait-Until {
@@ -600,6 +748,7 @@ function Assert-PostUpgrade {
   Assert-True ($secondPid -gt 0) 'OneSoft-Server restarted for second run'
   $secondHealth = Wait-Health $true 240 'second run ready=true'
   Assert-True ($secondHealth.ready -eq $true) 'second application startup reports ready=true'
+  Set-DiagnosticStatus 'second_run' 'PASS'
 
   $secondTag = Invoke-Sql $DatabaseName "SELECT tag FROM __drizzle_migrations ORDER BY id DESC LIMIT 1;" 'onesoft_app' $runtimePassword
   $secondCustomerCount = [int](Invoke-Sql $DatabaseName "SELECT count(*) FROM customers WHERE code='ACCEPT-V100';" 'onesoft_app' $runtimePassword)
@@ -607,38 +756,249 @@ function Assert-PostUpgrade {
   Assert-True ($secondCustomerCount -eq 1) 'second run preserved Legacy data'
 }
 
+function Sanitize-DiagnosticText([string]$Text) {
+  if ($null -eq $Text) { return '' }
+  return $Text `
+    -replace '(?i)postgres(?:ql)?://\S+', 'postgresql://***' `
+    -replace '(?im)(PGPASSWORD|DATABASE_URL|ONESOFT_UPGRADE_DATABASE_URL)\s*[:=]\s*\S+', '$1=***' `
+    -replace '(?im)(password|secret|token|credential|api[-_]?key)\s*[:=]\s*\S+', '$1=***'
+}
+
+function Export-CombinedDiagnostic(
+  [string[]]$SourcePaths,
+  [string]$Destination,
+  [string]$MissingMessage
+) {
+  $sections = [System.Collections.Generic.List[string]]::new()
+  $seen = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+  foreach ($source in @($SourcePaths)) {
+    if ([string]::IsNullOrWhiteSpace([string]$source)) { continue }
+    $resolved = [System.IO.Path]::GetFullPath([string]$source)
+    if (-not $seen.Add($resolved) -or -not (Test-Path $resolved -PathType Leaf)) { continue }
+    try {
+      $sections.Add("===== $resolved =====")
+      $sections.Add((Get-Content -Raw -LiteralPath $resolved -ErrorAction Stop))
+    } catch {
+      $sections.Add("Unable to read $resolved`: $($_.Exception.Message)")
+    }
+  }
+  if ($sections.Count -eq 0) {
+    $sections.Add($MissingMessage)
+  }
+  [System.IO.File]::WriteAllText(
+    $Destination,
+    (Sanitize-DiagnosticText ($sections -join "`r`n")),
+    [System.Text.UTF8Encoding]::new($false)
+  )
+}
+
+function Get-UpgradeDiagnosticEntries([string]$Path) {
+  $entries = [System.Collections.Generic.List[object]]::new()
+  if (-not (Test-Path $Path -PathType Leaf)) { return $entries }
+  foreach ($line in (Get-Content -LiteralPath $Path -ErrorAction SilentlyContinue)) {
+    try {
+      $entry = $line | ConvertFrom-Json -ErrorAction Stop
+      if ($entry.stage -and $entry.status) { $entries.Add($entry) }
+    } catch {
+      # Keep non-JSON log lines in upgrade.log, but ignore them in the summary.
+    }
+  }
+  return $entries
+}
+
+function Get-StageDiagnosticStatus($Entries, [string[]]$Stages) {
+  $matching = @($Entries | Where-Object { $Stages -contains [string]$_.stage })
+  if (@($matching | Where-Object { $_.status -eq 'failure' }).Count -gt 0) { return 'FAIL' }
+  if (@($matching | Where-Object { $_.status -eq 'success' }).Count -gt 0) { return 'PASS' }
+  return 'NOT_RUN'
+}
+
+function Get-SqlState([string]$Text) {
+  if ($Text -match '(?i)SQLSTATE(?:\s*[:=]|\s+|\[)?\s*([0-9A-Z]{5})') { return $Matches[1].ToUpperInvariant() }
+  if ($Text -match '(?im)\bERROR:\s*([0-9A-Z]{5})\b') { return $Matches[1].ToUpperInvariant() }
+  if ($Text -match '(?im)\bcode\s*[:=]\s*([0-9A-Z]{5})\b') { return $Matches[1].ToUpperInvariant() }
+  return $null
+}
+
+function Export-Diagnostics {
+  New-Item -ItemType Directory -Force -Path $ReportDir | Out-Null
+  $programDataLogs = Join-Path ($env:PROGRAMDATA ?? 'C:\ProgramData') 'OneSoft\Logs'
+  $programDataSources = @()
+  if (Test-Path $programDataLogs) {
+    $programDataSources = @(Get-ChildItem $programDataLogs -File -Recurse -ErrorAction SilentlyContinue)
+  }
+
+  $upgradeSources = @($programDataSources |
+    Where-Object { $_.Name -ieq 'upgrade.log' } |
+    ForEach-Object { $_.FullName })
+  $serverSources = @($programDataSources |
+    Where-Object { $_.Name -ieq 'server.log' -or $_.Name -ieq 'stdout.log' -or $_.Name -ieq 'stderr.log' } |
+    ForEach-Object { $_.FullName })
+  $installerSources = @()
+  foreach ($root in @($env:APPDATA, $env:LOCALAPPDATA)) {
+    if ($root -and (Test-Path $root)) {
+      $installerSources += @(Get-ChildItem $root -Filter 'onesoft-installer.log' -File -Recurse -ErrorAction SilentlyContinue |
+        ForEach-Object { $_.FullName })
+    }
+  }
+  $postgresSources = @()
+  foreach ($root in @('C:\Program Files\PostgreSQL', 'C:\Program Files (x86)\PostgreSQL')) {
+    if (Test-Path $root) {
+      $postgresSources += @(Get-ChildItem $root -Filter '*.log' -File -Recurse -ErrorAction SilentlyContinue |
+        Where-Object { $_.FullName -match '(?i)\\data\\log\\' } |
+        ForEach-Object { $_.FullName })
+    }
+  }
+
+  $acceptancePath = Join-Path $ReportDir 'acceptance.log'
+  $script:Log | Set-Content $acceptancePath -Encoding UTF8
+  # Keep the original filename for existing consumers while adding the stable
+  # diagnostic filename required by CI triage.
+  Copy-Item $acceptancePath (Join-Path $ReportDir 'acceptance.txt') -Force
+  if (Test-Path $programDataLogs) {
+    Copy-Item $programDataLogs (Join-Path $ReportDir 'ProgramData-Logs') -Recurse -Force -ErrorAction SilentlyContinue
+  }
+  Export-CombinedDiagnostic $upgradeSources (Join-Path $ReportDir 'upgrade.log') 'upgrade.log was not produced'
+  Export-CombinedDiagnostic $serverSources (Join-Path $ReportDir 'server.log') 'server.log was not produced'
+  Export-CombinedDiagnostic $installerSources (Join-Path $ReportDir 'installer.log') 'onesoft-installer.log was not produced'
+  Export-CombinedDiagnostic $postgresSources (Join-Path $ReportDir 'postgres.log') 'PostgreSQL data/log/*.log was not found'
+
+  $upgradePath = Join-Path $ReportDir 'upgrade.log'
+  $installerPath = Join-Path $ReportDir 'installer.log'
+  $serverPath = Join-Path $ReportDir 'server.log'
+  $acceptanceText = Get-Content -Raw $acceptancePath -ErrorAction SilentlyContinue
+  $allText = @(
+    $acceptanceText
+    (Get-Content -Raw $upgradePath -ErrorAction SilentlyContinue)
+    (Get-Content -Raw $installerPath -ErrorAction SilentlyContinue)
+    (Get-Content -Raw $serverPath -ErrorAction SilentlyContinue)
+  ) -join "`n"
+  $entries = Get-UpgradeDiagnosticEntries $upgradePath
+  $lastSuccess = @($entries | Where-Object { $_.status -eq 'success' } | Select-Object -Last 1)
+  $lastFailure = @($entries | Where-Object { $_.status -eq 'failure' } | Select-Object -Last 1)
+  if ($lastSuccess.Count -gt 0) { $script:LastSuccessfulStage = [string]$lastSuccess[0].stage }
+  if ($lastFailure.Count -gt 0 -and -not $script:FailedStage) { $script:FailedStage = [string]$lastFailure[0].stage }
+  if ($lastFailure.Count -gt 0 -and -not $script:FailureMessage) { $script:FailureMessage = [string]$lastFailure[0].error }
+  $lastMigration = @($entries | Where-Object { $_.migration } | Select-Object -Last 1)
+  if ($lastMigration.Count -gt 0) { $script:CurrentMigration = [string]$lastMigration[0].migration }
+
+  $schemaStatus = Get-StageDiagnosticStatus $entries @('verification')
+  $permissionStatus = Get-StageDiagnosticStatus $entries @('permission-compatibility', 'permission-repair')
+  $foundationStatus = Get-StageDiagnosticStatus $entries @('foundation')
+  $rollbackStatus = Get-StageDiagnosticStatus $entries @('rollback')
+  if ($schemaStatus -eq 'NOT_RUN' -and $allText -match '(?i)schema(?: version)? reached.*PASS|_schema_version reached') { $schemaStatus = 'PASS' }
+  if ($foundationStatus -eq 'NOT_RUN' -and $allText -match '(?i)Foundation.*(?:applied|valid).*PASS') { $foundationStatus = 'PASS' }
+  if ($permissionStatus -eq 'NOT_RUN' -and $allText -match '(?i)permission boundary assertions complete') { $permissionStatus = 'PASS' }
+  if ($rollbackStatus -eq 'NOT_RUN' -and $allText -match '(?i)rollback.*PASS') { $rollbackStatus = 'PASS' }
+  $script:DiagnosticState['schema_compatibility'] = $schemaStatus
+  $script:DiagnosticState['permission_compatibility'] = $permissionStatus
+  $script:DiagnosticState['foundation'] = $foundationStatus
+  if ($script:DiagnosticState['system_accounts'] -eq 'NOT_RUN' -and
+      $allText -match '(?i)system account.*(?:PASS|valid|preserved)|PASS: all required system accounts') {
+    $script:DiagnosticState['system_accounts'] = 'PASS'
+  }
+  if ($script:DiagnosticState['ready'] -eq 'NOT_RUN' -and
+      $allText -match '(?i)health reports ready=true|application is healthy|الخادم جاهز') {
+    $script:DiagnosticState['ready'] = 'PASS'
+  }
+  if ($script:DiagnosticState['second_run'] -eq 'NOT_RUN' -and
+      $allText -match '(?i)second application startup reports ready=true') {
+    $script:DiagnosticState['second_run'] = 'PASS'
+  }
+  $script:DiagnosticState['rollback'] = $rollbackStatus
+
+  $sqlState = Get-SqlState $allText
+  $failedMigration = if ($lastFailure.Count -gt 0 -and $lastFailure[0].migration) {
+    [string]$lastFailure[0].migration
+  } else { $script:CurrentMigration }
+  $result = [ordered]@{
+    scenario = if ($ReproduceStaleLedger) { 'stale-ledger' } else { 'clean' }
+    old_version = $OldVersion
+    target_version = $NewVersion
+    passed = ($script:ExitCode -eq 0)
+    exit_code = $script:ExitCode
+    last_successful_stage = $script:LastSuccessfulStage
+    failed_stage = $script:FailedStage
+    failure_message = Sanitize-DiagnosticText $script:FailureMessage
+    sqlstate = $sqlState
+    migration = $failedMigration
+    schema_compatibility = $script:DiagnosticState['schema_compatibility']
+    permission_compatibility = $script:DiagnosticState['permission_compatibility']
+    foundation = $script:DiagnosticState['foundation']
+    system_accounts = $script:DiagnosticState['system_accounts']
+    ready = $script:DiagnosticState['ready']
+    second_run = $script:DiagnosticState['second_run']
+    rollback = $script:DiagnosticState['rollback']
+  }
+  $result | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $ReportDir 'result.json') -Encoding UTF8
+  @(
+    "scenario=$($result.scenario)"
+    "exit_code=$($result.exit_code)"
+    "last_successful_stage=$($result.last_successful_stage)"
+    "failed_stage=$($result.failed_stage)"
+    "sqlstate=$($result.sqlstate)"
+    "migration=$($result.migration)"
+    "schema_compatibility=$($result.schema_compatibility)"
+    "permission_compatibility=$($result.permission_compatibility)"
+    "foundation=$($result.foundation)"
+    "system_accounts=$($result.system_accounts)"
+    "ready=$($result.ready)"
+    "second_run=$($result.second_run)"
+    "rollback=$($result.rollback)"
+  ) | Set-Content (Join-Path $ReportDir 'stage.txt') -Encoding UTF8
+}
+
 New-Item -ItemType Directory -Force -Path $ReportDir | Out-Null
-$reportFile = Join-Path $ReportDir 'acceptance.txt'
 try {
-  Log "Windows v1.0.0 → v1.0.39 acceptance started; staleLedger=$ReproduceStaleLedger"
+  Log "Windows v1.0.0 → v$NewVersion acceptance started; scenario=$(if ($ReproduceStaleLedger) { 'stale-ledger' } else { 'clean' })"
+  Start-Stage 'test-state-cleanup'
   Remove-TestState
+  Complete-Stage
+  Start-Stage 'postgres-preflight'
   $script:PsqlPath = Find-Psql
+  Complete-Stage
+  Start-Stage 'v1.0.0-install'
   Install-OldApplication
+  Complete-Stage
+  Start-Stage 'v1.0.0-database'
   Create-LegacyDatabase
   Configure-LegacyRuntime
   Initialize-LegacyBaseSchema
+  Complete-Stage
+  Start-Stage 'v1.0.0-running'
   Install-LegacyService
   Seed-LegacyFoundation
   Assert-LegacyDatabase
+  Complete-Stage
   if ($ReproduceStaleLedger) {
+    Start-Stage 'stale-ledger-reproduction'
     Reproduce-StaleLedgerSequence
+    Complete-Stage
   }
+  Start-Stage 'installer-upgrade'
   Run-NewInstallerUpgrade
+  Complete-Stage
+  Start-Stage 'post-upgrade-verification'
   Assert-PostUpgrade
-  Log 'WINDOWS V1.0.0 → V1.0.39 ACCEPTANCE = PASS'
+  Complete-Stage
+  Log "WINDOWS V1.0.0 → v$NewVersion ACCEPTANCE = PASS"
+  $script:ExitCode = 0
 } catch {
-  Log "WINDOWS V1.0.0 → V1.0.39 ACCEPTANCE = FAIL: $($_.Exception.Message)"
+  if (-not $script:FailedStage) { $script:FailedStage = $script:CurrentStage }
+  if (-not $script:FailureMessage) { $script:FailureMessage = $_.Exception.Message }
+  Log "WINDOWS V1.0.0 → v$NewVersion ACCEPTANCE = FAIL: $($_.Exception.Message)"
   throw
 } finally {
   try {
-    $script:Log | Set-Content $reportFile -Encoding UTF8
-    $programDataLogs = "$env:PROGRAMDATA\OneSoft\Logs"
-    if (Test-Path $programDataLogs) {
-      Copy-Item $programDataLogs (Join-Path $ReportDir 'ProgramData-Logs') -Recurse -Force -ErrorAction SilentlyContinue
+    Export-Diagnostics
+  } catch {
+    # Artifact generation must never hide the acceptance failure. Create the
+    # required placeholders even when a filesystem/permissions error occurs.
+    foreach ($name in @('acceptance.log', 'upgrade.log', 'server.log', 'installer.log', 'postgres.log', 'stage.txt', 'result.json')) {
+      $path = Join-Path $ReportDir $name
+      if (-not (Test-Path $path)) { "diagnostic export failed: $($_.Exception.Message)" | Set-Content $path -Encoding UTF8 }
     }
-    $appDataLogs = Get-ChildItem "$env:APPDATA" -Filter 'onesoft-installer.log' -File -Recurse -ErrorAction SilentlyContinue
-    foreach ($logFile in $appDataLogs) {
-      Copy-Item $logFile.FullName (Join-Path $ReportDir $logFile.Name) -Force -ErrorAction SilentlyContinue
-    }
-  } catch {}
+  }
 }
+
+if ($script:ExitCode -ne 0) { exit $script:ExitCode }

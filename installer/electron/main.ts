@@ -242,6 +242,7 @@ import { registerFilesystemIpc }   from './ipc/filesystem.ipc.js';
 import { registerUninstallIpc }    from './ipc/uninstall.ipc.js';
 import { registerDeploymentIpc }   from './ipc/deployment.ipc.js';
 import { runHeadlessUpgrade }      from '../core/upgrade/HeadlessUpgrade.js';
+import { ConfigManager }           from '../core/config/ConfigManager.js';
 
 let mainWindow: BrowserWindow | null = null;
 let upgradeWizardExitCode = 1;
@@ -495,7 +496,9 @@ h2{margin:0 0 12px;font-size:20px;}p{font-size:13px;color:#6B7280;margin:4px 0;w
   } else if (process.argv.includes('--run-upgrade-wizard')) {
     writeLog('INFO', `upgrade wizard — loadFile ${indexPath} — start`);
     const query: Record<string, string> = { mode: 'upgrade' };
-    if (process.env.ONESOFT_ACCEPTANCE === '1') query.acceptance = '1';
+    if (process.env.ONESOFT_ACCEPTANCE === '1' || process.argv.includes('--acceptance')) {
+      query.acceptance = '1';
+    }
     mainWindow.loadFile(indexPath, { query })
       .then(() => writeLog('INFO', 'upgrade wizard loadFile — resolved'))
       .catch((e: unknown) => writeLog('ERROR', 'upgrade wizard loadFile — rejected', e));
@@ -539,7 +542,15 @@ app.whenReady()
     // Foundation verification, and service startup.
     if (process.argv.includes('--run-upgrade-core')) {
       writeLog('INFO', 'headless upgrade requested by NSIS');
-      const exitCode = await runHeadlessUpgrade();
+      writeLog(
+        'INFO',
+        `headless config path=${ConfigManager.getConfigPath()} exists=${ConfigManager.exists()}`,
+      );
+      const exitCode = await runHeadlessUpgrade(
+        (message) => writeLog('ERROR', message),
+        (event) => writeLog(event.level.toUpperCase(), `[upgrade-core] ${event.message}`),
+        (status) => writeLog('INFO', `[upgrade-core] status=${status}`),
+      );
       writeLog('INFO', `headless upgrade finished with exitCode=${exitCode}`);
       app.exit(exitCode);
       return;

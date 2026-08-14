@@ -96,7 +96,11 @@ export async function preflightDatabase(
     result.migratorRoleExists = roles.rows.some((r) => r.rolname === 'onesoft_migrator');
     result.schemaOwnerRoleExists = roles.rows.some((r) => r.rolname === 'onesoft_schema_owner');
     result.canSetSchemaOwner = (await client.query<{ allowed: boolean }>(
-      `SELECT pg_has_role(current_user, 'onesoft_schema_owner', 'member') AS allowed`,
+      `SELECT CASE
+         WHEN EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'onesoft_schema_owner')
+         THEN pg_has_role(current_user, 'onesoft_schema_owner', 'member')
+         ELSE false
+       END AS allowed`,
     )).rows[0]?.allowed === true;
 
     const version = await client.query<{ version: string }>(

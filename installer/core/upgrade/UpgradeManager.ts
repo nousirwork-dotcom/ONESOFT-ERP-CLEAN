@@ -22,6 +22,8 @@ import { APP_SCHEMA_VERSION } from '../version.js';
 import { ConfigManager } from '../config/ConfigManager.js';
 import { ServiceManager }       from '../services/ServiceManager.js';
 import { verifyPostUpgrade, verifyPostUpgradeDatabase } from './PostUpgradeVerifier.js';
+import { checkPermissionCompatibility } from '../database/PermissionCompatibilityChecker.js';
+import { repairRuntimePrivileges } from '../database/DatabaseRoleManager.js';
 import { UpgradeDiagnosticLogger } from './UpgradeDiagnosticLogger.js';
 import { PostgreSQLToolsResolver } from '../database/PostgreSQLToolsResolver.js';
 import * as fs from 'fs';
@@ -152,7 +154,12 @@ export class UpgradeManager {
       // backup or stopping services. Windows service installations commonly
       // omit PostgreSQL\bin from PATH, so this must not be a PATH-only check.
       startStage('postgres-tools-preflight');
-      const postgresTools = this.postgresToolsResolver.resolveAll(dbOpts);
+      // A legacy config intentionally points dbOpts at the not-yet-provisioned
+      // runtime role. Probe the live server with the already validated admin
+      // or protected migrator credential instead; otherwise psql cannot run
+      // SHOW server_version_num before role bootstrap.
+      const toolConnection = opts.adminDbOpts ?? storedMigrationCredential ?? dbOpts;
+      const postgresTools = this.postgresToolsResolver.resolveAll(toolConnection);
       emit({
         level: 'info',
         message: `أدوات PostgreSQL جاهزة: pg_dump=${postgresTools.pgDump}, pg_restore=${postgresTools.pgRestore}, psql=${postgresTools.psql}`,
@@ -332,6 +339,41 @@ export class UpgradeManager {
       }
       successStage('migrations', result.applied.at(-1) ?? result.skipped.at(-1));
 
+      // After migrations, perform a comprehensive runtime-privilege repair as
+      // a safety layer. This ensures onesoft_app has SELECT/INSERT/UPDATE/DELETE
+      // on ALL tables including __drizzle_migrations and _schema_version which
+      // were created by MigrationRunner under SET ROLE onesoft_schema_owner.
+      // The explicit GRANT in MigrationRunner handles the common case; this
+      // handles edge cases where DEFAULT PRIVILEGES did not fire correctly.
+      startStage('permission-repair');
+      try {
+        await repairRuntimePrivileges(
+          migrationConnection(migrationCredential),
+          (msg) => emit({ level: 'info', message: msg, timestamp: now() }),
+        );
+      } catch (repairError: unknown) {
+        emit({
+          level: 'error',
+          message: `فشل إصلاح الصلاحيات الشاملة: ${safeMigrationError(repairError)}`,
+          timestamp: now(),
+        });
+        throw repairError;
+      }
+      successStage('permission-repair');
+
+      // Permission compatibility check: verify onesoft_app has all required
+      // privileges and emit a detailed diagnostic report.
+      startStage('permission-compatibility');
+      const adminUrl = opts.adminDbOpts
+        ? `postgresql://${encodeURIComponent(opts.adminDbOpts.user)}:${encodeURIComponent(opts.adminDbOpts.password ?? '')}@${opts.adminDbOpts.host}:${opts.adminDbOpts.port ?? 5432}/${encodeURIComponent(dbOpts.database)}`
+        : databaseUrl;
+      await checkPermissionCompatibility(
+        adminUrl,
+        migrationConnection(migrationCredential),
+        emit,
+      );
+      successStage('permission-compatibility');
+
       // 6. Apply Foundation with the production engine before any Backend
       // service is started. The one-shot process does not listen on HTTP.
       startStage('foundation');
@@ -350,10 +392,14 @@ export class UpgradeManager {
         throw new Error('Journal فارغ — لا يمكن التحقق من إصدار المخطط');
       }
       startStage('verification');
+      const adminUrlForDiagnostic = opts.adminDbOpts
+        ? `postgresql://${encodeURIComponent(opts.adminDbOpts.user)}:${encodeURIComponent(opts.adminDbOpts.password ?? '')}@${opts.adminDbOpts.host}:${opts.adminDbOpts.port ?? 5432}/${encodeURIComponent(dbOpts.database)}`
+        : undefined;
       await verifyPostUpgradeDatabase({
         databaseUrl,
         serverAppPath,
         expectedSchemaVersion,
+        adminUrl: adminUrlForDiagnostic,
       }, emit);
       successStage('verification');
 

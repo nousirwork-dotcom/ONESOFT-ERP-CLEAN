@@ -277,10 +277,63 @@ export async function runOwnershipRepairTransaction(
     await client.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ${quote(RUNTIME_ROLE)}`);
     await client.query(`GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO ${quote(RUNTIME_ROLE)}`);
     await client.query(`GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO ${quote(RUNTIME_ROLE)}`);
+
+    // Diagnostic: verify ALTER DEFAULT PRIVILEGES preconditions before issuing
+    // it. PostgreSQL requires current_user = SCHEMA_OWNER_ROLE or current_user
+    // to be a member of it (which is the case for admin/superuser).
+    const userCtx = await client.query<{
+      current_user: string;
+      session_user: string;
+      is_member: boolean;
+    }>(`
+      SELECT current_user,
+             session_user,
+             pg_has_role(current_user, ${sqlLiteral(SCHEMA_OWNER_ROLE)}, 'MEMBER') AS is_member
+    `);
+    const ctx = userCtx.rows[0];
+    console.log(
+      `[role-manager] ALTER DEFAULT PRIVILEGES context: ` +
+      `current_user=${ctx?.current_user ?? '?'}, ` +
+      `session_user=${ctx?.session_user ?? '?'}, ` +
+      `is_member_of_${SCHEMA_OWNER_ROLE}=${ctx?.is_member ?? false}`,
+    );
+    if (!ctx?.is_member) {
+      throw new Error(
+        `current_user "${ctx?.current_user}" is not a member of "${SCHEMA_OWNER_ROLE}" — ` +
+        `ALTER DEFAULT PRIVILEGES FOR ROLE would be ineffective. ` +
+        `session_user="${ctx?.session_user}"`,
+      );
+    }
+
     await client.query(`ALTER DEFAULT PRIVILEGES FOR ROLE ${quote(SCHEMA_OWNER_ROLE)} IN SCHEMA public
       GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ${quote(RUNTIME_ROLE)}`);
     await client.query(`ALTER DEFAULT PRIVILEGES FOR ROLE ${quote(SCHEMA_OWNER_ROLE)} IN SCHEMA public
       GRANT USAGE, SELECT ON SEQUENCES TO ${quote(RUNTIME_ROLE)}`);
+
+    // Verify that DEFAULT PRIVILEGES were actually recorded in pg_default_acl.
+    const aclCheck = await client.query<{ count: number }>(`
+      SELECT COUNT(*)::int AS count
+        FROM pg_default_acl da
+        JOIN pg_namespace n ON n.oid = da.defaclnamespace
+        JOIN pg_roles r ON r.oid = da.defaclrole
+       WHERE n.nspname = 'public'
+         AND r.rolname = ${sqlLiteral(SCHEMA_OWNER_ROLE)}
+         AND da.defaclobjtype = 'r'
+         AND EXISTS (
+           SELECT 1 FROM unnest(da.defaclacl) AS acl_entry(entry)
+            WHERE acl_entry.entry::text LIKE ${`'${RUNTIME_ROLE}=%'`}
+         )
+    `);
+    if ((aclCheck.rows[0]?.count ?? 0) === 0) {
+      console.warn(
+        `[role-manager] WARNING: ALTER DEFAULT PRIVILEGES for TABLES may not have been ` +
+        `recorded in pg_default_acl — future tables created by ${SCHEMA_OWNER_ROLE} ` +
+        `may not be accessible to ${RUNTIME_ROLE}. ` +
+        `current_user="${ctx?.current_user}", session_user="${ctx?.session_user}"`,
+      );
+    } else {
+      console.log(`[role-manager] ALTER DEFAULT PRIVILEGES verified in pg_default_acl: OK`);
+    }
 
     for (const target of targets) {
       if (target.currentOwner === SCHEMA_OWNER_ROLE || target.objectType === 'schema') continue;
@@ -300,6 +353,45 @@ export async function runOwnershipRepairTransaction(
   } catch (error: unknown) {
     await rollbackTransaction(client);
     throw error;
+  }
+}
+
+/**
+ * Repair runtime privileges for onesoft_app comprehensively.
+ *
+ * Must be called with a connection URL for the onesoft_migrator role
+ * (which has SET ROLE onesoft_schema_owner available). Issues GRANT ON ALL
+ * TABLES/SEQUENCES/FUNCTIONS and refreshes ALTER DEFAULT PRIVILEGES so that
+ * any metadata table created by MigrationRunner is accessible to the runtime.
+ *
+ * This is idempotent and safe to call after every migration run.
+ */
+export async function repairRuntimePrivileges(
+  migrationUrl: string,
+  emit: (msg: string) => void,
+): Promise<void> {
+  emit('[privileges] جارٍ إصلاح صلاحيات onesoft_app الشاملة...');
+  const { Pool } = await import('pg');
+  const pool = new Pool({ connectionString: migrationUrl, connectionTimeoutMillis: 15_000 });
+  const client = await pool.connect();
+  try {
+    // Run as onesoft_schema_owner so that GRANT is issued by the object owner
+    // and ALTER DEFAULT PRIVILEGES applies to future objects created by that role.
+    await client.query(`SET ROLE ${quote(SCHEMA_OWNER_ROLE)}`);
+
+    await client.query(`GRANT USAGE ON SCHEMA public TO ${quote(RUNTIME_ROLE)}`);
+    await client.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ${quote(RUNTIME_ROLE)}`);
+    await client.query(`GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO ${quote(RUNTIME_ROLE)}`);
+    await client.query(`GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO ${quote(RUNTIME_ROLE)}`);
+    await client.query(`ALTER DEFAULT PRIVILEGES FOR ROLE ${quote(SCHEMA_OWNER_ROLE)} IN SCHEMA public
+      GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ${quote(RUNTIME_ROLE)}`);
+    await client.query(`ALTER DEFAULT PRIVILEGES FOR ROLE ${quote(SCHEMA_OWNER_ROLE)} IN SCHEMA public
+      GRANT USAGE, SELECT ON SEQUENCES TO ${quote(RUNTIME_ROLE)}`);
+
+    emit('[privileges] ✅ إصلاح صلاحيات onesoft_app مكتمل');
+  } finally {
+    client.release();
+    await pool.end();
   }
 }
 

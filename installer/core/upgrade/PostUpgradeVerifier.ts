@@ -4,6 +4,7 @@ import * as path from 'path';
 import { createHash } from 'crypto';
 import * as pg from 'pg';
 import type { ProgressEvent } from '../types.js';
+import { buildPermissionDeniedDiagnostic } from '../database/PermissionCompatibilityChecker.js';
 
 const { Client } = pg;
 type Emit = (event: ProgressEvent) => void;
@@ -235,11 +236,40 @@ export async function verifyPostUpgradeDatabase(opts: {
   databaseUrl: string;
   serverAppPath: string;
   expectedSchemaVersion: string;
+  /** Optional admin URL used only for 42501 diagnostic queries — never for writes. */
+  adminUrl?: string;
 }, emit: Emit): Promise<void> {
   const client = new Client({ connectionString: opts.databaseUrl, connectionTimeoutMillis: 15_000 });
   await client.connect();
   try {
     await verifyFoundation(client, opts.serverAppPath, opts.expectedSchemaVersion, emit);
+  } catch (error: unknown) {
+    // SQLSTATE 42501 = insufficient_privilege. Attach a diagnostic report so
+    // the upgrade log shows exactly what object was denied and what ACL exists.
+    const sqlState = (error as Record<string, unknown>)?.code as string | undefined;
+    if (sqlState === '42501' && opts.adminUrl) {
+      const msg = error instanceof Error ? error.message : String(error);
+      try {
+        // Best-effort: extract the object name from the error message.
+        const objectMatch = msg.match(/table "?([a-zA-Z0-9_]+)"?/) ??
+                            msg.match(/relation "?([a-zA-Z0-9_]+)"?/);
+        const objectName = objectMatch?.[1] ?? '_schema_version';
+        const diagnostic = await buildPermissionDeniedDiagnostic(
+          opts.adminUrl,
+          objectName,
+          'SELECT',
+          sqlState,
+        );
+        emit({
+          level: 'error',
+          message: `❌ PERMISSION DENIED أثناء التحقق:\n${diagnostic}`,
+          timestamp: now(),
+        });
+      } catch {
+        // Ignore errors in the diagnostic path — the original error is re-thrown below.
+      }
+    }
+    throw error;
   } finally {
     await client.end();
   }

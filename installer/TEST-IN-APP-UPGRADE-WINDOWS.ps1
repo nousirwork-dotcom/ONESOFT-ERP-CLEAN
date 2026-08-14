@@ -24,10 +24,10 @@
 .USAGE
     PowerShell (Admin):
       .\TEST-IN-APP-UPGRADE-WINDOWS.ps1 `
-        -InstallerExe "C:\Build\OneSoftSetup-1.0.39-x64.exe"
+        -InstallerExe "C:\Build\OneSoftSetup-1.0.40-x64.exe"
 
     InstallerExe is optional. When omitted, the script automatically locates
-    OneSoftSetup-1.0.39-x64.exe next to this script, in Downloads, or on the
+    OneSoftSetup-1.0.40-x64.exe next to this script, in Downloads, or on the
     Desktop.
 
     ExpectedOldVersion is optional. When supplied, it is checked against the
@@ -41,7 +41,7 @@ param(
 
     [string]$InstallDir = "C:\OneSoft-ERP",
     [string]$ExpectedOldVersion = "",
-    [string]$ExpectedNewVersion = "1.0.39",
+    [string]$ExpectedNewVersion = "1.0.40",
     [string]$ReportDir = "$env:USERPROFILE\Desktop\OneSoft-InApp-Upgrade-Report",
     [int]$UpgradeTimeoutSeconds = 1800,
     [int]$HealthTimeoutSeconds = 180
@@ -134,7 +134,7 @@ function Resolve-Installer {
         Select-Object -Unique
 
     foreach ($directory in $searchDirectories) {
-        $candidate = Join-Path $directory "OneSoftSetup-1.0.39-x64.exe"
+        $candidate = Join-Path $directory "OneSoftSetup-1.0.40-x64.exe"
         if (Test-Path $candidate -PathType Leaf) {
             return $candidate
         }
@@ -657,7 +657,7 @@ try {
     if (-not [string]::IsNullOrWhiteSpace($InstallerExe) -and (Test-Path $InstallerExe -PathType Leaf)) {
         Pass "Installer exists: $InstallerExe"
     } else {
-        Fail "OneSoftSetup-1.0.39-x64.exe was not found next to the script, in Downloads, or on the Desktop"
+        Fail "OneSoftSetup-1.0.40-x64.exe was not found next to the script, in Downloads, or on the Desktop"
     }
     if (Test-Path $ConfigPath) {
         Pass "OneSoft config exists"

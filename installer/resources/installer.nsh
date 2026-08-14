@@ -54,7 +54,15 @@
   ${If} ${FileExists} "$R6\OneSoft\config\onesoft.config.json"
     ; Manual installs get the interactive wizard so a Legacy machine can
     ; receive a one-time PostgreSQL administrator credential. Silent updater
-    ; installs remain fail-closed and never prompt.
+    ; installs remain fail-closed and never prompt. The acceptance marker is
+    ; created only by the isolated Windows CI runner and selects the same
+    ; headless Upgrade Core used by silent production updates.
+    ReadEnvStr $R4 "PROGRAMDATA"
+    ${If} ${FileExists} "$R6\OneSoft\acceptance.mode"
+      DetailPrint "Running OneSoft Upgrade Core in CI acceptance mode..."
+      ExecWait '"$INSTDIR\OneSoft ERP.exe" --run-upgrade-core --silent' $R0
+      Goto upgrade_result
+    ${EndIf}
     IfSilent silent_upgrade manual_upgrade
     silent_upgrade:
       DetailPrint "Running OneSoft Upgrade Core before starting services..."

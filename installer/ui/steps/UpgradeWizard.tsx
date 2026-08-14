@@ -50,9 +50,11 @@ export default function UpgradeWizard() {
             port: config.database.port,
             database: config.database.name,
           });
-          if (acceptanceMode) {
-            setAcceptancePassword(config.database.password ?? '');
-          }
+          // The v1.0.0 acceptance fixture stores the legacy administrator
+          // connection (postgres), while newer installs store onesoft_app.
+          // Acceptance mode must be able to exercise the real one-time
+          // administrator path for either configured user.
+          if (acceptanceMode) setAcceptancePassword(config.database.password ?? '');
           const legacyUser = config.database.user?.trim();
           if (legacyUser && legacyUser !== 'onesoft_app') {
             setAdminUser(legacyUser);

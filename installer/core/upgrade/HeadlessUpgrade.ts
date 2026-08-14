@@ -30,6 +30,11 @@ function resourcesPath(): string {
   return electronProcess.resourcesPath ?? path.resolve(process.cwd(), 'resources');
 }
 
+function defaultBackupsPath(): string {
+  const programData = process.env['PROGRAMDATA'] ?? process.env['ProgramData'] ?? 'C:\\ProgramData';
+  return path.join(programData, 'OneSoft', 'Backups');
+}
+
 function runtimePassword(): string {
   return randomBytes(24).toString('base64url');
 }
@@ -68,7 +73,9 @@ function buildUpgradeOptions(config: OneSoftConfig): {
 
   return {
     serverAppPath: path.join(resourcesPath(), 'app', 'server-app'),
-    backupsDir: config.paths.backups,
+    // v1.0.0 configs predate the structured `paths` block. Keep the
+    // headless adapter usable for those real legacy installations.
+    backupsDir: config.paths?.backups ?? defaultBackupsPath(),
     dbOpts,
     databaseUrl: connectionString(dbOpts),
     targetVersion: APP_VERSION,
@@ -86,9 +93,15 @@ function buildUpgradeOptions(config: OneSoftConfig): {
  * process with --run-upgrade-core. Keeping the adapter here means those
  * installers cannot accidentally grow a second migration implementation.
  */
-export async function runHeadlessUpgrade(): Promise<number> {
+export async function runHeadlessUpgrade(
+  onError?: (message: string) => void,
+  onProgress?: (event: ProgressEvent) => void,
+  onStatus?: (status: string) => void,
+): Promise<number> {
   if (!ConfigManager.exists()) {
-    console.error('[upgrade-core] existing installation config was not found');
+    const message = `existing installation config was not found: ${ConfigManager.getConfigPath()}`;
+    console.error(`[upgrade-core] ${message}`);
+    onError?.(message);
     return 2;
   }
 
@@ -98,16 +111,21 @@ export async function runHeadlessUpgrade(): Promise<number> {
 
     const result = await new UpgradeManager().upgrade(
       upgradeOptions,
-      emit,
-      (status) => console.log(`[upgrade-core] status=${status}`),
+      (event) => {
+        emit(event);
+        onProgress?.(event);
+      },
+      (status) => {
+        console.log(`[upgrade-core] status=${status}`);
+        onStatus?.(status);
+      },
     );
 
     return result.success ? 0 : 1;
   } catch (error) {
-    console.error(
-      '[upgrade-core] fatal:',
-      error instanceof Error ? error.message : String(error),
-    );
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('[upgrade-core] fatal:', message);
+    onError?.(`fatal: ${message}`);
     return 1;
   }
 }

@@ -198,6 +198,14 @@ export class MigrationRunner {
             applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
           )
         `);
+        // Explicit GRANT while still running as onesoft_schema_owner so that
+        // onesoft_app can always read/write the metadata table regardless of
+        // whether ALTER DEFAULT PRIVILEGES fired before or after creation.
+        await client.query(`
+          GRANT SELECT, INSERT, UPDATE, DELETE
+            ON TABLE public.__drizzle_migrations
+            TO "onesoft_app"
+        `);
         await synchronizeMigrationLedgerSequence(client, emit);
 
         // تثبيتات OneSoft القديمة كانت تملك ختم _schema_version قبل إنشاء
@@ -210,6 +218,13 @@ export class MigrationRunner {
             version    TEXT NOT NULL,
             stamped_at TIMESTAMP NOT NULL DEFAULT NOW()
           )
+        `);
+        // Same explicit GRANT for _schema_version — the owner issues the grant
+        // while SET ROLE is still active.
+        await client.query(`
+          GRANT SELECT, INSERT, UPDATE, DELETE
+            ON TABLE public._schema_version
+            TO "onesoft_app"
         `);
         const ledgerCount = await client.query<{ count: string }>(
           'SELECT COUNT(*)::text AS count FROM __drizzle_migrations',
