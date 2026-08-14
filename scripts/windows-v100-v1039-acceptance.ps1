@@ -553,7 +553,33 @@ function Run-NewInstallerUpgrade {
   $deadline  = (Get-Date).AddSeconds(600)
   $lastDiag  = [DateTime]::MinValue
 
+  $upgLog    = Join-Path ($env:PROGRAMDATA ?? 'C:\ProgramData') 'OneSoft\Logs\upgrade.log'
+  $upgFailed = $false
+  $upgFailMsg = ''
+
   while (-not $installer.HasExited -and (Get-Date) -lt $deadline) {
+    # ── Detect upgrade-core terminal state from upgrade.log ──────────────────
+    # If the upgrade core has already finished (success or failed+rolled-back),
+    # the NSIS process may remain alive showing a GUI even in /S mode.
+    # Kill it immediately and report the real outcome rather than waiting 600s.
+    if (Test-Path $upgLog) {
+      $logContent = Get-Content $upgLog -Raw -ErrorAction SilentlyContinue
+      if ($logContent -match '"stage"\s*:\s*"rollback"\s*,\s*"status"\s*:\s*"success"') {
+        # Upgrade core rolled back — extract error from log
+        $errMatch = [regex]::Match($logContent, '"stage"\s*:\s*"permission-compatibility"\s*,[^}]*"error"\s*:\s*"([^"]+)"')
+        if (-not $errMatch.Success) {
+          $errMatch = [regex]::Match($logContent, '"status"\s*:\s*"failure"\s*,[^}]*"error"\s*:\s*"([^"]+)"')
+        }
+        $upgFailMsg = if ($errMatch.Success) { $errMatch.Groups[1].Value } else { 'upgrade-core failed (see upgrade.log)' }
+        $upgFailed  = $true
+        Log "── upgrade-core rolled back — terminating installer (error: $upgFailMsg) ──"
+        try { $installer.Kill() } catch {}
+        # brief wait for process to actually die
+        $null = $installer.WaitForExit(5000)
+        break
+      }
+    }
+
     if (((Get-Date) - $lastDiag).TotalSeconds -ge 30) {
       $elapsed = [int]((Get-Date) - $startTime).TotalSeconds
       Log "── installer still running (${elapsed}s elapsed) ──"
@@ -585,9 +611,19 @@ function Run-NewInstallerUpgrade {
     Start-Sleep -Seconds 5
   }
 
+  # ── Post-loop handling ────────────────────────────────────────────────────
+
+  # Case 1: upgrade-core failed and rolled back — already killed above
+  if ($upgFailed) {
+    if (Test-Path $upgLog) {
+      Log "── upgrade.log (last 60 lines) ──"
+      Get-Content $upgLog -Tail 60 -ErrorAction SilentlyContinue | ForEach-Object { Log "  $_" }
+    }
+    Fail "OneSoftSetup-$NewVersion-x64.exe: upgrade-core failed — $upgFailMsg"
+  }
+
+  # Case 2: deadline reached but installer still alive
   if (-not $installer.HasExited) {
-    # Print final diagnostics before failing
-    $upgLog = Join-Path ($env:PROGRAMDATA ?? 'C:\ProgramData') 'OneSoft\Logs\upgrade.log'
     if (Test-Path $upgLog) {
       Log "── upgrade.log (last 60 lines) ──"
       Get-Content $upgLog -Tail 60 -ErrorAction SilentlyContinue | ForEach-Object { Log "  $_" }
@@ -596,9 +632,10 @@ function Run-NewInstallerUpgrade {
     Fail "OneSoftSetup-$NewVersion-x64.exe did not finish within 600 seconds"
   }
 
+  # Case 3: installer exited normally — check exit code
   if ($installer.ExitCode -ne 0) {
     foreach ($logPath in @(
-      (Join-Path ($env:PROGRAMDATA ?? 'C:\ProgramData') 'OneSoft\Logs\upgrade.log'),
+      $upgLog,
       (Join-Path $env:APPDATA 'onesoft-installer.log')
     )) {
       if (Test-Path $logPath) {
