@@ -111,6 +111,10 @@ try {
   Assert-True ($null -ne $uninstaller) 'uninstaller exists'
   $uninstall = Start-Process -FilePath $uninstaller.FullName -ArgumentList '/S' -PassThru -Wait
   Assert-True ($uninstall.ExitCode -eq 0) 'uninstaller exited with code 0'
+  $removeDeadline = (Get-Date).AddSeconds(30)
+  while ((Test-Path $InstallDir) -and (Get-Date) -lt $removeDeadline) {
+    Start-Sleep -Seconds 1
+  }
   Assert-True (-not (Test-Path $InstallDir)) 'install directory removed by uninstaller'
   Assert-True (Test-Path $MarkerPath) 'uninstaller preserves first-install marker'
   Invoke-CandidateInstaller
