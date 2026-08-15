@@ -42,7 +42,8 @@
       StrCpy $R3 "0$R3"
     ${EndIf}
     FileOpen $R4 "$R6\OneSoft\trial-install-marker.pending.json" w
-    FileWrite $R4 "{$\r$\n  $\"schema$\": 1,$\r$\n  $\"firstInstallAt$\": $\"$R9-$R8-$R7T$R2:$R3:$R5.000Z$\"$\r$\n}$\r$\n"
+    StrCpy $0 "$R9-$R8-$R7T$R2:$R3:$R5.000Z"
+    FileWrite $R4 "{$\r$\n  $\"schema$\": 1,$\r$\n  $\"firstInstallAt$\": $\"$0$\"$\r$\n}$\r$\n"
     FileClose $R4
   ${EndIf}
 !macroend
