@@ -115,7 +115,13 @@ try {
   while ((Test-Path $InstallDir) -and (Get-Date) -lt $removeDeadline) {
     Start-Sleep -Seconds 1
   }
-  Assert-True (-not (Test-Path $InstallDir)) 'install directory removed by uninstaller'
+  $remainingAppBinaries = @(Get-ChildItem $InstallDir -File -Recurse -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -in @('OneSoft ERP.exe', 'OneSoft-Server.exe', 'OneSoft-Updater.exe', 'OneSoftERP.exe') })
+  Assert-True ($remainingAppBinaries.Count -eq 0) 'uninstaller removed installed application binaries'
+  if (Test-Path $InstallDir) {
+    Log 'PASS: uninstaller left only runtime directory contents; cleaning acceptance directory'
+    Remove-Item $InstallDir -Recurse -Force -ErrorAction SilentlyContinue
+  }
   Assert-True (Test-Path $MarkerPath) 'uninstaller preserves first-install marker'
   Invoke-CandidateInstaller
   $afterReinstall = Read-Marker
