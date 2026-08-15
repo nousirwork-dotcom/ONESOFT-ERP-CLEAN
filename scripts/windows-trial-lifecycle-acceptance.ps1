@@ -137,7 +137,15 @@ try {
   # Exercise the bundled production trial module with a future expiry instant
   # followed by an earlier instant. The persisted expired state must remain
   # terminal, while licensed state must remain valid past the trial expiry.
-  $trialModule = Get-ChildItem $InstallDir -Filter 'trial.js' -File -Recurse |
+  $asarPath = Join-Path $InstallDir 'resources\app.asar'
+  Assert-True (Test-Path $asarPath) 'bundled app.asar exists'
+  $trialExtractDir = Join-Path $env:TEMP 'onesoft-trial-asar'
+  Remove-Item $trialExtractDir -Recurse -Force -ErrorAction SilentlyContinue
+  $asarOutput = & npx --yes @electron/asar extract $asarPath $trialExtractDir 2>&1
+  if ($LASTEXITCODE -ne 0) {
+    throw ($asarOutput -join "`n")
+  }
+  $trialModule = Get-ChildItem $trialExtractDir -Filter 'trial.js' -File -Recurse |
     Where-Object { $_.FullName -like '*server-app*dist*lib*' } |
     Select-Object -First 1
   Assert-True ($null -ne $trialModule) 'bundled trial module exists'
@@ -174,4 +182,7 @@ console.log('PAID_LICENSE_UNAFFECTED=PASS');
   Remove-Item Env:ONESOFT_DATA_DIR -ErrorAction SilentlyContinue
   Remove-Item Env:NODE_ENV -ErrorAction SilentlyContinue
   Remove-Item Env:CLIENT_BUILD -ErrorAction SilentlyContinue
+  if ($trialExtractDir) {
+    Remove-Item $trialExtractDir -Recurse -Force -ErrorAction SilentlyContinue
+  }
 }
