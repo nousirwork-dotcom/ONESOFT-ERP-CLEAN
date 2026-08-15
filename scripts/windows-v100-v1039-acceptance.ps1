@@ -714,13 +714,26 @@ function Assert-PermissionBoundaries([string]$RuntimePassword) {
   }
   Assert-True $drizzleMigrationsSelectOk 'onesoft_app can SELECT on __drizzle_migrations'
 
-  # onesoft_app MUST NOT be able to DROP TABLE (security boundary)
+  # onesoft_app MUST NOT be able to DROP TABLE (security boundary).
+  #
+  # WHY NOT "IF EXISTS" ON A NON-EXISTENT TABLE:
+  # PostgreSQL's DROP TABLE IF EXISTS on a table that does not exist exits 0
+  # (NOTICE: skipping) without ever evaluating the caller's DROP privilege,
+  # so the test would always report a false "security violation".
+  # We therefore create the sentinel table first (as postgres/superuser) and
+  # then attempt a plain DROP TABLE — no IF EXISTS — as onesoft_app.
+  # If the drop succeeds → real security violation.
+  # If PostgreSQL returns "permission denied" → security boundary is correct.
+  Invoke-Sql $DatabaseName `
+    'CREATE TABLE IF NOT EXISTS _permission_test_sentinel (id int);' `
+    $DatabaseUser $DatabasePassword
+
   $dropTableDenied = $false
   try {
     $oldPassword = $env:PGPASSWORD
     $env:PGPASSWORD = $RuntimePassword
     $dropOutput = & $script:PsqlPath -h localhost -p 5432 -U 'onesoft_app' -d $DatabaseName `
-      -X -tA -v ON_ERROR_STOP=1 -c 'DROP TABLE IF EXISTS _permission_test_sentinel;' 2>&1
+      -X -tA -v ON_ERROR_STOP=1 -c 'DROP TABLE _permission_test_sentinel;' 2>&1
     $env:PGPASSWORD = $oldPassword
     # If we reach here the command succeeded — DROP TABLE must NOT succeed.
     Log "SECURITY VIOLATION: onesoft_app was able to execute DROP TABLE: $($dropOutput -join ' ')"
@@ -730,6 +743,10 @@ function Assert-PermissionBoundaries([string]$RuntimePassword) {
     Log "onesoft_app DROP TABLE correctly denied: $($_.Exception.Message)"
   } finally {
     if ($null -ne $oldPassword) { $env:PGPASSWORD = $oldPassword } else { Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue }
+    # Always clean up the sentinel table regardless of test outcome.
+    Invoke-Sql $DatabaseName `
+      'DROP TABLE IF EXISTS _permission_test_sentinel;' `
+      $DatabaseUser $DatabasePassword
   }
   Assert-True $dropTableDenied 'onesoft_app cannot DROP TABLE (security boundary enforced)'
 
