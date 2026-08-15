@@ -1,10 +1,10 @@
 #Requires -Version 7.0
 <#
 .SYNOPSIS
-  Real Windows acceptance for a clean v1.0.0 installation upgraded to v1.0.41.
+  Real Windows acceptance for a clean v1.0.0 installation upgraded to v1.0.42.
 
   The old installer is downloaded from the published v1.0.0 release. The new
-  installer is supplied by the single v1.0.41 candidate built in the release
+  installer is supplied by the single v1.0.42 candidate built in the release
   workflow. Clean and stale-ledger scenarios must use that same file.
 
   This test deliberately uses the real old server bundle, PostgreSQL Windows
@@ -20,13 +20,13 @@ param(
   [switch]$ReproduceStaleLedger,
 
   [string]$OldVersion = '1.0.0',
-  [string]$NewVersion = '1.0.41',
+  [string]$NewVersion = '1.0.42',
   [string]$ExpectedSchemaVersion = '0093_schema_compatibility_repair',
   [string]$InstallDir = 'C:\Program Files\OneSoft ERP',
   [string]$DatabaseName = 'onesoft_erp',
   [string]$DatabaseUser = 'postgres',
   [string]$DatabasePassword = 'OneSoftAcceptance2026',
-  [string]$ReportDir = "$env:GITHUB_WORKSPACE\windows-v100-v1040-$(if ($ReproduceStaleLedger) { 'stale-ledger' } else { 'clean' })"
+  [string]$ReportDir = "$env:GITHUB_WORKSPACE\windows-v100-v1041-$(if ($ReproduceStaleLedger) { 'stale-ledger' } else { 'clean' })"
 )
 
 $ErrorActionPreference = 'Stop'

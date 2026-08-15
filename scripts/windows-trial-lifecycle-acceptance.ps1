@@ -66,7 +66,7 @@ function Read-Marker {
 }
 
 try {
-  Log 'Windows 1.0.41 trial lifecycle acceptance started'
+  Log 'Windows 1.0.42 trial lifecycle acceptance started'
   Remove-InstallState
 
   # Fresh install: the real EXE must create the durable marker only on success.
@@ -86,7 +86,7 @@ try {
     Log 'PASS: marker stores first-install anchor; expiry is derived by persisted trial state'
   }
 
-  # Installing 1.0.41 over the existing installation must preserve the marker.
+  # Installing 1.0.42 over the existing installation must preserve the marker.
   Invoke-CandidateInstaller
   $afterUpdate = Read-Marker
   Assert-True ([string]$afterUpdate.firstInstallAt -eq $firstInstallAt) 'update preserves first-install date'

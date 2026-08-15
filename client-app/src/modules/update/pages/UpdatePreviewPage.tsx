@@ -5,7 +5,7 @@
 import { useState } from "react";
 
 const MOCK_MANIFEST = {
-  latestVersion:       "1.0.41",
+  latestVersion:       "1.0.42",
   minSupportedVersion: "1.0.0",
   mandatory:           false,
   messageAr:           "يوجد تحديث جديد: تجربة مجانية لمدة 180 يوماً وإصلاحات لمثبت Windows.",
@@ -15,7 +15,7 @@ const MOCK_MANIFEST = {
     "الحفاظ على تاريخ بداية التجربة عند التحديث وإعادة التثبيت",
     "تثبيت وترقية Windows بصمت",
   ],
-  downloadUrl:  "https://github.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/releases/download/v1.0.41/OneSoftSetup-1.0.41-x64.exe",
+  downloadUrl:  "https://github.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/releases/download/v1.0.42/OneSoftSetup-1.0.42-x64.exe",
   fileSizeBytes: 81_966_246,
 };
 
