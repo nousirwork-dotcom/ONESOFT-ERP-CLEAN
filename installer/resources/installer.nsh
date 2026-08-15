@@ -64,10 +64,6 @@ Function .onInstFailed
   !insertmacro oneSoftDeletePendingTrialMarker
 FunctionEnd
 
-Function .onUserAbort
-  !insertmacro oneSoftDeletePendingTrialMarker
-FunctionEnd
-
 ; يُنفَّذ عند بدء المثبت الجديد، قبل أن يستدعي electron-builder مزيل
 ; التثبيت القديم في ترقية --updated. هذا المسار ضروري للترقية من إصدارات
 ; legacy التي كان customUnInit فيها يتخطى الإيقاف عند وجود --updated.
