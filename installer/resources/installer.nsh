@@ -20,6 +20,54 @@
 !include "LogicLib.nsh"
 !include "FileFunc.nsh"
 
+; يجهز لحظة أول تثبيت في ملف مؤقت. لا يصبح الملف المعتمد نهائياً إلا في
+; .onInstSuccess، لذلك إلغاء/فشل المثبت لا يستهلك التجربة.
+!macro oneSoftEnsureTrialMarker
+  ${IfNot} ${FileExists} "$R6\OneSoft\trial-install-marker.json"
+    ${GetTime} "" "G" $0 $1 $2 $3 $4 $5 $6
+    FileOpen $R4 "$R6\OneSoft\trial-install-marker.pending.json" w
+    FileWrite $R4 "{$\r$\n  $\"schema$\": 1,$\r$\n  $\"firstInstallAt$\": $\"$2-$1-$0T$3:$4:$5.000Z$\"$\r$\n}$\r$\n"
+    FileClose $R4
+  ${EndIf}
+!macroend
+
+!macro oneSoftCommitTrialMarker
+  ReadEnvStr $R6 "PROGRAMDATA"
+  ${If} $R6 == ""
+    StrCpy $R6 "C:\ProgramData"
+  ${EndIf}
+  ${If} ${FileExists} "$R6\OneSoft\trial-install-marker.pending.json"
+    ${IfNot} ${FileExists} "$R6\OneSoft\trial-install-marker.json"
+      Rename "$R6\OneSoft\trial-install-marker.pending.json" "$R6\OneSoft\trial-install-marker.json"
+      ; يمنع المستخدم العادي من الكتابة على العلامة، مع إبقاء قراءتها
+      ; متاحة لخدمة OneSoft التي تعمل بحساب SYSTEM.
+      nsExec::Exec 'icacls "$R6\OneSoft\trial-install-marker.json" /inheritance:r /grant:r "SYSTEM:(F)" "Administrators:(F)" "Users:(R)"'
+    ${Else}
+      Delete "$R6\OneSoft\trial-install-marker.pending.json"
+    ${EndIf}
+  ${EndIf}
+!macroend
+
+!macro oneSoftDeletePendingTrialMarker
+  ReadEnvStr $R6 "PROGRAMDATA"
+  ${If} $R6 == ""
+    StrCpy $R6 "C:\ProgramData"
+  ${EndIf}
+  Delete "$R6\OneSoft\trial-install-marker.pending.json"
+!macroend
+
+Function .onInstSuccess
+  !insertmacro oneSoftCommitTrialMarker
+FunctionEnd
+
+Function .onInstFailed
+  !insertmacro oneSoftDeletePendingTrialMarker
+FunctionEnd
+
+Function .onUserAbort
+  !insertmacro oneSoftDeletePendingTrialMarker
+FunctionEnd
+
 ; يُنفَّذ عند بدء المثبت الجديد، قبل أن يستدعي electron-builder مزيل
 ; التثبيت القديم في ترقية --updated. هذا المسار ضروري للترقية من إصدارات
 ; legacy التي كان customUnInit فيها يتخطى الإيقاف عند وجود --updated.
@@ -44,6 +92,7 @@
   ${If} $R6 == ""
     StrCpy $R6 "C:\ProgramData"
   ${EndIf}
+  CreateDirectory "$R6\OneSoft"
 
   ; Fresh installs have no config/version pair yet; the React wizard owns
   ; database setup and service installation in that case. Existing installs
@@ -86,6 +135,13 @@
   FileOpen $R5 "$R6\OneSoft\version.json" w
   FileWrite $R5 "{$\r$\n  $\"version$\": $\"${VERSION}$\",$\r$\n  $\"source$\": $\"nsis-update$\"$\r$\n}$\r$\n"
   FileClose $R5
+
+  ; لا نبدأ التجربة عند أول تسجيل دخول أو إعداد يدوي. هذه النقطة هي آخر
+  ; خطوة في customInstall بعد نجاح Upgrade Core وكتابة version.json.
+  ; تحديثات 1.0.41 وما بعدها لا تدخل هذا الفرع لأن config موجود.
+  ${IfNot} ${FileExists} "$R6\OneSoft\config\onesoft.config.json"
+    !insertmacro oneSoftEnsureTrialMarker
+  ${EndIf}
 !macroend
 
 ; يضبط $R9 = "1" إذا كان إلغاء تثبيت حقيقياً (بدون --updated)، وإلا "0"

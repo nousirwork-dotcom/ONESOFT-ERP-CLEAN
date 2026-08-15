@@ -140,7 +140,7 @@ await q(`
   INSERT INTO organizations (code, name, name_en, tax_number, phone, email, address,
     currency, status, subscription_expiry, max_users)
   VALUES ('TESTCO','شركة الاختبار','Test Co','','','','','SAR','trial',
-    NOW() + INTERVAL '3 months', 5)
+     NOW() + INTERVAL '180 days', 5)
   ON CONFLICT (code) DO NOTHING
 `);
 const [orgRow]  = await q('SELECT id FROM organizations WHERE code=$1', ['TESTCO']);

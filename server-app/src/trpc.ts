@@ -3,6 +3,8 @@ import superjson from 'superjson';
 import type { Request, Response } from 'express';
 import { getUserFromRequest } from './auth.js';
 import type { User } from './schema.js';
+import { getLicense } from './lib/license.js';
+import { getTrialState, isTrialExpired, markTrialExpiredIfNeeded } from './lib/trial.js';
 
 export type Context = {
   req: Request;
@@ -20,8 +22,32 @@ const t = initTRPC.context<Context>().create({ transformer: superjson });
 export const router = t.router;
 export const publicProcedure = t.procedure;
 
-const requireAuth = t.middleware(({ ctx, next }) => {
+const EXPIRED_TRIAL_ALLOWED_PROCEDURES = new Set([
+  'auth.adminPasswordStatus',
+]);
+
+function assertTrialAccess(path: string): void {
+  const persistedTrialState = getTrialState();
+  const trialState = persistedTrialState
+    ? markTrialExpiredIfNeeded(persistedTrialState)
+    : null;
+  const hasValidLicense = getLicense().valid;
+  if (
+    trialState &&
+    isTrialExpired(trialState) &&
+    !hasValidLicense &&
+    !EXPIRED_TRIAL_ALLOWED_PROCEDURES.has(path)
+  ) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'انتهت الفترة التجريبية. يرجى تفعيل الترخيص أو طلب التمديد.',
+    });
+  }
+}
+
+const requireAuth = t.middleware(({ ctx, next, path }) => {
   if (!ctx.user) throw new TRPCError({ code: 'UNAUTHORIZED', message: 'يجب تسجيل الدخول أولاً' });
+  assertTrialAccess(path);
   return next({ ctx: { ...ctx, user: ctx.user } });
 });
 
@@ -30,6 +56,7 @@ const requireAdmin = t.middleware(({ ctx, next }) => {
   if (!['superadmin', 'admin'].includes(ctx.user.role)) {
     throw new TRPCError({ code: 'FORBIDDEN', message: 'ليس لديك صلاحية' });
   }
+  assertTrialAccess('admin');
   return next({ ctx: { ...ctx, user: ctx.user } });
 });
 
@@ -38,6 +65,7 @@ const requireSuperAdmin = t.middleware(({ ctx, next }) => {
   if (ctx.user.role !== 'superadmin') {
     throw new TRPCError({ code: 'FORBIDDEN', message: 'هذه الصفحة للمدير العام فقط' });
   }
+  assertTrialAccess('superadmin');
   return next({ ctx: { ...ctx, user: ctx.user } });
 });
 

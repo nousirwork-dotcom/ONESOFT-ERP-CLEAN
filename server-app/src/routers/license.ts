@@ -20,6 +20,57 @@ import {
   saveDevicePrefs,
   clearDeviceOrgCode,
 } from '../lib/devicePrefs.js';
+import {
+  ensureTrialState,
+  getTrialState,
+  isTrialExpired,
+  markTrialExpiredIfNeeded,
+  trialDatesForPayload,
+  updateTrialLicenseState,
+} from '../lib/trial.js';
+
+const TRIAL_MODULES = [
+  'sales', 'purchases', 'inventory', 'accounting', 'pos', 'reports',
+  'zatca', 'hr', 'payroll', 'assets', 'manufacturing', 'branches',
+  'sync', 'offline',
+];
+
+function buildTrialPayload(
+  org: { code: string; name: string; maxUsers?: number | null },
+  state: ReturnType<typeof ensureTrialState>,
+) {
+  const dates = trialDatesForPayload(state);
+  return {
+    org_id:           org.code,
+    customer_name:    org.name,
+    max_users:        org.maxUsers ?? 5,
+    max_pos:          1,
+    max_branches:     1,
+    max_devices:      1,
+    enabled_modules:  TRIAL_MODULES,
+    start_date:       dates.startDate,
+    expiry_date:      dates.expiryDate,
+    license_id:       'TRIAL',
+    activation_id:    'TRIAL',
+    issued_at:        state.firstInstallAt,
+    issued_by:        'OneSoft Installer',
+    license_type:     'trial' as const,
+    package_name:     'الفترة التجريبية',
+    web_allowed:      true,
+    desktop_allowed:  true,
+    offline_allowed:  true,
+  };
+}
+
+async function syncTrialExpiry(orgId: number, current: Date | null | undefined, expiry: Date) {
+  if (!current || current.getTime() !== expiry.getTime()) {
+    try {
+      await db.update(organizations)
+        .set({ subscriptionExpiry: expiry, updatedAt: new Date() })
+        .where(eq(organizations.id, orgId));
+    } catch { /* لا تمنع شاشة الترخيص إذا كانت القاعدة غير متاحة مؤقتاً */ }
+  }
+}
 
 export const licenseRouter = router({
 
@@ -29,20 +80,26 @@ export const licenseRouter = router({
     const status = getLicense();
     if (!status.valid || !status.payload) {
       // إذا لم يوجد ملف ترخيص → تحقق من حالة المؤسسة في DB (فقط إذا كان المستخدم مسجلاً)
-      if (status.error === 'license_not_found' && ctx.user) {
+      if (status.error === 'license_not_found') {
         try {
-          const org = await db.query.organizations.findFirst({
-            where: eq(organizations.id, ctx.user.orgId),
-            columns: { status: true, subscriptionExpiry: true },
-          });
+          const org = ctx.user
+            ? await db.query.organizations.findFirst({
+                where: eq(organizations.id, ctx.user.orgId),
+                columns: { id: true, code: true, name: true, maxUsers: true, status: true, createdAt: true, subscriptionExpiry: true },
+              })
+            : await db.query.organizations.findFirst({
+                where: eq(organizations.status, 'trial'),
+                columns: { id: true, code: true, name: true, maxUsers: true, status: true, createdAt: true, subscriptionExpiry: true },
+              });
           if (org?.status === 'trial') {
-            const trialExpired = org.subscriptionExpiry
-              ? new Date(org.subscriptionExpiry) < new Date()
-              : false;
+            const trialState = markTrialExpiredIfNeeded(ensureTrialState(org.createdAt));
+            const trialExpiry = new Date(trialState.trialExpiresAt);
+            await syncTrialExpiry(org.id, org.subscriptionExpiry, trialExpiry);
+            const trialExpired = isTrialExpired(trialState);
             return {
               valid:   !trialExpired,
               error:   trialExpired ? ('trial_expired' as string) : ('trial_active' as string),
-              payload: null,
+              payload: buildTrialPayload(org, trialState),
             };
           }
           // مؤسسات قديمة (status='active' بدون ملف ترخيص) — تثبيتات سابقة قبل نظام التراخيص
@@ -167,16 +224,19 @@ export const licenseRouter = router({
     try {
       // نجلب كل المؤسسات ونفضّل trial، ثم أي active غير SYSTEM
       const allOrgs = await db.query.organizations.findMany({
-        columns: { id: true, code: true, name: true, status: true, subscriptionExpiry: true },
+        columns: { id: true, code: true, name: true, status: true, createdAt: true, subscriptionExpiry: true },
       });
       const org =
         allOrgs.find(o => o.status === 'trial') ??
         allOrgs.find(o => o.status === 'active' && o.code !== 'SYSTEM') ??
         null;
       if (org && (org.status === 'trial' || org.status === 'active')) {
-        const trialExpired = org.status === 'trial' && org.subscriptionExpiry
-          ? new Date(org.subscriptionExpiry) < new Date()
-          : false;
+        const trialState = org.status === 'trial'
+          ? markTrialExpiredIfNeeded(ensureTrialState(org.createdAt))
+          : null;
+        const trialExpiry = trialState ? new Date(trialState.trialExpiresAt) : org.subscriptionExpiry;
+        if (trialState) await syncTrialExpiry(org.id, org.subscriptionExpiry, trialExpiry!);
+        const trialExpired = trialState ? isTrialExpired(trialState) : false;
         return {
           hasLicense:   false,
           isExpired:    false,     // Trial لا يمنع تسجيل الدخول — AuthGuard يعالج الانتهاء
@@ -184,7 +244,7 @@ export const licenseRouter = router({
           orgCode:      org.code,
           orgName:      org.name,
           licenseId:    null,
-          licExpiry:    org.subscriptionExpiry?.toISOString() ?? null,
+          licExpiry:    trialExpiry?.toISOString() ?? null,
           isTrial:      org.status === 'trial',
           trialExpired,
         };
@@ -297,6 +357,8 @@ async function _applyLicense(signed: SignedLicense) {
   // حفظ الترخيص وتحديث الكاش
   saveLicense(signed);
   invalidateLicenseCache();
+  const trialState = getTrialState();
+  if (trialState) updateTrialLicenseState(trialState, 'licensed');
   // إعادة قراءة للتأكد
   const fresh = getLicense();
 

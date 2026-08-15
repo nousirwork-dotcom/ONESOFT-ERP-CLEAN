@@ -8,6 +8,7 @@ import {
   UploadCloud, ClipboardCopy, Timer, Phone,
   Infinity as InfinityIcon, AlertTriangle, Info,
 } from "lucide-react";
+import { calendarDaysBetween, daysLeft } from "../trialDates";
 
 // ─── Theme ─────────────────────────────────────────────────────────────
 // Navy #1B2B5C  |  Gold #C9A84C  |  Cream bg #FAF7F0
@@ -38,9 +39,6 @@ function deriveLicType(lt?: LicType, exp?: string): LicType {
   if (lt) return lt;
   if (!exp) return undefined;
   return exp >= "2099-01-01" ? "lifetime" : "subscription";
-}
-function daysLeft(exp: string) {
-  return Math.max(0, Math.ceil((new Date(exp + "T23:59:59Z").getTime() - Date.now()) / 86_400_000));
 }
 function fmtDate(d?: string | null) {
   if (!d) return "—";
@@ -243,17 +241,17 @@ export default function LicenseActivationPage() {
   const curBranches = (stats as { current_branches?: number } | undefined)?.current_branches ?? 0;
   const mods        = new Set(p?.enabled_modules ?? []);
 
-  const isTrial        = isValid && lt === "trial";
+  const isTrial        = lt === "trial";
+  const isTrialActive  = isValid && isTrial;
   const isLifetime     = isValid && lt === "lifetime";
   const isExpired      = !isValid && err === "expired";
   const isTrialExpired = !isValid && err === "trial_expired";   // انتهت فترة التجربة
-  const isTrialActive  = !isValid && err === "trial_active";    // في فترة التجربة (بدون ملف ترخيص)
-  const isSlate        = !isValid && (err === "license_not_found" || isTrialActive);
+  const isSlate        = !isValid && (err === "license_not_found" || err === "trial_active");
   const isInvalid      = !isValid && (err === "invalid_signature" || err === "unknown_algorithm" || err === "unknown_kid" || err === "invalid_json");
   const isDateTamper   = !isValid && err === "date_manipulation_suspected";
 
   const trialDuration = p?.start_date && p?.expiry_date && isTrial
-    ? Math.ceil((new Date(p.expiry_date + "T23:59:59Z").getTime() - new Date(p.start_date + "T00:00:00Z").getTime()) / 86_400_000)
+    ? calendarDaysBetween(p.start_date, p.expiry_date)
     : null;
 
   const typeLabel =
@@ -269,8 +267,10 @@ export default function LicenseActivationPage() {
   // status badge for inside card
   const statusBadge = isValid && !isTrial
     ? { label: "الترخيص مفعّل ✓",     bg: "bg-green-100",  text: "text-green-800",  border: "border-green-300" }
-    : isTrial
+     : isTrialActive
     ? { label: "نسخة تجريبية",        bg: "bg-[#FFF3D0]",  text: "text-[#8B6914]",  border: "border-[#C9A84C]/60" }
+     : isTrialExpired
+     ? { label: "انتهت فترة التجربة",  bg: "bg-red-100",    text: "text-red-800",  border: "border-red-300" }
     : isExpired
     ? { label: "انتهت الصلاحية",      bg: "bg-red-100",    text: "text-red-800",    border: "border-red-300" }
     : isInvalid
@@ -278,7 +278,8 @@ export default function LicenseActivationPage() {
     : { label: "غير مفعّل",            bg: "bg-gray-100",   text: "text-gray-600",   border: "border-gray-300" };
 
   const ShieldIcon = isValid && !isTrial ? ShieldCheck
-    : isTrial ? ShieldCheck
+     : isTrialActive ? ShieldCheck
+     : isTrialExpired ? ShieldAlert
     : isSlate ? ShieldQuestion
     : isExpired ? ShieldAlert
     : ShieldOff;
@@ -286,8 +287,9 @@ export default function LicenseActivationPage() {
   const daysColor = !days ? "" : days <= 7 ? "text-red-600" : days <= 30 ? "text-amber-600" : "text-[#1B2B5C]";
 
   const statusMessage =
-    isSlate     ? "البرنامج غير مفعّل. يرجى إدخال كود التفعيل أو استيراد ملف الترخيص للمتابعة."
-    : isTrial   ? "هذه نسخة تجريبية محدودة المدة."
+     isTrialExpired ? "انتهت مدة التجربة البالغة 180 يوماً. يرجى إدخال كود التفعيل أو طلب تمديد التجربة."
+     : isSlate     ? "البرنامج غير مفعّل. يرجى إدخال كود التفعيل أو استيراد ملف الترخيص للمتابعة."
+     : isTrialActive ? "هذه نسخة تجريبية مدتها 180 يوماً تبدأ من أول تثبيت ناجح."
     : isExpired ? "انتهت صلاحية الترخيص. يرجى التواصل مع مزود النظام للتجديد."
     : isInvalid ? "ملف الترخيص غير صالح أو تم تعديله. يرجى التواصل مع مزود النظام."
     : isDateTamper ? "يوجد خطأ في إعدادات التاريخ والوقت. يرجى مراجعة إعدادات الجهاز."

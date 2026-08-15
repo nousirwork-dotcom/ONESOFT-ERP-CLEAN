@@ -13,8 +13,9 @@ import { db } from './db.js';
 import { organizations, users } from './schema.js';
 import { hashPassword } from './auth.js';
 import { logger } from './logger.js';
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { seedFoundationAccounts } from './seed-foundation.js';
+import { ensureTrialState, type TrialState } from './lib/trial.js';
 
 // يُضبط true بعد انتهاء ensureDefaultAdmin (نجاحاً أو فشلاً).
 // setup.isFirstRun يستخدمه لمنع ظهور معالج «إنشاء أول مدير» أثناء نافذة الإقلاع
@@ -29,19 +30,36 @@ export async function ensureDefaultAdmin(): Promise<void> {
     const rows = await db.select({ cnt: sql<number>`count(*)::int` }).from(users);
     const userCount = rows[0]?.cnt ?? 0;
 
+    // ── تأكد من وجود مؤسسة صالحة ──────────────────────────────────────────
+    // نفضّل أي مؤسسة موجودة غير SYSTEM، وإلا نُنشئ مؤسسة تجريبية لمدة 180 يوماً
+    const existing = await db.query.organizations.findMany({
+      columns: { id: true, code: true, status: true, createdAt: true, subscriptionExpiry: true },
+    });
+    let org = existing.find(o => o.code !== 'SYSTEM') ?? null;
+    const trialOrg = existing.find(o => o.status === 'trial') ?? null;
+    let trialState: TrialState | null = null;
+
+    // Existing pre-1.0.41 installations have no installer marker yet. Their
+    // organization creation time is the only durable legacy anchor.
+    if (trialOrg) {
+      trialState = ensureTrialState(trialOrg.createdAt);
+      const trialExpiry = new Date(trialState.trialExpiresAt);
+      if (
+        !trialOrg.subscriptionExpiry ||
+        trialOrg.subscriptionExpiry.getTime() !== trialExpiry.getTime()
+      ) {
+        await db.update(organizations)
+          .set({ subscriptionExpiry: trialExpiry, updatedAt: new Date() })
+          .where(eq(organizations.id, trialOrg.id));
+      }
+    }
+
     // قاعدة بيانات موجودة مسبقاً — لا تُنشئ أو تُعدّل أي مستخدم إطلاقاً
     if (userCount > 0) return;
 
-    // ── تأكد من وجود مؤسسة صالحة ──────────────────────────────────────────
-    // نفضّل أي مؤسسة موجودة غير SYSTEM، وإلا نُنشئ مؤسسة تجريبية لمدة 3 أشهر
-    const existing = await db.query.organizations.findMany({
-      columns: { id: true, code: true },
-    });
-    let org = existing.find(o => o.code !== 'SYSTEM') ?? null;
-
     if (!org) {
-      const trialExpiry = new Date();
-      trialExpiry.setMonth(trialExpiry.getMonth() + 3);
+      trialState = ensureTrialState();
+      const trialExpiry = new Date(trialState.trialExpiresAt);
       const [created] = await db.insert(organizations).values({
         code:               'TRIAL',
         name:               'مؤسستي',
@@ -54,9 +72,15 @@ export async function ensureDefaultAdmin(): Promise<void> {
         status:             'trial',
         subscriptionExpiry: trialExpiry,
         maxUsers:           5,
-      }).returning({ id: organizations.id, code: organizations.code });
+      }).returning({
+        id: organizations.id,
+        code: organizations.code,
+        status: organizations.status,
+        createdAt: organizations.createdAt,
+        subscriptionExpiry: organizations.subscriptionExpiry,
+      });
       org = created;
-      logger.info('bootstrap', `default trial org created (code=${created.code}, 3 calendar months)`);
+      logger.info('bootstrap', `default trial org created (code=${created.code}, 180 days)`);
     }
 
     // ── أنشئ مستخدم ADMIN بكلمة مرور فارغة ────────────────────────────────

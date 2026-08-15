@@ -8,6 +8,7 @@ import { db } from '../db.js';
 import { organizations, users, appSettings } from '../schema.js';
 import { hashPassword } from '../auth.js';
 import { logger } from '../logger.js';
+import { ensureTrialState } from '../lib/trial.js';
 import { ENV } from '../env.js';
 import fs from 'fs';
 import path from 'path';
@@ -186,9 +187,9 @@ export const setupRouter = router({
 
       logger.info('setup', 'first-run wizard started');
 
-      // إنشاء المؤسسة — وضع تجريبي لمدة 3 أشهر تقويمية
-      const trialExpiry = new Date();
-      trialExpiry.setMonth(trialExpiry.getMonth() + 3);
+      // إنشاء المؤسسة — 180 يوماً من أول تثبيت ناجح، لا من أول تسجيل دخول.
+      const trialState = ensureTrialState();
+      const trialExpiry = new Date(trialState.trialExpiresAt);
       const [org] = await db.insert(organizations).values({
         code:             'TRIAL',
         name:             input.company.name,

@@ -38,6 +38,9 @@ const ALLOWED_PREFS_KEYS = [
   'organizationName',
   'licenseId',
   'deviceId',
+  'trialFirstInstallAt',
+  'trialExpiresAt',
+  'trialLicenseState',
   // backward-compat aliases
   'savedOrgCode',
   'savedOrgName',
@@ -65,6 +68,9 @@ export interface DevicePrefs {
   organizationName?: string;  // اسم المؤسسة (للعرض فقط)
   licenseId?:        string;  // معرّف الترخيص
   deviceId?:         string;  // معرّف الجهاز (cached)
+  trialFirstInstallAt?: string;
+  trialExpiresAt?:      string;
+  trialLicenseState?:   'trial' | 'expired' | 'licensed';
   // backward-compat aliases
   savedOrgCode?: string;
   savedOrgName?: string;

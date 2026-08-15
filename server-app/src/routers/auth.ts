@@ -6,6 +6,7 @@ import { users, organizations, appSettings, userGroups, userGroupMembers } from 
 import { and, eq } from 'drizzle-orm';
 import { verifyPassword, getAuthCookieOptions } from '../auth.js';
 import { ENV } from '../env.js';
+import { ensureTrialState, isTrialExpired, markTrialExpiredIfNeeded } from '../lib/trial.js';
 
 export const authRouter = router({
 
@@ -53,16 +54,18 @@ export const authRouter = router({
       db.query.users.findFirst({ where: eq(users.id, ctx.user.id) }),
       db.query.organizations.findFirst({
         where: eq(organizations.id, ctx.user.orgId),
-        columns: { status: true, subscriptionExpiry: true },
+        columns: { status: true, createdAt: true, subscriptionExpiry: true },
       }),
     ]);
 
     let trialDaysLeft: number | null = null;
     let isTrial = false;
-    if (org?.status === 'trial' && org.subscriptionExpiry) {
+    if (org?.status === 'trial') {
+      const trialState = markTrialExpiredIfNeeded(ensureTrialState(org.createdAt));
       isTrial = true;
-      const msLeft = new Date(org.subscriptionExpiry).getTime() - Date.now();
+      const msLeft = new Date(trialState.trialExpiresAt).getTime() - Date.now();
       trialDaysLeft = Math.max(0, Math.ceil(msLeft / (1000 * 60 * 60 * 24)));
+      if (isTrialExpired(trialState)) trialDaysLeft = 0;
     }
 
     return {
