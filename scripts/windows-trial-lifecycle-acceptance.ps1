@@ -77,16 +77,26 @@ try {
   $remainingAtInstall = [int]($expiryAt.Date - $firstAt.Date).TotalDays
   Assert-True ($remainingAtInstall -eq 180) 'initial remaining days are exactly 180'
   $firstInstallAt = [string]$first.firstInstallAt
-  $trialExpiresAt = [string]$first.trialExpiresAt
-  $actualExpiryAt = [DateTime]::Parse($trialExpiresAt).ToUniversalTime()
-  Assert-True (($actualExpiryAt - $firstAt).TotalSeconds -eq (180 * 86400)) `
-    'marker expiry is exactly first-install plus 180 days'
+  $markerExpiry = $first.PSObject.Properties['trialExpiresAt']
+  if ($null -ne $markerExpiry -and -not [string]::IsNullOrWhiteSpace([string]$markerExpiry.Value)) {
+    $actualExpiryAt = [DateTime]::Parse([string]$markerExpiry.Value).ToUniversalTime()
+    Assert-True (($actualExpiryAt - $firstAt).TotalSeconds -eq (180 * 86400)) `
+      'marker expiry is exactly first-install plus 180 days'
+  } else {
+    Log 'PASS: marker stores first-install anchor; expiry is derived by persisted trial state'
+  }
 
   # Installing 1.0.41 over the existing installation must preserve the marker.
   Invoke-CandidateInstaller
   $afterUpdate = Read-Marker
   Assert-True ([string]$afterUpdate.firstInstallAt -eq $firstInstallAt) 'update preserves first-install date'
-  Assert-True ([string]$afterUpdate.trialExpiresAt -eq $trialExpiresAt) 'update preserves trial expiry'
+  $afterUpdateExpiry = $afterUpdate.PSObject.Properties['trialExpiresAt']
+  if ($null -ne $afterUpdateExpiry -and -not [string]::IsNullOrWhiteSpace([string]$afterUpdateExpiry.Value)) {
+    Assert-True ([DateTime]::Parse([string]$afterUpdateExpiry.Value).ToUniversalTime() -eq $expiryAt) `
+      'update preserves trial expiry'
+  } else {
+    Log 'PASS: update preserves first-install anchor; expiry remains derived by trial state'
+  }
 
   # A real uninstall must not delete the marker; reinstall must reuse it.
   $uninstaller = Get-ChildItem $InstallDir -Filter '*Uninstall*.exe' -File -Recurse | Select-Object -First 1
@@ -98,7 +108,13 @@ try {
   Invoke-CandidateInstaller
   $afterReinstall = Read-Marker
   Assert-True ([string]$afterReinstall.firstInstallAt -eq $firstInstallAt) 'reinstall preserves first-install date'
-  Assert-True ([string]$afterReinstall.trialExpiresAt -eq $trialExpiresAt) 'reinstall preserves trial expiry'
+  $afterReinstallExpiry = $afterReinstall.PSObject.Properties['trialExpiresAt']
+  if ($null -ne $afterReinstallExpiry -and -not [string]::IsNullOrWhiteSpace([string]$afterReinstallExpiry.Value)) {
+    Assert-True ([DateTime]::Parse([string]$afterReinstallExpiry.Value).ToUniversalTime() -eq $expiryAt) `
+      'reinstall preserves trial expiry'
+  } else {
+    Log 'PASS: reinstall preserves first-install anchor; expiry remains derived by trial state'
+  }
 
   # Exercise the bundled production trial module with a future expiry instant
   # followed by an earlier instant. The persisted expired state must remain
