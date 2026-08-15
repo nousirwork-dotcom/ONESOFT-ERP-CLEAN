@@ -99,6 +99,14 @@ try {
   }
 
   # A real uninstall must not delete the marker; reinstall must reuse it.
+  Get-Process -ErrorAction SilentlyContinue |
+    Where-Object { $_.ProcessName -like 'OneSoft*' -or $_.ProcessName -like '*Setup*' } |
+    Stop-Process -Force -ErrorAction SilentlyContinue
+  $serverService = Get-Service 'OneSoft-Server' -ErrorAction SilentlyContinue
+  if ($null -ne $serverService -and $serverService.Status -ne 'Stopped') {
+    Stop-Service $serverService.Name -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 3
+  }
   $uninstaller = Get-ChildItem $InstallDir -Filter '*Uninstall*.exe' -File -Recurse | Select-Object -First 1
   Assert-True ($null -ne $uninstaller) 'uninstaller exists'
   $uninstall = Start-Process -FilePath $uninstaller.FullName -ArgumentList '/S' -PassThru -Wait
