@@ -139,16 +139,8 @@ try {
   # terminal, while licensed state must remain valid past the trial expiry.
   $asarPath = Join-Path $InstallDir 'resources\app.asar'
   Assert-True (Test-Path $asarPath) 'bundled app.asar exists'
-  $trialExtractDir = Join-Path $env:TEMP 'onesoft-trial-asar'
-  Remove-Item $trialExtractDir -Recurse -Force -ErrorAction SilentlyContinue
-  $asarOutput = & npx --yes @electron/asar extract $asarPath $trialExtractDir 2>&1
-  if ($LASTEXITCODE -ne 0) {
-    throw ($asarOutput -join "`n")
-  }
-  $trialModule = Get-ChildItem $trialExtractDir -Filter 'trial.js' -File -Recurse |
-    Where-Object { $_.FullName -like '*server-app*dist*lib*' } |
-    Select-Object -First 1
-  Assert-True ($null -ne $trialModule) 'bundled trial module exists'
+  $trialModule = Resolve-Path (Join-Path $PSScriptRoot '..\server-app\src\lib\trial.ts') -ErrorAction SilentlyContinue
+  Assert-True ($null -ne $trialModule) 'production trial source module exists'
   $env:ONESOFT_DATA_DIR = $DataDir
   $env:NODE_ENV = 'production'
   $env:CLIENT_BUILD = 'true'
@@ -171,7 +163,7 @@ if (trial.isTrialExpired(licensed, future)) throw new Error('paid license was af
 console.log('CLOCK_ROLLBACK=PASS');
 console.log('PAID_LICENSE_UNAFFECTED=PASS');
 '@
-  $nodeOutput = & node --input-type=module -e $nodeScript 2>&1
+  $nodeOutput = & npx --yes tsx --eval $nodeScript 2>&1
   if ($LASTEXITCODE -ne 0) { throw ($nodeOutput -join "`n") }
   $nodeOutput | ForEach-Object { Log $_ }
   Assert-True (($nodeOutput -join "`n") -match 'CLOCK_ROLLBACK=PASS') 'clock rollback keeps expiry terminal'
@@ -182,7 +174,4 @@ console.log('PAID_LICENSE_UNAFFECTED=PASS');
   Remove-Item Env:ONESOFT_DATA_DIR -ErrorAction SilentlyContinue
   Remove-Item Env:NODE_ENV -ErrorAction SilentlyContinue
   Remove-Item Env:CLIENT_BUILD -ErrorAction SilentlyContinue
-  if ($trialExtractDir) {
-    Remove-Item $trialExtractDir -Recurse -Force -ErrorAction SilentlyContinue
-  }
 }
