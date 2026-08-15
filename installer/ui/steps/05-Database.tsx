@@ -3,6 +3,7 @@ import { useInstallerStore } from '../store/installer.store';
 import type { DatabaseMode } from '../../core/types';
 import type { ExistingDbInfo } from '../../core/database/ExistingDbDetector';
 import { generateSecurePassword } from '../lib/generatePassword';
+import { APP_VERSION } from '../../core/version';
 
 const DB_MODES: {
   id: DatabaseMode;
@@ -155,7 +156,10 @@ export default function Step06DatabaseMode() {
     setSaveState('running');
 
     const cfg = {
-        version: (await window.installer?.getVersion?.()) ?? '1.0.28',
+        // The persisted config version must come from the bundled release
+        // metadata, never from Electron's runtime/package version. Legacy
+        // packages can report 1.0.0 through app:get-version.
+        version: APP_VERSION,
       database: {
         host:          dbOpts.host,
         port:          dbOpts.port,

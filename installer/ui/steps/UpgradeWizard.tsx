@@ -73,8 +73,10 @@ export default function UpgradeWizard() {
         if (typeof configuredPort === 'number' && configuredPort > 0) {
           setBackendPort(configuredPort);
         }
-        const installedVersion = await window.installer?.getVersion?.();
-        if (installedVersion) setTargetVersion(installedVersion);
+        // Keep the upgrade target from the installer bundle's version.json.
+        // app:get-version is the Electron runtime version and can be stale in
+        // legacy packages (for example 1.0.0); it must never replace the
+        // target release shown or sent to UpgradeManager.
         if (config?.database?.user === 'onesoft_app') {
           const credentialProbe = await window.installer?.hasMigrationCredential?.();
           if (!credentialProbe) {
