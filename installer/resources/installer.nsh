@@ -28,7 +28,7 @@
     ; FileFunc GetTime option and would silently return blank fields.
     ${GetTime} "" "LS" $0 $1 $2 $3 $4 $5 $6
     FileOpen $R4 "$R6\OneSoft\trial-install-marker.pending.json" w
-    FileWrite $R4 "{$\r$\n  $\"schema$\": 1,$\r$\n  $\"firstInstallAt$\": $\"$2-$1-$0T$3:$5:$6.000Z$\"$\r$\n}$\r$\n"
+    FileWrite $R4 "{$\r$\n  $\"schema$\": 1,$\r$\n  $\"firstInstallAt$\": $\"$2-$1-$0T$4:$5:$6.000Z$\"$\r$\n}$\r$\n"
     FileClose $R4
   ${EndIf}
 !macroend
