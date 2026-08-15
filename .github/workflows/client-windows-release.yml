@@ -816,7 +816,9 @@ jobs:
       - name: Checkout tested source
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          # Reused artifacts must be tested against the commit that built them.
+          # Fresh builds have no source_head_sha output and use this run's SHA.
+          ref: ${{ needs.reuse-artifact.outputs.source_head_sha || github.sha }}
 
       - name: Install PostgreSQL 16
         shell: pwsh
@@ -855,17 +857,20 @@ jobs:
         shell: pwsh
         env:
           SOURCE_RUN_ID: ${{ github.event.inputs.source_run_id }}
+          SOURCE_HEAD_SHA: ${{ needs.reuse-artifact.outputs.source_head_sha }}
         run: |
           $manifestPath = Get-ChildItem candidate -Filter 'build-manifest.json' -Recurse -File | Select-Object -First 1
           if (-not $manifestPath) { throw 'build-manifest.json is missing from installer-exe artifact' }
           $manifest = Get-Content -Raw $manifestPath.FullName | ConvertFrom-Json
           if ($manifest.version -ne '1.0.41') { throw "Candidate version is $($manifest.version), expected 1.0.41" }
-          # Skip commit-SHA check when reusing an artifact from a different run
-          if ([string]::IsNullOrEmpty($env:SOURCE_RUN_ID)) {
-            if ($manifest.commit -ne '${{ github.sha }}') { throw "Candidate commit $($manifest.commit) does not match workflow commit ${{ github.sha }}" }
-          } else {
-            Write-Host "Reusing artifact from Run $env:SOURCE_RUN_ID — manifest commit: $($manifest.commit) (current sha: ${{ github.sha }})"
+          $trustedCommit = $env:SOURCE_HEAD_SHA
+          if ([string]::IsNullOrWhiteSpace($trustedCommit)) {
+            $trustedCommit = '${{ github.sha }}'
           }
+          if ($manifest.commit -ne $trustedCommit) {
+            throw "Candidate commit $($manifest.commit) does not match trusted source commit $trustedCommit"
+          }
+          Write-Host "Candidate provenance verified: manifest.commit=$($manifest.commit)"
           $x64 = Get-ChildItem candidate -Filter $manifest.x64.file -Recurse -File | Select-Object -First 1
           if (-not $x64) { throw "Candidate x64 file $($manifest.x64.file) is missing" }
           $actual = (Get-FileHash $x64.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -1007,7 +1012,7 @@ jobs:
             candidate/latest-ia32.yml
             candidate/build-manifest.json
           tag_name: ${{ github.event.inputs.tag || github.ref_name }}
-          target_commitish: ${{ github.sha }}
+          target_commitish: ${{ needs.reuse-artifact.outputs.source_head_sha || github.sha }}
           name: "OneSoft ERP 1.0.41"
           body: |
             ## OneSoft ERP 1.0.41

@@ -139,13 +139,12 @@ try {
   # terminal, while licensed state must remain valid past the trial expiry.
   $asarPath = Join-Path $InstallDir 'resources\app.asar'
   Assert-True (Test-Path $asarPath) 'bundled app.asar exists'
-  $trialModulePath = Resolve-Path (Join-Path $PSScriptRoot '..\server-app\src\lib\trial.ts') -ErrorAction SilentlyContinue
-  $trialModule = if ($null -ne $trialModulePath) { [string]$trialModulePath.Path } else { $null }
-  Assert-True ($null -ne $trialModule) 'production trial source module exists'
+  $trialModule = Join-Path $InstallDir 'resources\app\server-app\dist\lib\trial.mjs'
+  Assert-True (Test-Path $trialModule) 'bundled production trial module exists'
   $env:ONESOFT_DATA_DIR = $DataDir
   $env:NODE_ENV = 'production'
   $env:CLIENT_BUILD = 'true'
-  $env:TRIAL_MODULE = $trialModule.FullName
+  $env:TRIAL_MODULE = $trialModule
   $nodeScript = @'
 import { pathToFileURL } from 'node:url';
 const trial = await import(pathToFileURL(process.argv[2]).href);
@@ -167,7 +166,7 @@ console.log('PAID_LICENSE_UNAFFECTED=PASS');
   $nodeScriptPath = Join-Path $env:TEMP ("onesoft-trial-acceptance-" + [Guid]::NewGuid().ToString('N') + '.mjs')
   try {
     Set-Content -Path $nodeScriptPath -Value $nodeScript -Encoding utf8
-    $nodeOutput = & npx --yes tsx $nodeScriptPath $trialModule 2>&1
+    $nodeOutput = & node $nodeScriptPath $trialModule 2>&1
     $nodeOutput | ForEach-Object { Log $_ }
     if ($LASTEXITCODE -ne 0) { throw ($nodeOutput -join "`n") }
     Assert-True (($nodeOutput -join "`n") -match 'CLOCK_ROLLBACK=PASS') 'clock rollback keeps expiry terminal'

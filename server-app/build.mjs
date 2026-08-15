@@ -93,6 +93,29 @@ try {
   process.exit(1);
 }
 
+// ── Testable production entry for the machine-level trial lifecycle ───────────
+// The main server is intentionally bundled into one index.mjs. Keep a small
+// bundled entry for acceptance so lifecycle checks execute the same compiled
+// trial implementation that ships in the installer, not a separately loaded
+// TypeScript source file.
+try {
+  mkdirSync('dist/lib', { recursive: true });
+  await esbuild.build({
+    entryPoints: ['src/lib/trial.ts'],
+    platform: 'node',
+    target: 'node20',
+    format: 'esm',
+    bundle: true,
+    outfile: 'dist/lib/trial.mjs',
+    sourcemap: false,
+    minify: false,
+    logLevel: 'warning',
+  });
+} catch (e) {
+  console.error('\n❌ فشل بناء trial entry:\n', e.message ?? e);
+  process.exit(1);
+}
+
 // ── كتابة build-info.json ─────────────────────────────────────────────────────
 // يُحفظ في dist/ بجانب index.mjs — يُقرأ من setup.ts بدلاً من git runtime
 const buildInfo = {
