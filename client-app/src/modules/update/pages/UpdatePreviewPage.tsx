@@ -5,19 +5,18 @@
 import { useState } from "react";
 
 const MOCK_MANIFEST = {
-  latestVersion:       "1.0.2",
+  latestVersion:       "1.0.41",
   minSupportedVersion: "1.0.0",
   mandatory:           false,
-  messageAr:           "يوجد تحديث جديد يتضمن تحسينات في الأداء وإصلاح مشاكل.",
-  messageEn:           "New update with performance improvements.",
+  messageAr:           "يوجد تحديث جديد: تجربة مجانية لمدة 180 يوماً وإصلاحات لمثبت Windows.",
+  messageEn:           "New update with 180-day trial support and Windows installer fixes.",
   releaseNotes:        [
-    "تحسين شاشة الترخيص",
-    "إصلاح مشاكل التثبيت على Windows 11",
-    "تحسين الأمان",
-    "تحديثات في نظام التحديث التلقائي",
+    "تجربة مجانية لمدة 180 يوماً تبدأ بعد أول تثبيت ناجح",
+    "الحفاظ على تاريخ بداية التجربة عند التحديث وإعادة التثبيت",
+    "تثبيت وترقية Windows بصمت",
   ],
-  downloadUrl:  "https://example.com/OneSoftSetup-1.0.2.exe",
-  fileSizeBytes: 80_450_000,
+  downloadUrl:  "https://github.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/releases/download/v1.0.41/OneSoftSetup-1.0.41-x64.exe",
+  fileSizeBytes: 81_966_246,
 };
 
 const MOCK_MANDATORY = { ...MOCK_MANIFEST, mandatory: true, minSupportedVersion: "1.0.2",
@@ -60,7 +59,7 @@ function DemoDialog({ state, pct }: { state: DemoState; pct: number }) {
   const [showNotes, setShowNotes] = useState(false);
   const manifest   = state === "mandatory" ? MOCK_MANDATORY : MOCK_MANIFEST;
   const isMandatory = state === "mandatory";
-  const currentVer  = "1.0.1";
+  const currentVer  = "1.0.40";
 
   const bps  = 1_258_291;
   const total = manifest.fileSizeBytes!;
