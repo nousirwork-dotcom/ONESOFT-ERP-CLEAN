@@ -147,7 +147,7 @@ try {
   $env:TRIAL_MODULE = $trialModule.FullName
   $nodeScript = @'
 import { pathToFileURL } from 'node:url';
-const trial = await import(pathToFileURL(process.env.TRIAL_MODULE).href);
+const trial = await import(pathToFileURL(process.argv[2]).href);
 const state = trial.ensureTrialState();
 const future = new Date(new Date(state.trialExpiresAt).getTime() + 1000);
 const expired = trial.markTrialExpiredIfNeeded(state, future);
@@ -166,7 +166,7 @@ console.log('PAID_LICENSE_UNAFFECTED=PASS');
   $nodeScriptPath = Join-Path $env:TEMP ("onesoft-trial-acceptance-" + [Guid]::NewGuid().ToString('N') + '.mjs')
   try {
     Set-Content -Path $nodeScriptPath -Value $nodeScript -Encoding utf8
-    $nodeOutput = & npx --yes tsx $nodeScriptPath 2>&1
+    $nodeOutput = & npx --yes tsx $nodeScriptPath $trialModule.FullName 2>&1
     $nodeOutput | ForEach-Object { Log $_ }
     if ($LASTEXITCODE -ne 0) { throw ($nodeOutput -join "`n") }
     Assert-True (($nodeOutput -join "`n") -match 'CLOCK_ROLLBACK=PASS') 'clock rollback keeps expiry terminal'
