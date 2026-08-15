@@ -677,7 +677,63 @@ jobs:
       github.event.inputs.source_run_id != '' &&
       github.event.inputs.source_run_id != null
 
+    outputs:
+      source_head_sha: ${{ steps.provenance.outputs.source_head_sha }}
+
     steps:
+      - name: Validate source run provenance
+        id: provenance
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          RUN_ID="${{ github.event.inputs.source_run_id }}"
+          REPO="${{ github.repository }}"
+          EXPECTED_WORKFLOW=".github/workflows/client-windows-release.yml"
+
+          echo "Fetching metadata for run $RUN_ID in $REPO..."
+          RUN_JSON=$(curl -sf \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/actions/runs/$RUN_ID")
+
+          RUN_WORKFLOW=$(echo "$RUN_JSON"   | jq -r '.path')
+          RUN_REPO=$(echo "$RUN_JSON"       | jq -r '.repository.full_name')
+          RUN_CONCLUSION=$(echo "$RUN_JSON" | jq -r '.conclusion')
+          RUN_HEAD_SHA=$(echo "$RUN_JSON"   | jq -r '.head_sha')
+          RUN_HEAD_BRANCH=$(echo "$RUN_JSON"| jq -r '.head_branch')
+
+          echo "  workflow   : $RUN_WORKFLOW"
+          echo "  repository : $RUN_REPO"
+          echo "  conclusion : $RUN_CONCLUSION"
+          echo "  head_sha   : $RUN_HEAD_SHA"
+          echo "  head_branch: $RUN_HEAD_BRANCH"
+
+          FAIL=0
+          if [[ "$RUN_WORKFLOW" != "$EXPECTED_WORKFLOW" ]]; then
+            echo "❌ PROVENANCE FAIL: workflow='$RUN_WORKFLOW' != expected '$EXPECTED_WORKFLOW'"
+            FAIL=1
+          fi
+          if [[ "$RUN_REPO" != "$REPO" ]]; then
+            echo "❌ PROVENANCE FAIL: repository='$RUN_REPO' != expected '$REPO'"
+            FAIL=1
+          fi
+          if [[ "$RUN_CONCLUSION" != "success" ]]; then
+            echo "❌ PROVENANCE FAIL: source run conclusion='$RUN_CONCLUSION' (must be success)"
+            FAIL=1
+          fi
+          if [[ "$RUN_HEAD_SHA" == "null" || -z "$RUN_HEAD_SHA" ]]; then
+            echo "❌ PROVENANCE FAIL: could not retrieve head_sha from source run"
+            FAIL=1
+          fi
+          if [[ "$FAIL" -eq 1 ]]; then
+            exit 1
+          fi
+
+          echo "✅ Provenance validated: run=$RUN_ID sha=$RUN_HEAD_SHA branch=$RUN_HEAD_BRANCH"
+          echo "source_head_sha=$RUN_HEAD_SHA" >> "$GITHUB_OUTPUT"
+
       - name: Download installer-exe from source run
         uses: actions/download-artifact@v4
         with:
@@ -686,9 +742,10 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path: candidate
 
-      - name: Verify build-manifest.json is present
+      - name: Verify build-manifest.json matches source run SHA
         shell: bash
         run: |
+          set -euo pipefail
           MANIFEST=$(find candidate -name build-manifest.json | head -1)
           if [ -z "$MANIFEST" ]; then
             echo "❌ build-manifest.json missing from source run artifact"
@@ -696,6 +753,14 @@ jobs:
           fi
           echo "✅ Manifest found: $MANIFEST"
           cat "$MANIFEST"
+          # Validate that the manifest's recorded commit matches the provenance-verified head SHA
+          MANIFEST_COMMIT=$(jq -r '.commit' "$MANIFEST")
+          SOURCE_SHA="${{ steps.provenance.outputs.source_head_sha }}"
+          if [[ "$MANIFEST_COMMIT" != "$SOURCE_SHA" ]]; then
+            echo "❌ INTEGRITY FAIL: manifest.commit='$MANIFEST_COMMIT' != source run head_sha='$SOURCE_SHA'"
+            exit 1
+          fi
+          echo "✅ manifest.commit matches source run head SHA: $MANIFEST_COMMIT"
 
       - name: Re-upload as installer-exe for this run
         uses: actions/upload-artifact@v4
@@ -835,8 +900,8 @@ jobs:
       always() &&
       needs.windows-acceptance.result == 'success' &&
       (
-        needs.build-windows.result == 'success' ||
-        needs.reuse-artifact.result == 'success'
+        needs.build-windows.result    == 'success' ||
+        needs.reuse-artifact.result   == 'success'
       ) &&
       github.event.inputs.dry_run != 'true' &&
       (
@@ -857,6 +922,8 @@ jobs:
 
       - name: Verify release candidate manifest
         shell: bash
+        env:
+          SOURCE_HEAD_SHA: ${{ needs.reuse-artifact.outputs.source_head_sha }}
         run: |
           set -euo pipefail
           MANIFEST="$(find candidate -name build-manifest.json -type f | head -1)"
@@ -884,6 +951,18 @@ jobs:
             const sha = crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
             if (sha !== manifest[arch].sha256) throw new Error(`SHA256 mismatch for ${file}`);
           }
+          // Commit-SHA provenance: for reuse path, trust the SHA fetched via the
+          // API (SOURCE_HEAD_SHA); for fresh builds it must match GITHUB_SHA.
+          const sourceHeadSha = process.env.SOURCE_HEAD_SHA;
+          const trustedSha    = sourceHeadSha || process.env.GITHUB_SHA;
+          if (trustedSha && manifest.commit !== trustedSha) {
+            throw new Error(
+              `Artifact provenance mismatch: manifest.commit=${manifest.commit} ` +
+              `does not match trusted SHA=${trustedSha}. ` +
+              `This binary was not built from the expected source commit.`
+            );
+          }
+          console.log(`✅ commit provenance OK: ${manifest.commit}`);
           console.log(JSON.stringify(manifest, null, 2));
           NODE
 
