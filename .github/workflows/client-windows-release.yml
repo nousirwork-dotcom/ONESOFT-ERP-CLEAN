@@ -877,6 +877,23 @@ jobs:
           Write-Host "Using exact candidate: $($x64.FullName)"
           Write-Host "SHA256: $actual"
 
+      - name: Run Windows trial lifecycle acceptance on the exact candidate
+        if: matrix.scenario == 'clean'
+        shell: pwsh
+        run: |
+          ./scripts/windows-trial-lifecycle-acceptance.ps1 `
+            -InstallerPath (Resolve-Path 'candidate\OneSoftSetup-1.0.41-x64.exe') `
+            -ReportDir 'windows-trial-lifecycle'
+
+      - name: Upload Windows trial lifecycle evidence
+        if: always() && matrix.scenario == 'clean'
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-trial-lifecycle
+          path: windows-trial-lifecycle/
+          if-no-files-found: warn
+          retention-days: 30
+
       - name: Run ${{ matrix.scenario }} acceptance against same candidate
         shell: pwsh
         run: |
