@@ -139,7 +139,8 @@ try {
   # terminal, while licensed state must remain valid past the trial expiry.
   $asarPath = Join-Path $InstallDir 'resources\app.asar'
   Assert-True (Test-Path $asarPath) 'bundled app.asar exists'
-  $trialModule = Resolve-Path (Join-Path $PSScriptRoot '..\server-app\src\lib\trial.ts') -ErrorAction SilentlyContinue
+  $trialModulePath = Resolve-Path (Join-Path $PSScriptRoot '..\server-app\src\lib\trial.ts') -ErrorAction SilentlyContinue
+  $trialModule = if ($null -ne $trialModulePath) { [string]$trialModulePath.Path } else { $null }
   Assert-True ($null -ne $trialModule) 'production trial source module exists'
   $env:ONESOFT_DATA_DIR = $DataDir
   $env:NODE_ENV = 'production'
@@ -166,7 +167,7 @@ console.log('PAID_LICENSE_UNAFFECTED=PASS');
   $nodeScriptPath = Join-Path $env:TEMP ("onesoft-trial-acceptance-" + [Guid]::NewGuid().ToString('N') + '.mjs')
   try {
     Set-Content -Path $nodeScriptPath -Value $nodeScript -Encoding utf8
-    $nodeOutput = & npx --yes tsx $nodeScriptPath $trialModule.FullName 2>&1
+    $nodeOutput = & npx --yes tsx $nodeScriptPath $trialModule 2>&1
     $nodeOutput | ForEach-Object { Log $_ }
     if ($LASTEXITCODE -ne 0) { throw ($nodeOutput -join "`n") }
     Assert-True (($nodeOutput -join "`n") -match 'CLOCK_ROLLBACK=PASS') 'clock rollback keeps expiry terminal'
