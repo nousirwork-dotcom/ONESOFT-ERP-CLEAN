@@ -24,12 +24,9 @@
 ; .onInstSuccess، لذلك إلغاء/فشل المثبت لا يستهلك التجربة.
 !macro oneSoftEnsureTrialMarker
   ${IfNot} ${FileExists} "$R6\OneSoft\trial-install-marker.json"
-    ; GetTime is reliable for a filesystem timestamp, but an empty path can
-    ; return blank fields on some Windows/NSIS combinations. Touch the
-    ; pending marker first and read its UTC creation timestamp instead.
-    FileOpen $R4 "$R6\OneSoft\trial-install-marker.pending.json" w
-    FileClose $R4
-    ${GetTime} "$R6\OneSoft\trial-install-marker.pending.json" "G" $0 $1 $2 $3 $4 $5 $6
+    ; LS asks NSIS for the current UTC system time. "G" is not a valid
+    ; FileFunc GetTime option and would silently return blank fields.
+    ${GetTime} "" "LS" $0 $1 $2 $3 $4 $5 $6
     FileOpen $R4 "$R6\OneSoft\trial-install-marker.pending.json" w
     FileWrite $R4 "{$\r$\n  $\"schema$\": 1,$\r$\n  $\"firstInstallAt$\": $\"$2-$1-$0T$3:$4:$5.000Z$\"$\r$\n}$\r$\n"
     FileClose $R4
