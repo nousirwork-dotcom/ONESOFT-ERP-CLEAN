@@ -163,11 +163,17 @@ if (trial.isTrialExpired(licensed, future)) throw new Error('paid license was af
 console.log('CLOCK_ROLLBACK=PASS');
 console.log('PAID_LICENSE_UNAFFECTED=PASS');
 '@
-  $nodeOutput = & npx --yes tsx --eval $nodeScript 2>&1
-  if ($LASTEXITCODE -ne 0) { throw ($nodeOutput -join "`n") }
-  $nodeOutput | ForEach-Object { Log $_ }
-  Assert-True (($nodeOutput -join "`n") -match 'CLOCK_ROLLBACK=PASS') 'clock rollback keeps expiry terminal'
-  Assert-True (($nodeOutput -join "`n") -match 'PAID_LICENSE_UNAFFECTED=PASS') 'paid license is unaffected by trial expiry'
+  $nodeScriptPath = Join-Path $env:TEMP ("onesoft-trial-acceptance-" + [Guid]::NewGuid().ToString('N') + '.mjs')
+  try {
+    Set-Content -Path $nodeScriptPath -Value $nodeScript -Encoding utf8
+    $nodeOutput = & npx --yes tsx $nodeScriptPath 2>&1
+    $nodeOutput | ForEach-Object { Log $_ }
+    if ($LASTEXITCODE -ne 0) { throw ($nodeOutput -join "`n") }
+    Assert-True (($nodeOutput -join "`n") -match 'CLOCK_ROLLBACK=PASS') 'clock rollback keeps expiry terminal'
+    Assert-True (($nodeOutput -join "`n") -match 'PAID_LICENSE_UNAFFECTED=PASS') 'paid license is unaffected by trial expiry'
+  } finally {
+    Remove-Item $nodeScriptPath -Force -ErrorAction SilentlyContinue
+  }
   Log 'WINDOWS TRIAL LIFECYCLE ACCEPTANCE = PASS'
 } finally {
   Remove-Item Env:TRIAL_MODULE -ErrorAction SilentlyContinue
