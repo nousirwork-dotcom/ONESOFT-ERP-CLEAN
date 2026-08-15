@@ -27,18 +27,22 @@
     ; LS asks NSIS for the current UTC system time. "G" is not a valid
     ; FileFunc GetTime option and would silently return blank fields.
     ${GetTime} "" "LS" $0 $1 $2 $3 $4 $5 $6
-    StrCpy $R0 $4
-    StrLen $R2 $R0
-    ${If} $R2 == 1
-      StrCpy $R0 "0$R0"
+    StrCpy $R7 $0
+    StrCpy $R8 $1
+    StrCpy $R9 $2
+    StrCpy $R2 $4
+    StrCpy $R3 $5
+    StrCpy $R5 $6
+    StrLen $R4 $R2
+    ${If} $R4 == 1
+      StrCpy $R2 "0$R2"
     ${EndIf}
-    StrCpy $R1 $5
-    StrLen $R2 $R1
-    ${If} $R2 == 1
-      StrCpy $R1 "0$R1"
+    StrLen $R4 $R3
+    ${If} $R4 == 1
+      StrCpy $R3 "0$R3"
     ${EndIf}
     FileOpen $R4 "$R6\OneSoft\trial-install-marker.pending.json" w
-    FileWrite $R4 "{$\r$\n  $\"schema$\": 1,$\r$\n  $\"firstInstallAt$\": $\"$2-$1-$0T$R0:$R1:$6.000Z$\"$\r$\n}$\r$\n"
+    FileWrite $R4 "{$\r$\n  $\"schema$\": 1,$\r$\n  $\"firstInstallAt$\": $\"$R9-$R8-$R7T$R2:$R3:$R5.000Z$\"$\r$\n}$\r$\n"
     FileClose $R4
   ${EndIf}
 !macroend
