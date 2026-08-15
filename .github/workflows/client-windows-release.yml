@@ -909,7 +909,7 @@ jobs:
             NewInstallerPath = '${{ steps.candidate.outputs.exe }}'
             NewVersion = '${{ steps.candidate.outputs.version }}'
             ExpectedSchemaVersion = $Matches[1]
-             ReportDir = "windows-v100-v1041-${{ matrix.scenario }}"
+            ReportDir = "windows-v100-v1041-${{ matrix.scenario }}"
           }
           if ('${{ matrix.scenario }}' -eq 'stale-ledger') {
             $params.ReproduceStaleLedger = $true
@@ -920,8 +920,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-           name: windows-v100-v1041-${{ matrix.scenario }}
-           path: windows-v100-v1041-${{ matrix.scenario }}/
+          name: windows-v100-v1041-${{ matrix.scenario }}
+          path: windows-v100-v1041-${{ matrix.scenario }}/
           if-no-files-found: warn
           retention-days: 30
 
