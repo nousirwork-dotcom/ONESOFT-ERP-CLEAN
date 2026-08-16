@@ -11,7 +11,7 @@
 
     After the real upgrade reaches the requested version, the script performs
     read-only PostgreSQL assertions for:
-      - migration 0093_schema_compatibility_repair
+      - migration 0095_sales_invoice_schema_compatibility
       - the complete 0093 schema compatibility contract
       - Foundation status and 77 Foundation records per active organization
       - the four required system accounts and duplicate detection
@@ -298,12 +298,12 @@ ORDER BY id
     }
 }
 
-function Assert-0093AndCompatibility {
+function Assert-0095AndCompatibility {
     $ledger = Get-LedgerSignature
-    if ($ledger.SchemaVersion -eq "0093_schema_compatibility_repair") {
-        Pass "0093_schema_compatibility_repair = PASS"
+    if ($ledger.SchemaVersion -eq "0095_sales_invoice_schema_compatibility") {
+        Pass "0095_sales_invoice_schema_compatibility = PASS"
     } else {
-        Fail "Expected schema ledger 0093_schema_compatibility_repair, found '$($ledger.SchemaVersion)'"
+        Fail "Expected schema ledger 0095_sales_invoice_schema_compatibility, found '$($ledger.SchemaVersion)'"
     }
 
     $checksSql = @"
@@ -621,7 +621,7 @@ function Compare-SecondRun($BeforeLedger, $BeforeAccounts, $BeforeFoundation) {
     Assert-Ready "Second run"
     $afterLedger = Get-LedgerSignature
     if ($afterLedger.SchemaVersion -eq $BeforeLedger.SchemaVersion) {
-        Pass "Second run schema version unchanged at 0093_schema_compatibility_repair"
+        Pass "Second run schema version unchanged at 0095_sales_invoice_schema_compatibility"
     } else {
         Fail "Second run changed schema version: $($BeforeLedger.SchemaVersion) -> $($afterLedger.SchemaVersion)"
     }
@@ -756,7 +756,7 @@ try {
         throw "Persisted runtime database connection is incomplete"
     }
 
-    $null = Assert-0093AndCompatibility
+    $null = Assert-0095AndCompatibility
     $accountSnapshot = @(Assert-SystemAccounts "First run")
     $foundationSnapshot = @(Assert-Foundation "First run")
     $null = Assert-Ready "First run"

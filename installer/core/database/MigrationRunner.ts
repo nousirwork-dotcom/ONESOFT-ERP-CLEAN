@@ -2,6 +2,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import type { PoolClient } from 'pg';
 import type { MigrationResult, ProgressEvent } from '../types.js';
+import { synchronizePrimaryKeySequences } from './SequenceCompatibilityRepair.js';
 
 type Emit = (e: ProgressEvent) => void;
 
@@ -190,6 +191,11 @@ export class MigrationRunner {
         }
         emit({ level: 'success', message: '✅ جدول organizations موجود', timestamp: now() });
 
+        // Legacy backup/import paths can leave serial/identity sequences behind
+        // their table data. Repair all single-column PK sequences monotonically
+        // before any compatibility migration or Foundation work can insert rows.
+        await synchronizePrimaryKeySequences(client, emit);
+
         // ── STEP 3: جدول تتبع Migrations ──────────────────────────────────────
         await client.query(`
           CREATE TABLE IF NOT EXISTS __drizzle_migrations (
@@ -298,6 +304,10 @@ export class MigrationRunner {
             };
           }
         }
+
+        // Migrations may create additional serial/identity PKs. Run the same
+        // monotonic repair again so the final upgraded schema is consistent.
+        await synchronizePrimaryKeySequences(client, emit);
 
         // ── STEP 5: تحقق نهائي من organizations ───────────────────────────────
         const finalCheck = await client.query(

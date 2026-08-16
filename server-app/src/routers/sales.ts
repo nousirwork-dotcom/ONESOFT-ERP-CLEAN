@@ -10,6 +10,26 @@ import { resolveInvoiceTaxItems } from '../lib/invoiceTaxValidation.js';
 import { assertSalesJournalUnitCanBeUsed } from '../services/zatcaUnitLifecycle.js';
 import { issueZatcaDocument } from '../services/zatcaDocumentIssuance.js';
 
+function originalDatabaseError(error: unknown): Record<string, unknown> {
+  let current = error as Record<string, unknown> | null;
+  const visited = new Set<unknown>();
+  while (
+    current?.cause &&
+    typeof current.cause === 'object' &&
+    current.cause !== current &&
+    !visited.has(current.cause)
+  ) {
+    visited.add(current.cause);
+    current = current.cause as Record<string, unknown>;
+  }
+  return current ?? {};
+}
+
+function databaseErrorField(error: Record<string, unknown>, field: string): string | null {
+  const value = error[field];
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
 // ── تحقق أن جميع بنود الفاتورة تُشير إلى أصناف مسجلة في النظام ──────────────────
 async function validateInvoiceItems(items: { productId?: number; productName: string; productCode?: string }[], orgId: number) {
   if (!items || items.length === 0) return;
@@ -571,12 +591,18 @@ export const salesRouter = router({
           }).returning();
           invoice = row;
         } catch (e: any) {
+          const cause = originalDatabaseError(e);
           console.error('[sales.create] INSERT ERROR:', {
-            message: e?.message,
-            code: e?.code,
-            detail: e?.detail,
-            constraint: e?.constraint,
-            table: e?.table,
+            message: typeof e?.message === 'string' ? e.message : String(e),
+            causeMessage: databaseErrorField(cause, 'message'),
+            code: databaseErrorField(cause, 'code') ?? databaseErrorField(e, 'code'),
+            sqlState: databaseErrorField(cause, 'code') ?? databaseErrorField(e, 'code'),
+            detail: databaseErrorField(cause, 'detail') ?? databaseErrorField(e, 'detail'),
+            hint: databaseErrorField(cause, 'hint'),
+            constraint: databaseErrorField(cause, 'constraint') ?? databaseErrorField(e, 'constraint'),
+            table: databaseErrorField(cause, 'table') ?? databaseErrorField(e, 'table'),
+            column: databaseErrorField(cause, 'column'),
+            schema: databaseErrorField(cause, 'schema'),
             data: { invoiceNumber: finalInvoiceNumber, orgId, paymentMethod: invoiceData.paymentMethod },
           });
           throw e;

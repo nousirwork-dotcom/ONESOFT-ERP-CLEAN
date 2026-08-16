@@ -441,6 +441,8 @@ CREATE TABLE IF NOT EXISTS "sales_invoices" (
     "due_date" TIMESTAMP,
     "customer_id" INTEGER,
     "customer_name" VARCHAR(500),
+    "customer_type" VARCHAR(20) DEFAULT 'individual',
+    "customer_tax_number" VARCHAR(100),
     "warehouse_id" INTEGER,
     "branch_id" INTEGER,
     "user_id" INTEGER,
@@ -461,6 +463,9 @@ CREATE TABLE IF NOT EXISTS "sales_invoices" (
     "ref_invoice_id" INTEGER,
     "generated_stock_voucher_id" INTEGER,
     "generated_stock_journal_entry_id" INTEGER,
+    "zatca_submitted_at" TIMESTAMP,
+    "zatca_attempt_count" INTEGER NOT NULL DEFAULT 0,
+    "zatca_rejection_reason" TEXT,
     "created_at" TIMESTAMP NOT NULL DEFAULT now(),
     "updated_at" TIMESTAMP NOT NULL DEFAULT now()
 );

@@ -253,6 +253,7 @@ const requiredPackageFiles = [
   path.join(RESOURCE_APP, 'package.json'),
   path.join(RESOURCE_APP, 'drizzle', '0092_repair_legacy_migration_drift.sql'),
   path.join(RESOURCE_APP, 'drizzle', '0093_schema_compatibility_repair.sql'),
+  path.join(RESOURCE_APP, 'drizzle', '0095_sales_invoice_schema_compatibility.sql'),
   path.join(INSTALLER, 'dist-ui', 'build-manifest.json'),
   path.join(ROOT, 'client-app', 'dist', 'build-manifest.json'),
 ];

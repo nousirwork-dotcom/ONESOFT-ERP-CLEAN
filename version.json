@@ -2,7 +2,7 @@
   "version": "1.0.42",
   "build": "20260815.001",
   "releaseDate": "2026-08-15",
-  "schemaVersion": "0093_schema_compatibility_repair",
+  "schemaVersion": "0095_sales_invoice_schema_compatibility",
   "product": "OneSoft ERP",
   "channel": "stable"
 }

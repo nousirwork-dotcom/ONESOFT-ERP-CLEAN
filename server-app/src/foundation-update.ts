@@ -382,6 +382,7 @@ function resolveRecordFks(
 
   for (const [key, value] of Object.entries(record)) {
     if (key.startsWith('_') && key.endsWith('_fk')) continue; // نحذف حقول التوثيق
+    if (key === 'id') continue; // IDs in a Foundation snapshot belong to the source database.
     out[key] = value;
   }
   resolveUserReferences(record, out, userMap);

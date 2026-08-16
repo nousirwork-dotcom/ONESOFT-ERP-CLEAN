@@ -17,6 +17,7 @@ import { pool } from './db.js';
 import { checkSchema } from './check-schema.js';
 import { APP_VERSION } from './app-version.js';
 import { REQUIRED_SCHEMA_VERSION } from './schema-version.js';
+import { synchronizePrimaryKeySequences } from '../../installer/core/database/SequenceCompatibilityRepair.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -382,6 +383,7 @@ if (process.env['ONESOFT_FOUNDATION_ONLY'] === '1') {
       console.error('[foundation-only] FOUNDATION_INCOMPLETE', foundationResult);
       await finishFoundationProcess(1);
     }
+    await verifySchemaAndSynchronizeSequences('foundation-only');
     console.log('[foundation-only] FOUNDATION_OK');
     await finishFoundationProcess(0);
   } catch (error) {
@@ -400,6 +402,34 @@ async function finishFoundationProcess(code: number): Promise<never> {
     new Promise<void>((resolve) => process.stderr.write('', () => resolve())),
   ]);
   process.exit(code);
+}
+
+/**
+ * Final database integrity gate shared by Fresh startup and the Legacy
+ * foundation-only process:
+ *   Foundation → schema verification → all PK sequence synchronization → Ready
+ */
+async function verifySchemaAndSynchronizeSequences(stage: string): Promise<void> {
+  if (!(await checkSchema(pool))) {
+    throw new Error(`فشل تحقق المخطط بعد Foundation (${stage})`);
+  }
+
+  const client = await pool.connect();
+  try {
+    const result = await synchronizePrimaryKeySequences(client, (event) => {
+      const line = `[database-integrity:${stage}] ${event.message}`;
+      logger.info('database-integrity', line);
+      console.log(line);
+    });
+    logger.info('database-integrity', 'DATABASE_INTEGRITY_READY', {
+      stage,
+      sequencesInspected: result.inspected,
+      sequencesRepaired: result.repaired,
+      sequencesPreserved: result.preserved,
+    });
+  } finally {
+    client.release();
+  }
 }
 
 const server = app.listen(ENV.port, () => {
@@ -532,6 +562,7 @@ try {
     console.error('[startup] ❌ FOUNDATION_INCOMPLETE — server will not announce readiness.', foundationResult);
     process.exit(1);
   }
+  await verifySchemaAndSynchronizeSequences('startup');
 } catch (err) {
   console.error('[startup] ❌ FOUNDATION_INCOMPLETE — server startup aborted:', err);
   process.exit(1);

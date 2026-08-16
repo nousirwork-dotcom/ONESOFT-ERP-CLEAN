@@ -17,6 +17,9 @@ export { ConnectionTester }     from './database/ConnectionTester.js';
 export { DatabaseInstaller }    from './database/DatabaseInstaller.js';
 export { MigrationRunner }      from './database/MigrationRunner.js';
 export {
+  synchronizePrimaryKeySequences,
+} from './database/SequenceCompatibilityRepair.js';
+export {
   DatabaseRoleManager,
   runRoleBootstrapTransaction,
   runOwnershipRepairTransaction,

@@ -1747,7 +1747,9 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
 
           {/* col 1 (يمين): الفرع — أول حقل إلزامي ══ */}
           {(() => {
-            const whs = warehousesQuery.data ?? [];
+            // شاشة الفاتورة تختار فرعاً فعلياً، لا المخزن العام غير المرتبط
+            // بفرع. يبقى المخزن العام متاحاً للشاشات التي تحتاج كل المخازن.
+            const whs = (warehousesQuery.data ?? []).filter((w: any) => w.branchId != null);
             const selWh = whs.find((w: any) => w.id === warehouseId);
             const wName = (w: any): string => isAr ? (w.name ?? w.nameEn ?? "") : (w.nameEn || (w.name ?? ""));
             return (

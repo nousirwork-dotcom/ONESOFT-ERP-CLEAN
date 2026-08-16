@@ -1,4 +1,4 @@
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import { REQUIRED_SCHEMA_VERSION } from './schema-version.js';
 
 const EXPECTED_TABLES = [
@@ -77,6 +77,18 @@ const EXPECTED_TABLES = [
   'user_group_migration_log',
 ];
 
+const EXPECTED_COLUMNS: Record<string, string[]> = {
+  // Required by the current sales/ZATCA runtime. Legacy databases receive
+  // these through migration 0095; Fresh base_schema includes them directly.
+  sales_invoices: [
+    'customer_type',
+    'customer_tax_number',
+    'zatca_submitted_at',
+    'zatca_attempt_count',
+    'zatca_rejection_reason',
+  ],
+};
+
 export async function checkSchema(pool: Pool): Promise<boolean> {
   // ── تشخيص: طباعة بيئة الاتصال قبل أي محاولة ──────────────────────────────
   console.log('[schema-check] ── Connection Diagnostics ──');
@@ -89,7 +101,7 @@ export async function checkSchema(pool: Pool): Promise<boolean> {
   console.log(`[schema-check]   CONFIG_PATH    = ${process.env['ONESOFT_CONFIG'] ?? 'default path'}`);
   // ── نهاية التشخيص ────────────────────────────────────────────────────────
 
-  let client;
+  let client: PoolClient;
   try {
     client = await pool.connect();
   } catch (err) {
@@ -115,6 +127,33 @@ export async function checkSchema(pool: Pool): Promise<boolean> {
       );
       console.error('[schema-check] Run "pnpm migrate" to bring the schema up to date.');
       return false;
+    }
+
+    const expectedTableNames = Object.keys(EXPECTED_COLUMNS);
+    if (expectedTableNames.length > 0) {
+      const columnResult = await client.query<{ table_name: string; column_name: string }>(
+        `SELECT table_name, column_name
+           FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = ANY($1::text[])`,
+        [expectedTableNames],
+      );
+      const existingColumns = new Set(
+        columnResult.rows.map((row) => `${row.table_name}.${row.column_name}`),
+      );
+      const missingColumns = Object.entries(EXPECTED_COLUMNS).flatMap(([table, columns]) =>
+        columns
+          .filter((column) => !existingColumns.has(`${table}.${column}`))
+          .map((column) => `${table}.${column}`),
+      );
+      if (missingColumns.length > 0) {
+        console.error(
+          '[schema-check] FATAL: The following required columns are missing:\n  ' +
+            missingColumns.join('\n  ') +
+            '\n[schema-check] Run the shipped migrations to repair the schema.',
+        );
+        return false;
+      }
     }
 
     // ── 2. Verify the migration version stamp matches this build ─────────────

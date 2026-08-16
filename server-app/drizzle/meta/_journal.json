@@ -659,6 +659,13 @@
       "when": 1786581464575,
       "tag": "0093_schema_compatibility_repair",
       "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "7",
+      "when": 1786839000000,
+      "tag": "0095_sales_invoice_schema_compatibility",
+      "breakpoints": true
     }
   ]
 }
