@@ -1536,8 +1536,7 @@ export default function DocumentJournalsPage() {
                 <div className="grid grid-cols-2 gap-x-5 gap-y-2.5">
                   <R label="نوع القيد" lw={145}>
                     <FS id="issuanceJournalType" value={form.issuanceJournalType} onValueChange={v => set("issuanceJournalType", v)}>
-                      {DOC_TYPES.filter(dt => ["journal_entry","purchase_invoice","receipt_voucher","payment_voucher"].includes(dt.id))
-                        .map(dt => <SelectItem key={dt.id} value={dt.id}>{dt.label}</SelectItem>)}
+                      {DOC_TYPES.map(dt => <SelectItem key={dt.id} value={dt.id}>{dt.label}</SelectItem>)}
                     </FS>
                   </R>
                   <R label="دفتر القيد" lw={145}>
