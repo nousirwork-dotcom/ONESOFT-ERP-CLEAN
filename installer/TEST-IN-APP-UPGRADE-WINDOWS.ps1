@@ -11,9 +11,9 @@
 
     After the real upgrade reaches the requested version, the script performs
     read-only PostgreSQL assertions for:
-      - migration 0095_sales_invoice_schema_compatibility
+       - migration 0096_warehouse_branch_reconciliation
       - the complete 0093 schema compatibility contract
-      - Foundation status and 77 Foundation records per active organization
+       - Foundation status and 76 Foundation records per active organization
       - the four required system accounts and duplicate detection
       - ready=true
 
@@ -298,12 +298,12 @@ ORDER BY id
     }
 }
 
-function Assert-0095AndCompatibility {
+function Assert-0096AndCompatibility {
     $ledger = Get-LedgerSignature
-    if ($ledger.SchemaVersion -eq "0095_sales_invoice_schema_compatibility") {
-        Pass "0095_sales_invoice_schema_compatibility = PASS"
+    if ($ledger.SchemaVersion -eq "0096_warehouse_branch_reconciliation") {
+        Pass "0096_warehouse_branch_reconciliation = PASS"
     } else {
-        Fail "Expected schema ledger 0095_sales_invoice_schema_compatibility, found '$($ledger.SchemaVersion)'"
+        Fail "Expected schema ledger 0096_warehouse_branch_reconciliation, found '$($ledger.SchemaVersion)'"
     }
 
     $checksSql = @"
@@ -540,9 +540,9 @@ function Assert-Foundation([string]$Phase) {
     }
     foreach ($org in $foundation) {
         if ($org.Status -eq "applied" -and
-            $org.RecordCount -eq 77 -and
+            $org.RecordCount -eq 76 -and
             $org.BrokenUserFks -eq 0) {
-            Pass "$Phase: Foundation applied, 77 records, no broken user FKs for $($org.OrgCode)"
+            Pass "$Phase: Foundation applied, 76 records, no broken user FKs for $($org.OrgCode)"
         } else {
             Fail "$Phase: Foundation invalid for $($org.OrgCode) (status=$($org.Status), records=$($org.RecordCount), broken_user_fks=$($org.BrokenUserFks))"
         }
@@ -621,7 +621,7 @@ function Compare-SecondRun($BeforeLedger, $BeforeAccounts, $BeforeFoundation) {
     Assert-Ready "Second run"
     $afterLedger = Get-LedgerSignature
     if ($afterLedger.SchemaVersion -eq $BeforeLedger.SchemaVersion) {
-        Pass "Second run schema version unchanged at 0095_sales_invoice_schema_compatibility"
+        Pass "Second run schema version unchanged at 0096_warehouse_branch_reconciliation"
     } else {
         Fail "Second run changed schema version: $($BeforeLedger.SchemaVersion) -> $($afterLedger.SchemaVersion)"
     }
@@ -756,7 +756,7 @@ try {
         throw "Persisted runtime database connection is incomplete"
     }
 
-    $null = Assert-0095AndCompatibility
+    $null = Assert-0096AndCompatibility
     $accountSnapshot = @(Assert-SystemAccounts "First run")
     $foundationSnapshot = @(Assert-Foundation "First run")
     $null = Assert-Ready "First run"

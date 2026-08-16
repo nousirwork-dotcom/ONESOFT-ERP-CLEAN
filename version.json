@@ -2,7 +2,7 @@
   "version": "1.0.42",
   "build": "20260815.001",
   "releaseDate": "2026-08-15",
-  "schemaVersion": "0095_sales_invoice_schema_compatibility",
+  "schemaVersion": "0096_warehouse_branch_reconciliation",
   "product": "OneSoft ERP",
   "channel": "stable"
 }

@@ -15,10 +15,16 @@ const baseSchema = fs.readFileSync(
   path.join(root, 'server-app/drizzle/base_schema.sql'),
   'utf8',
 );
-const compatibilityMigration = fs.readFileSync(
-  path.join(root, 'server-app/drizzle/0095_sales_invoice_schema_compatibility.sql'),
-  'utf8',
-);
+const compatibilityMigration = [
+  fs.readFileSync(
+    path.join(root, 'server-app/drizzle/0095_sales_invoice_schema_compatibility.sql'),
+    'utf8',
+  ),
+  fs.readFileSync(
+    path.join(root, 'server-app/drizzle/0096_warehouse_branch_reconciliation.sql'),
+    'utf8',
+  ),
+].join('\n');
 
 function assert(condition: boolean, message: string): void {
   if (!condition) throw new Error(`FAIL: ${message}`);

@@ -5,4 +5,4 @@
  * constant to match the new filename (without the .sql extension), then
  * run `pnpm migrate` so the live database is stamped with the new version.
  */
-export const REQUIRED_SCHEMA_VERSION = '0095_sales_invoice_schema_compatibility';
+export const REQUIRED_SCHEMA_VERSION = '0096_warehouse_branch_reconciliation';

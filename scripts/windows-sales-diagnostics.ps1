@@ -424,7 +424,7 @@ ORDER BY id;
     Invoke-ReadOnlySql -Name 'migration_presence' -Sql @"
 SELECT tag, COUNT(*)::int AS count
 FROM public."__drizzle_migrations"
-WHERE tag IN ('0040_branch_seller', '0093_schema_compatibility_repair', '0095_sales_invoice_schema_compatibility')
+WHERE tag IN ('0040_branch_seller', '0093_schema_compatibility_repair', '0095_sales_invoice_schema_compatibility', '0096_warehouse_branch_reconciliation')
 GROUP BY tag
 ORDER BY tag;
 "@ | Out-Null

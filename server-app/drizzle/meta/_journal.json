@@ -666,6 +666,13 @@
       "when": 1786839000000,
       "tag": "0095_sales_invoice_schema_compatibility",
       "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "7",
+      "when": 1786842000000,
+      "tag": "0096_warehouse_branch_reconciliation",
+      "breakpoints": true
     }
   ]
 }

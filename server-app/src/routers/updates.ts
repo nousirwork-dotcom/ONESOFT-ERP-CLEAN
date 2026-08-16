@@ -31,7 +31,7 @@ function readVersionFile(): CurrentVersionInfo {
     version:       APP_VERSION,
     build:         '20260630.001',
     releaseDate:   '2026-06-30',
-    schemaVersion: '0095_sales_invoice_schema_compatibility',
+    schemaVersion: '0096_warehouse_branch_reconciliation',
     product:       'OneSoft ERP',
     channel:       'stable',
   };

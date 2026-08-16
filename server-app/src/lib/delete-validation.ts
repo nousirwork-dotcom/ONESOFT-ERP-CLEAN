@@ -7,7 +7,7 @@
 import { db } from '../db.js';
 import { and, eq, sql } from 'drizzle-orm';
 import {
-  inventory, stockVouchers, stockVoucherItems, inventoryCounts,
+  inventory, stockVouchers, inventoryCounts,
   salesInvoices, purchaseInvoices,
   documentJournals, userWarehouseAssignments,
   warehouseAccountLinks,
@@ -40,7 +40,8 @@ export interface DeletionCheckItem {
 const MOVEMENT_TABLES: Array<{ table: any; orgField: any; idField: any; label: string }> = [
   { table: inventory,         orgField: (inventory as any).orgId,         idField: (inventory as any).warehouseId,         label: 'أرصدة مخزنية' },
   { table: stockVouchers,     orgField: (stockVouchers as any).orgId,     idField: (stockVouchers as any).warehouseId,     label: 'حركات مخزنية' },
-  { table: stockVoucherItems, orgField: null,                              idField: (stockVoucherItems as any).warehouseId, label: 'أصناف في حركات المخزون' },
+  // stock_voucher_items has no warehouse_id. Its parent stock_vouchers row
+  // is already checked above through the real voucher.warehouse_id FK.
   { table: inventoryCounts,   orgField: (inventoryCounts as any).orgId,   idField: (inventoryCounts as any).warehouseId,   label: 'جرد مخزني' },
   { table: salesInvoices,     orgField: (salesInvoices as any).orgId,     idField: (salesInvoices as any).warehouseId,     label: 'فواتير مبيعات' },
   { table: purchaseInvoices,  orgField: (purchaseInvoices as any).orgId,  idField: (purchaseInvoices as any).warehouseId,   label: 'فواتير مشتريات' },

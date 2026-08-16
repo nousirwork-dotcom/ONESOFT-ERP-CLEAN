@@ -21,7 +21,7 @@ param(
 
   [string]$OldVersion = '1.0.0',
   [string]$NewVersion = '1.0.42',
-  [string]$ExpectedSchemaVersion = '0095_sales_invoice_schema_compatibility',
+  [string]$ExpectedSchemaVersion = '0096_warehouse_branch_reconciliation',
   [string]$InstallDir = 'C:\Program Files\OneSoft ERP',
   [string]$DatabaseName = 'onesoft_erp',
   [string]$DatabaseUser = 'postgres',

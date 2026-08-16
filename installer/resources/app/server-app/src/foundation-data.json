@@ -12383,30 +12383,6 @@
       "includeInFoundation": true,
       "recordOrigin": "user",
       "foundationTemplateVersion": null
-    },
-    {
-      "branchId": null,
-      "name": "المخزن الرئيسي",
-      "address": null,
-      "isActive": true,
-      "code": "WH-MAIN",
-      "name2": null,
-      "fullName1": null,
-      "fullName2": null,
-      "invAccountId": null,
-      "cogsAccount1Id": null,
-      "cogsAccount2Id": null,
-      "cashAccountId": null,
-      "bankAccountId": null,
-      "salesAccount1Id": null,
-      "allowedUserId": null,
-      "allowedUserGroup": null,
-      "copyFromWarehouseId": null,
-      "recordPolicy": "flexible",
-      "foundationKey": "wh.المخزن_الرئيسي",
-      "includeInFoundation": true,
-      "recordOrigin": "foundation",
-      "foundationTemplateVersion": "2026-07-16"
     }
   ],
   "units": [],
@@ -12417,5 +12393,5 @@
   "documentTemplates": [],
   "postingDefinitions": [],
   "exportedAt": "2026-07-24T00:54:42.579Z",
-  "totalRecords": 77
+  "totalRecords": 76
 }

@@ -825,8 +825,8 @@ async function assertFoundation(name: string, runtime: DatabaseConnectionOptions
         );
         foundationCount += Number(count.rows[0]?.count ?? 0);
       }
-      if (foundationCount !== 77) {
-        throw new Error(`Legacy organization ${org.id} has ${foundationCount} Foundation records; expected 77`);
+      if (foundationCount !== 76) {
+        throw new Error(`Legacy organization ${org.id} has ${foundationCount} Foundation records; expected 76`);
       }
       for (const table of ['document_journals', 'warehouses']) {
         const brokenUserFks = await client.query(
@@ -866,7 +866,7 @@ async function assertFoundation(name: string, runtime: DatabaseConnectionOptions
     );
     return { orgCount: orgs.rowCount, before: before.rows[0].count };
   });
-  console.log('[legacy-test] migrations → Foundation → organizations detection without code → 77 records, no user FK violations: PASS');
+  console.log('[legacy-test] migrations → Foundation → organizations detection without code → 76 records, no user FK violations: PASS');
 }
 
 type RequiredSystemAccountSnapshot = {
