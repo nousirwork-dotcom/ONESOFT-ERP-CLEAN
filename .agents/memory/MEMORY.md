@@ -1,0 +1,4 @@
+- [Migration ledger sequence safety](migration-ledger.md) — Keep Legacy migration ledger IDs intact while repairing stale PostgreSQL sequences before appends.
+- [NSIS GetTime field handling](nsis-gettime.md) — FileFunc returns mixed-width time fields; preserve date fields and pad hour/minute only when one digit.
+- [Electron bundle test entry](electron-bundle-test-entry.md) — The server build is one bundled entry; acceptance must not expect source-level modules inside the installer.
+- [Linux Windows packaging limit](linux-windows-packaging.md) — NSIS x64 packaging needs a working Windows-capable build host; this Linux environment cannot run electron-builder's rcedit reliably.
