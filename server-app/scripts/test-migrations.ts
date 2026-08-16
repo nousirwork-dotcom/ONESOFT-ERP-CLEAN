@@ -151,6 +151,198 @@ async function seedUpgradeData(client: PgClient): Promise<{
   return { orgId, customerId, username };
 }
 
+async function seedWarehouseReconciliationFixtures(client: PgClient): Promise<{
+  orgIds: number[];
+  legacyWarehouseIds: number[];
+  duplicateWarehouseIds: Array<number | null>;
+  customerId: number;
+}> {
+  const fixtures = [
+    { code: 'RECON-WHMAIN', name: 'WH-MAIN Only', warehouseCode: 'WH-MAIN' },
+    { code: 'RECON-001', name: '001 Only', warehouseCode: '001' },
+    { code: 'RECON-DUPLICATE', name: 'Duplicate References', warehouseCode: '001', duplicateWarehouseCode: 'WH-MAIN' },
+  ];
+  const orgIds: number[] = [];
+  const legacyWarehouseIds: number[] = [];
+  const duplicateWarehouseIds: Array<number | null> = [];
+  let customerId = 0;
+
+  for (const [index, fixture] of fixtures.entries()) {
+    const org = await client.query(
+      `INSERT INTO organizations (code, name, status)
+       VALUES ($1, $2, 'trial')
+       RETURNING id`,
+      [fixture.code, fixture.name],
+    );
+    const orgId = Number(org.rows[0].id);
+    orgIds.push(orgId);
+
+    const customer = await client.query(
+      `INSERT INTO customers (org_id, code, name, phone)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id`,
+      [
+        orgId,
+        index === 0 ? 'CUS-KEEP' : `RECON-CUS-${index}`,
+        index === 0 ? 'Customer Must Survive' : `Reconciliation Customer ${index}`,
+        index === 0 ? '0500000000' : `051000000${index}`,
+      ],
+    );
+    if (index === 0) customerId = Number(customer.rows[0].id);
+
+    await client.query(
+      `INSERT INTO chart_of_accounts
+         (org_id, code, name, account_type, nature, is_parent, allow_posting,
+          is_active, record_type, system_key)
+       VALUES
+         ($1, '110101', 'Reconciliation Cash', 'asset', 'debit', false, true, true, 'system', '110101'),
+         ($1, '410101', 'Reconciliation Sales', 'revenue', 'credit', false, true, true, 'system', '410101'),
+         ($1, '210501', 'Reconciliation VAT', 'liability', 'credit', false, true, true, 'system', '210501'),
+         ($1, '110103', 'Reconciliation Installment Cash', 'asset', 'debit', false, true, true, 'system', '110103')`,
+      [orgId],
+    );
+
+    const warehouse = await client.query(
+      `INSERT INTO warehouses
+         (org_id, code, name, is_active, include_in_foundation, record_origin)
+       VALUES ($1, $2, $3, true, false, 'user')
+       RETURNING id`,
+      [orgId, fixture.warehouseCode, fixture.name],
+    );
+    legacyWarehouseIds.push(Number(warehouse.rows[0].id));
+
+    let duplicateWarehouseId: number | null = null;
+    if (fixture.duplicateWarehouseCode) {
+      const duplicateWarehouse = await client.query(
+        `INSERT INTO warehouses
+           (org_id, code, name, is_active, include_in_foundation, record_origin)
+         VALUES ($1, $2, $3, true, false, 'user')
+         RETURNING id`,
+        [orgId, fixture.duplicateWarehouseCode, `${fixture.name} Duplicate`],
+      );
+      duplicateWarehouseId = Number(duplicateWarehouse.rows[0].id);
+    }
+    duplicateWarehouseIds.push(duplicateWarehouseId);
+
+    if (index === 0) {
+      const branch = await client.query(
+        `INSERT INTO branches (org_id, name)
+         VALUES ($1, 'Reconciliation Customer Branch')
+         RETURNING id`,
+        [orgId],
+      );
+      await client.query(
+        `INSERT INTO warehouses (org_id, branch_id, code, name)
+         VALUES ($1, $2, 'CUS-WH', 'Customer Warehouse')`,
+        [orgId, branch.rows[0].id],
+      );
+    }
+
+    if (duplicateWarehouseId !== null) {
+      await client.query(
+        `INSERT INTO users (org_id, username, password_hash, name, default_warehouse_id)
+         VALUES ($1, $2, 'not-used-by-test', 'Reconciliation Reference User', $3)`,
+        [orgId, `recon_reference_${process.pid}`, duplicateWarehouseId],
+      );
+      await client.query(
+        `INSERT INTO warehouse_account_links (warehouse_id, label)
+         VALUES ($1, 'reconciliation-duplicate-link')`,
+        [duplicateWarehouseId],
+      );
+      await client.query(
+        `INSERT INTO document_journals (org_id, doc_type, code, name, warehouse_id)
+         VALUES ($1, 'sales', 'RECON-DJ', 'Reconciliation Journal', $2)`,
+        [orgId, duplicateWarehouseId],
+      );
+      await client.query(
+        `INSERT INTO stock_vouchers (org_id, voucher_number, type, warehouse_id)
+         VALUES ($1, 'RECON-SV', 'receipt', $2)`,
+        [orgId, duplicateWarehouseId],
+      );
+    }
+  }
+
+  return { orgIds, legacyWarehouseIds, duplicateWarehouseIds, customerId };
+}
+
+async function assertWarehouseReconciliationFixtures(
+  client: PgClient,
+  orgIds: number[],
+  legacyWarehouseIds: number[],
+  duplicateWarehouseIds: Array<number | null>,
+): Promise<void> {
+  for (const [index, orgId] of orgIds.entries()) {
+    const rows = await client.query(
+      `SELECT id, code, foundation_key, is_active, include_in_foundation
+         FROM warehouses
+        WHERE org_id = $1
+        ORDER BY id`,
+      [orgId],
+    );
+    const canonical = rows.rows.filter(
+      (row) =>
+        row.is_active === true &&
+        row.code === '001' &&
+        row.foundation_key === 'wh.001' &&
+        row.include_in_foundation === true,
+    );
+    if (canonical.length !== 1) {
+      throw new Error(
+        `reconciliation fixture ${index} expected one active canonical warehouse: ${JSON.stringify(rows.rows)}`,
+      );
+    }
+    const legacy = rows.rows.find((row) => Number(row.id) === legacyWarehouseIds[index]);
+    if (!legacy || Number(legacy.id) !== Number(canonical[0].id)) {
+      throw new Error(
+        `reconciliation fixture ${index} did not preserve the legacy warehouse as canonical: ${JSON.stringify(rows.rows)}`,
+      );
+    }
+    if (
+      rows.rows.some(
+        (row) =>
+          row.is_active === true &&
+          (String(row.code).toUpperCase() === 'WH-MAIN' ||
+            row.foundation_key === 'wh.المخزن_الرئيسي'),
+      )
+    ) {
+      throw new Error(`reconciliation fixture ${index} left an active WH-MAIN row`);
+    }
+
+    const duplicateId = duplicateWarehouseIds[index];
+    if (duplicateId !== null && duplicateId !== undefined) {
+      const duplicate = rows.rows.find((row) => Number(row.id) === duplicateId);
+      if (!duplicate || duplicate.is_active === true || duplicate.foundation_key !== null) {
+        throw new Error(
+          `reconciliation fixture ${index} did not retire duplicate warehouse: ${JSON.stringify(rows.rows)}`,
+        );
+      }
+      const canonicalId = Number(canonical[0].id);
+      const references = await client.query(
+        `SELECT
+           (SELECT default_warehouse_id FROM users
+             WHERE org_id = $1 AND username = $2) AS user_warehouse_id,
+           (SELECT warehouse_id FROM warehouse_account_links
+             WHERE label = 'reconciliation-duplicate-link') AS link_warehouse_id,
+           (SELECT warehouse_id FROM document_journals
+             WHERE org_id = $1 AND code = 'RECON-DJ') AS journal_warehouse_id,
+           (SELECT warehouse_id FROM stock_vouchers
+             WHERE org_id = $1 AND voucher_number = 'RECON-SV') AS voucher_warehouse_id`,
+        [orgId, `recon_reference_${process.pid}`],
+      );
+      const referenceRow = references.rows[0];
+      if (
+        [referenceRow.user_warehouse_id, referenceRow.link_warehouse_id,
+          referenceRow.journal_warehouse_id, referenceRow.voucher_warehouse_id]
+          .some((value) => Number(value) !== canonicalId)
+      ) {
+        throw new Error(
+          `reconciliation fixture ${index} left stale references: ${JSON.stringify(referenceRow)}`,
+        );
+      }
+    }
+  }
+}
+
 function stableHash(value: unknown): string {
   return createHash('sha256')
     .update(JSON.stringify(value))
@@ -319,6 +511,7 @@ async function runUpgradeStartup(
 
 const freshDatabase = `onesoft_migration_fresh_${process.pid}`;
 const upgradeDatabase = `onesoft_migration_upgrade_${process.pid}`;
+const reconciliationDatabase = `onesoft_migration_reconciliation_${process.pid}`;
 let client: PgClient | null = null;
 
 try {
@@ -340,6 +533,53 @@ try {
   console.log('[migration-test] fresh database: PASS');
   await client.end();
   client = null;
+
+  await createDatabase(reconciliationDatabase);
+  client = new Client({ connectionString: databaseUrlFor(reconciliationDatabase) });
+  await client.connect();
+  await applyThrough(client, '0095_sales_invoice_schema_compatibility');
+  const {
+    orgIds: reconciliationOrgIds,
+    legacyWarehouseIds,
+    duplicateWarehouseIds,
+    customerId: reconciliationCustomerId,
+  } = await seedWarehouseReconciliationFixtures(client);
+  await client.query(
+    `CREATE TABLE IF NOT EXISTS _schema_version (
+       id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+       version TEXT NOT NULL,
+       stamped_at TIMESTAMP NOT NULL DEFAULT now()
+     )`,
+  );
+  await client.query(
+    `INSERT INTO _schema_version (id, version)
+     VALUES (1, '0095_sales_invoice_schema_compatibility')
+     ON CONFLICT (id) DO UPDATE SET version = EXCLUDED.version, stamped_at = now()`,
+  );
+  await client.end();
+  client = null;
+
+  // Startup applies 0096 and then runs Foundation against both legacy shapes.
+  await runUpgradeStartup(
+    reconciliationDatabase,
+    reconciliationOrgIds[0]!,
+    reconciliationCustomerId,
+  );
+  const reconciliationVerify = new Client({
+    connectionString: databaseUrlFor(reconciliationDatabase),
+  });
+  await reconciliationVerify.connect();
+  try {
+    await assertWarehouseReconciliationFixtures(
+      reconciliationVerify,
+      reconciliationOrgIds,
+      legacyWarehouseIds,
+      duplicateWarehouseIds,
+    );
+  } finally {
+    await reconciliationVerify.end();
+  }
+  console.log('[migration-test] WH-MAIN-only + code-001-only reconciliation before Foundation: PASS');
 
   await createDatabase(upgradeDatabase);
   client = new Client({ connectionString: databaseUrlFor(upgradeDatabase) });
@@ -421,4 +661,5 @@ try {
   if (client) await client.end().catch(() => undefined);
   await dropDatabase(freshDatabase).catch(() => undefined);
   await dropDatabase(upgradeDatabase).catch(() => undefined);
+  await dropDatabase(reconciliationDatabase).catch(() => undefined);
 }

@@ -10,6 +10,11 @@ CREATE TEMP TABLE _warehouse_reconciliation_map (
   canonical_id integer NOT NULL
 ) ON COMMIT DROP;
 
+CREATE TEMP TABLE _warehouse_reconciliation_canonical (
+  org_id integer PRIMARY KEY,
+  canonical_id integer NOT NULL
+) ON COMMIT DROP;
+
 WITH candidates AS (
   SELECT
     w.id,
@@ -20,43 +25,48 @@ WITH candidates AS (
         CASE
           WHEN w.is_active = true AND w.foundation_key = 'wh.001' THEN 0
           WHEN w.is_active = true AND w.code = '001' THEN 1
-          WHEN w.foundation_key = 'wh.001' THEN 2
-          WHEN w.code = '001' THEN 3
-          ELSE 4
+          WHEN upper(coalesce(w.code, '')) = 'WH-MAIN' THEN 2
+          WHEN w.foundation_key = 'wh.001' THEN 3
+          WHEN w.code = '001' THEN 4
+          ELSE 5
         END,
         w.id
     ) AS rn
   FROM warehouses w
-  WHERE w.foundation_key = 'wh.001' OR w.code = '001'
-),
-canonical AS (
-  SELECT org_id, id AS canonical_id
-  FROM candidates
-  WHERE rn = 1
-),
-sources AS (
-  SELECT w.id AS old_id, w.org_id, c.canonical_id
-  FROM warehouses w
-  JOIN canonical c ON c.org_id = w.org_id AND c.canonical_id <> w.id
   WHERE
-    w.code = '001'
+    w.foundation_key = 'wh.001'
+    OR w.code = '001'
     OR upper(coalesce(w.code, '')) = 'WH-MAIN'
-    OR w.foundation_key IN ('wh.001', 'wh.المخزن_الرئيسي')
 )
-INSERT INTO _warehouse_reconciliation_map (old_id, org_id, canonical_id)
-SELECT old_id, org_id, canonical_id
-FROM sources;
+INSERT INTO _warehouse_reconciliation_canonical (org_id, canonical_id)
+SELECT org_id, id
+FROM candidates
+WHERE rn = 1;
 
--- If a legacy organization had only a user-created code-001 row, make that
--- chosen canonical row Foundation-addressable without changing its user data.
+INSERT INTO _warehouse_reconciliation_map (old_id, org_id, canonical_id)
+SELECT w.id, w.org_id, c.canonical_id
+FROM warehouses w
+JOIN _warehouse_reconciliation_canonical c
+  ON c.org_id = w.org_id
+ AND c.canonical_id <> w.id
+WHERE
+  w.code = '001'
+  OR upper(coalesce(w.code, '')) = 'WH-MAIN'
+  OR w.foundation_key IN ('wh.001', 'wh.المخزن_الرئيسي');
+
+/*
+ * The canonical table is session-local and intentionally kept separate from
+ * the source map: an organization with only one legacy warehouse has no
+ * source row to map, but still needs its selected row normalized below.
+ */
 UPDATE warehouses w
-SET foundation_key = 'wh.001',
+SET code = '001',
+    foundation_key = 'wh.001',
     include_in_foundation = true
 WHERE w.id IN (
-  SELECT DISTINCT canonical_id
-  FROM _warehouse_reconciliation_map
-)
-AND (w.foundation_key IS NULL OR w.foundation_key = '');
+  SELECT canonical_id
+  FROM _warehouse_reconciliation_canonical
+);
 
 -- Direct warehouse references.
 UPDATE users u
@@ -207,6 +217,29 @@ BEGIN
   IF remaining <> 0 THEN
     RAISE EXCEPTION
       'warehouse reconciliation left % stale references', remaining;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM warehouses w
+    WHERE w.is_active = true
+      AND (
+        upper(coalesce(w.code, '')) = 'WH-MAIN'
+        OR w.foundation_key IN ('wh.001', 'wh.المخزن_الرئيسي')
+      )
+      AND NOT EXISTS (
+        SELECT 1
+        FROM _warehouse_reconciliation_map m
+        WHERE m.old_id = w.id
+      )
+      AND NOT (
+        w.code = '001'
+        AND w.foundation_key = 'wh.001'
+        AND w.include_in_foundation = true
+      )
+  ) THEN
+    RAISE EXCEPTION
+      'warehouse reconciliation left an active non-canonical Foundation warehouse';
   END IF;
 END $$;
 
