@@ -1604,34 +1604,34 @@ export default function DocumentJournalsPage() {
                         key={type.id}
                         className="rounded-lg border border-[#5d5349] bg-[#F2F0EC] overflow-hidden"
                       >
-                        <div className="grid grid-cols-5 gap-x-3 px-3 py-2 border-b border-[#b8aea3]" dir="rtl">
-                            <div className="min-w-0">
+                        <div className="grid grid-cols-5 gap-x-3 px-3 py-2 border-b border-[#b8aea3] text-center" dir="rtl">
+                            <div className="min-w-0 text-center">
                               <div className="text-[10px] font-medium text-[#806c5a] mb-0.5">نوع السند</div>
-                              <div className="text-[10px] font-semibold text-[#3A3030] truncate">
+                              <div className="text-[11px] font-semibold text-[#3A3030] truncate">
                                 {type.nameAr || "نوع سند جديد"}
                               </div>
                             </div>
-                            <div className="min-w-0">
+                            <div className="min-w-0 text-center">
                               <div className="text-[10px] font-medium text-[#806c5a] mb-0.5">الاسم العربي</div>
-                              <div className="text-[10px] text-slate-700 truncate">
+                              <div className="text-[11px] text-slate-700 truncate">
                                 {type.nameAr || <span className="text-slate-300">—</span>}
                               </div>
                             </div>
-                            <div className="min-w-0">
+                            <div className="min-w-0 text-center">
                               <div className="text-[10px] font-medium text-[#806c5a] mb-0.5">الاسم الإنجليزي</div>
-                              <div className="text-[10px] text-slate-600 truncate" dir="ltr">
+                              <div className="text-[11px] text-slate-600 truncate text-center" dir="ltr">
                                 {type.nameEn || <span className="text-slate-300">—</span>}
                               </div>
                             </div>
-                            <div className="min-w-0">
+                            <div className="min-w-0 text-center">
                               <div className="text-[10px] font-medium text-[#806c5a] mb-0.5">كود عربي</div>
-                              <div className="text-[10px] font-mono text-slate-600 truncate">
+                              <div className="text-[11px] font-mono text-slate-600 truncate">
                                 {type.codeAr || <span className="text-slate-300">—</span>}
                               </div>
                             </div>
-                            <div className="min-w-0">
+                            <div className="min-w-0 text-center">
                               <div className="text-[10px] font-medium text-[#806c5a] mb-0.5">كود إنجليزي</div>
-                              <div className="text-[10px] font-mono text-slate-600 truncate" dir="ltr">
+                              <div className="text-[11px] font-mono text-slate-600 truncate text-center" dir="ltr">
                                 {type.codeEn || <span className="text-slate-300">—</span>}
                               </div>
                             </div>
