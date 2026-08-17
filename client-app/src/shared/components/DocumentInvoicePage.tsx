@@ -457,6 +457,14 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   const navInvoiceQuery = config.docCategory === "sales"
     ? trpc.salesInvoices.get.useQuery({ id: navInvoiceId! }, { enabled: !!navInvoiceId })
     : trpc.purchases.get.useQuery({ id: navInvoiceId! }, { enabled: !!navInvoiceId });
+  const linkedDocumentsQuery = trpc.salesInvoices.getLinkedDocuments.useQuery(
+    { id: savedInvoiceId! },
+    {
+      enabled: config.docCategory === "sales" && savedInvoiceId !== null,
+      staleTime: 5000,
+    },
+  );
+  const linkedDocuments = linkedDocumentsQuery.data as any;
 
   // تحميل المستند المختار بالتنقل
   useEffect(() => {
@@ -1834,6 +1842,48 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
               <span className="col-span-2 break-all">
                 <b>UUID:</b> {sourceInvoice.zatcaUuid || "غير مُرسل بعد"}
               </span>
+            </div>
+          </div>
+        )}
+        {config.docCategory === "sales" && savedInvoiceId && linkedDocuments && (
+          <div className="mt-2 rounded border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-700" dir="rtl">
+            <div className="mb-1.5 flex items-center justify-between">
+              <strong className="text-slate-800">سلسلة المستندات المرتبطة</strong>
+              <span className={`rounded px-2 py-0.5 font-semibold ${linkedDocuments.current?.isPosted ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>
+                {linkedDocuments.current?.isPosted ? "مرحل" : "غير مرحل"}
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {linkedDocuments.parent && (
+                <button
+                  type="button"
+                  className="rounded border border-slate-300 bg-white px-2 py-1 hover:bg-slate-100"
+                  onClick={() => setNavInvoiceId(linkedDocuments.parent.id)}
+                >
+                  الأصل: {linkedDocuments.parent.invoiceNumber}
+                </button>
+              )}
+              {linkedDocuments.parent && <span className="text-slate-400">←</span>}
+              <span className="rounded border border-blue-200 bg-blue-50 px-2 py-1 font-semibold">
+                الحالي: {linkedDocuments.current?.invoiceNumber}
+              </span>
+              {(linkedDocuments.children ?? []).map((child: any) => (
+                <React.Fragment key={child.id}>
+                  <span className="text-slate-400">→</span>
+                  <button
+                    type="button"
+                    className="rounded border border-slate-300 bg-white px-2 py-1 hover:bg-slate-100"
+                    onClick={() => setNavInvoiceId(child.id)}
+                  >
+                    تابع: {child.invoiceNumber}
+                  </button>
+                </React.Fragment>
+              ))}
+            </div>
+            <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
+              <span><b>قيد المبيعات:</b> {linkedDocuments.accounting?.salesJournal?.entryNumber ?? "غير منشأ"}</span>
+              <span><b>سند المخزون:</b> {linkedDocuments.stock?.voucherNumber ?? "غير منشأ"}</span>
+              <span><b>قيد COGS:</b> {linkedDocuments.accounting?.cogsJournal?.entryNumber ?? "غير منشأ"}</span>
             </div>
           </div>
         )}

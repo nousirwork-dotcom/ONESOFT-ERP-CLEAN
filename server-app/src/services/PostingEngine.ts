@@ -565,6 +565,23 @@ export async function buildSalesInvoiceLines(
   return { lines, warnings, totalDebit: totalDebit.toFixed(4), totalCredit: totalCredit.toFixed(4), isBalanced };
 }
 
+/** Returns the actual posting direction, including the reversal required by
+ * sales returns and credit notes. */
+export async function buildSalesPostingLines(
+  invoice: typeof salesInvoices.$inferSelect,
+  journal: typeof documentJournals.$inferSelect | null,
+  orgId: number,
+) {
+  const result = await buildSalesInvoiceLines(invoice, journal, orgId);
+  const isReturn = invoice.invoiceType === 'return' || invoice.invoiceType === 'credit_note';
+  return {
+    ...result,
+    lines: isReturn
+      ? result.lines.map((line) => ({ ...line, debit: line.credit, credit: line.debit }))
+      : result.lines,
+  };
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // buildPurchaseInvoiceLines — بناء أسطر قيد فاتورة المشتريات
 // ══════════════════════════════════════════════════════════════════════════════
@@ -685,6 +702,12 @@ export async function insertJournalEntry(opts: {
   tx?: DbClient;
 }) {
   const client = opts.tx ?? db;
+  // Entries without a document journal still need a serialized allocator.
+  // The transaction-scoped lock keeps JE-* numbers unique during concurrent
+  // sales postings instead of relying on an advisory read of the last row.
+  if (!opts.journalId && opts.tx) {
+    await client.execute(sql`SELECT pg_advisory_xact_lock(${opts.orgId}::bigint)`);
+  }
   const reserved = opts.journalId
     ? await reserveDocumentNumber(opts.journalId, opts.orgId, client)
     : null;

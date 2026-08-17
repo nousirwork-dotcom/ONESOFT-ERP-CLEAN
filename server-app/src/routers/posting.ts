@@ -3,7 +3,7 @@ import { eq, and, inArray, gte, lte, sql, isNull } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
 import {
-  salesInvoices, purchaseInvoices,
+  salesInvoices, salesInvoiceItems, purchaseInvoices,
   journalEntries, journalEntryLines,
   documentJournals, chartOfAccounts,
   pendingAccountMovements, pendingStockMovements,
@@ -15,6 +15,7 @@ import {
   resolveDocTypeAccounts,
   resolveDocTypeAccountsByJournal,
   buildSalesInvoiceLines,
+  buildSalesPostingLines,
   buildPurchaseInvoiceLines,
   autoPostSalesInvoice,
   autoPostPurchaseInvoice,
@@ -25,6 +26,12 @@ import {
   type AccountLinkConfig,
   type PaymentTypesConfig,
 } from '../services/PostingEngine.js';
+import {
+  cancelSalesStockMovement,
+  postSalesStockMovement,
+  syncUnpostedSalesEffects,
+} from '../services/salesPostingEffects.js';
+import { assertJournalAccess, assertSalesPermission, assertWarehouseAccess } from '../lib/salesPermissions.js';
 
 type IssuanceConfig = {
   journalEntryType?: string | null;
@@ -57,6 +64,7 @@ export {
   resolveDocTypeAccounts,
   resolveDocTypeAccountsByJournal,
   buildSalesInvoiceLines,
+  buildSalesPostingLines,
   buildPurchaseInvoiceLines,
   autoPostSalesInvoice,
   autoPostPurchaseInvoice,
@@ -102,7 +110,7 @@ export const postingRouter = router({
       } as typeof documentJournals.$inferSelect;
 
       const { lines, warnings, totalDebit, totalCredit, isBalanced } =
-        await buildSalesInvoiceLines(invoice, effectiveJournal, orgId);
+        await buildSalesPostingLines(invoice, effectiveJournal, orgId);
 
       return {
         invoiceNumber: invoice.invoiceNumber,
@@ -121,11 +129,13 @@ export const postingRouter = router({
     .input(z.object({ invoiceId: z.number() }))
     .mutation(async ({ ctx, input }) => {
       const orgId = ctx.user.orgId;
+      await assertSalesPermission(ctx.user, 'post');
       const invoice = await db.query.salesInvoices.findFirst({
         where: and(eq(salesInvoices.id, input.invoiceId), eq(salesInvoices.orgId, orgId)),
       });
       if (!invoice) throw new Error('الفاتورة غير موجودة');
       if (invoice.isPosted) throw new Error('الفاتورة مرحَّلة مسبقاً');
+      if (invoice.status === 'draft') throw new Error('لا يمكن ترحيل مسودة قبل اعتمادها');
 
       const journal = invoice.journalId
         ? await db.query.documentJournals.findFirst({
@@ -135,6 +145,8 @@ export const postingRouter = router({
 
       if (journal?.postingMode === 'disabled')
         throw new Error('الترحيل معطَّل لهذا الدفتر');
+      await assertJournalAccess(ctx.user, invoice.journalId);
+      await assertWarehouseAccess(ctx.user, invoice.warehouseId);
 
       const docTypeAccs = invoice.docTypeId
         ? await resolveDocTypeAccounts(invoice.docTypeId, orgId)
@@ -168,40 +180,104 @@ export const postingRouter = router({
           );
       }
 
-      const { lines, isBalanced } = await buildSalesInvoiceLines(invoice, effectiveJournal, orgId);
+      const { lines, isBalanced } = await buildSalesPostingLines(invoice, effectiveJournal, orgId);
       if (!isBalanced) throw new Error('لا يمكن ترحيل المستند: المدين لا يساوي الدائن في القيد المحاسبي');
 
       await validateAccounts(lines.map(l => l.accountId));
 
-      const entry = await insertJournalEntry({
-        orgId,
-        userId:          ctx.user.id,
-        date:            invoice.invoiceDate,
-        description:     `ترحيل ${invoice.invoiceType === 'debit_note' ? 'إشعار مدين' : 'مستند مبيعات'} ${invoice.invoiceNumber}`,
-        reference:       invoice.invoiceNumber,
-        sourceDocType:   invoice.invoiceType === 'debit_note'
-          ? 'debit_note'
-          : invoice.invoiceType === 'credit_note'
-            ? 'credit_note'
-            : invoice.invoiceType === 'return'
+      return db.transaction(async (tx) => {
+        const locked = await tx.execute(sql`
+          SELECT id, is_posted AS "isPosted", status
+          FROM sales_invoices
+          WHERE id = ${input.invoiceId} AND org_id = ${orgId}
+          FOR UPDATE
+        `);
+        const lockedRow = locked.rows[0] as { id: number; isPosted: boolean; status: string } | undefined;
+        if (!lockedRow) throw new Error('الفاتورة غير موجودة');
+        if (lockedRow.isPosted) throw new Error('الفاتورة مرحَّلة مسبقاً');
+        if (lockedRow.status === 'draft') throw new Error('لا يمكن ترحيل مسودة قبل اعتمادها');
+
+        const txInvoice = await tx.query.salesInvoices.findFirst({
+          where: and(eq(salesInvoices.id, input.invoiceId), eq(salesInvoices.orgId, orgId)),
+        });
+        if (!txInvoice) throw new Error('الفاتورة غير موجودة');
+        const txItems = await tx.query.salesInvoiceItems.findMany({
+          where: eq(salesInvoiceItems.invoiceId, txInvoice.id),
+        });
+
+        // يدعم السجلات القديمة التي لم تُنشئ آثاراً معلّقة، ويعيد بناء
+        // الآثار بأمان داخل نفس قفل الترحيل دون تكرار تغيير المخزون.
+        await syncUnpostedSalesEffects(tx, txInvoice, txItems, orgId);
+
+        const sourceDocType = txInvoice.invoiceType === 'credit_note'
+          ? 'credit_note'
+          : txInvoice.invoiceType === 'debit_note'
+            ? 'debit_note'
+            : txInvoice.invoiceType === 'return'
               ? 'sales_return'
-              : 'sales_invoice',
-        sourceDocId:     invoice.id,
-        sourceDocNumber: invoice.invoiceNumber,
-        lines,
+              : 'sales_invoice';
+        const entry = await insertJournalEntry({
+          orgId,
+          userId:          ctx.user.id,
+          date:            txInvoice.invoiceDate,
+          description:     `ترحيل ${txInvoice.invoiceType === 'debit_note' ? 'إشعار مدين' : 'مستند مبيعات'} ${txInvoice.invoiceNumber}`,
+          reference:       txInvoice.invoiceNumber,
+          sourceDocType:   invoice.invoiceType === 'debit_note'
+            ? 'debit_note'
+            : invoice.invoiceType === 'credit_note'
+              ? 'credit_note'
+              : invoice.invoiceType === 'return'
+                ? 'sales_return'
+                : 'sales_invoice',
+          sourceDocId:     txInvoice.id,
+          sourceDocNumber: txInvoice.invoiceNumber,
+          journalId:       txInvoice.journalId,
+          generatedDocType: txInvoice.invoiceType,
+          lines,
+          tx,
+        });
+
+        const stock = await postSalesStockMovement(tx, txInvoice, orgId, ctx.user);
+
+        await tx.update(salesInvoices)
+          .set({
+            isPosted: true,
+            postedAt: new Date(),
+            postedJournalEntryId: entry.id,
+            generatedStockVoucherId: stock?.id ?? null,
+            generatedStockJournalEntryId: stock?.generatedJournalEntryId ?? null,
+            updatedAt: new Date(),
+          })
+          .where(and(
+            eq(salesInvoices.id, input.invoiceId),
+            eq(salesInvoices.orgId, orgId),
+            eq(salesInvoices.isPosted, false),
+          ));
+
+        await tx.update(pendingAccountMovements)
+          .set({ status: 'linked', linkedJournalEntryId: entry.id, updatedAt: new Date() })
+          .where(and(
+            eq(pendingAccountMovements.orgId, orgId),
+            eq(pendingAccountMovements.sourceDocId, txInvoice.id),
+            eq(pendingAccountMovements.status, 'unposted'),
+          ));
+
+        return {
+          success: true,
+          journalEntryId: entry.id,
+          entryNumber: entry.entryNumber,
+          stockVoucherId: stock?.id ?? null,
+          stockVoucherNumber: stock?.voucherNumber ?? null,
+          stockJournalEntryId: stock?.generatedJournalEntryId ?? null,
+        };
       });
-
-      await db.update(salesInvoices)
-        .set({ isPosted: true, postedAt: new Date(), postedJournalEntryId: entry.id, updatedAt: new Date() })
-        .where(and(eq(salesInvoices.id, input.invoiceId), eq(salesInvoices.orgId, orgId)));
-
-      return { success: true, journalEntryId: entry.id, entryNumber: entry.entryNumber };
     }),
 
   unpostSalesInvoice: protectedProcedure
     .input(z.object({ invoiceId: z.number() }))
     .mutation(async ({ ctx, input }) => {
       const orgId = ctx.user.orgId;
+      await assertSalesPermission(ctx.user, 'unpost');
       const invoice = await db.query.salesInvoices.findFirst({
         where: and(eq(salesInvoices.id, input.invoiceId), eq(salesInvoices.orgId, orgId)),
       });
@@ -216,19 +292,80 @@ export const postingRouter = router({
 
       if (journal && !journal.allowUnpost)
         throw new Error('إلغاء الترحيل غير مسموح به في هذا الدفتر');
+      await assertJournalAccess(ctx.user, invoice.journalId);
+      await assertWarehouseAccess(ctx.user, invoice.warehouseId);
 
-      if (invoice.postedJournalEntryId) {
-        await db.delete(journalEntryLines)
-          .where(eq(journalEntryLines.entryId, invoice.postedJournalEntryId));
-        await db.delete(journalEntries)
-          .where(and(eq(journalEntries.id, invoice.postedJournalEntryId), eq(journalEntries.orgId, orgId)));
-      }
+      return db.transaction(async (tx) => {
+        const locked = await tx.execute(sql`
+          SELECT id, is_posted AS "isPosted", posted_journal_entry_id AS "postedJournalEntryId",
+                 generated_stock_journal_entry_id AS "generatedStockJournalEntryId"
+          FROM sales_invoices
+          WHERE id = ${input.invoiceId} AND org_id = ${orgId}
+          FOR UPDATE
+        `);
+        const row = locked.rows[0] as {
+          id: number; isPosted: boolean; postedJournalEntryId: number | null;
+          generatedStockJournalEntryId: number | null;
+        } | undefined;
+        if (!row?.isPosted) throw new Error('الفاتورة ليست مرحَّلة');
 
-      await db.update(salesInvoices)
-        .set({ isPosted: false, postedAt: null, postedJournalEntryId: null, updatedAt: new Date() })
-        .where(and(eq(salesInvoices.id, input.invoiceId), eq(salesInvoices.orgId, orgId)));
+        const entryIds = [row.postedJournalEntryId, row.generatedStockJournalEntryId].filter(
+          (value): value is number => Number.isInteger(value),
+        );
+        for (const entryId of entryIds) {
+          const entry = await tx.query.journalEntries.findFirst({
+            where: and(eq(journalEntries.id, entryId), eq(journalEntries.orgId, orgId)),
+          });
+          if (!entry?.journalId) continue;
+          const newer = await tx.execute(sql`
+            SELECT id
+            FROM journal_entries
+            WHERE org_id = ${orgId}
+              AND journal_id = ${entry.journalId}
+              AND status = 'posted'
+              AND id > ${entry.id}
+            LIMIT 1
+          `);
+          if (newer.rows.length > 0) {
+            throw new Error('لا يمكن فك الترحيل: توجد قيود لاحقة في نفس دفتر الترحيل');
+          }
+        }
 
-      return { success: true };
+        await cancelSalesStockMovement(tx, invoice, orgId);
+        await tx.update(journalEntries)
+          .set({ status: 'cancelled' })
+          .where(and(
+            eq(journalEntries.orgId, orgId),
+            inArray(journalEntries.id, entryIds),
+          ));
+        await tx.update(pendingAccountMovements)
+          .set({ status: 'unposted', linkedJournalEntryId: null, linkedStockVoucherId: null, updatedAt: new Date() })
+          .where(and(
+            eq(pendingAccountMovements.orgId, orgId),
+            eq(pendingAccountMovements.sourceDocId, invoice.id),
+            eq(pendingAccountMovements.status, 'linked'),
+          ));
+        await tx.update(pendingStockMovements)
+          .set({ status: 'unposted', linkedJournalEntryId: null, linkedStockVoucherId: null, updatedAt: new Date() })
+          .where(and(
+            eq(pendingStockMovements.orgId, orgId),
+            eq(pendingStockMovements.sourceDocId, invoice.id),
+            eq(pendingStockMovements.status, 'linked'),
+          ));
+
+        await tx.update(salesInvoices)
+          .set({
+            isPosted: false,
+            postedAt: null,
+            postedJournalEntryId: null,
+            generatedStockVoucherId: null,
+            generatedStockJournalEntryId: null,
+            updatedAt: new Date(),
+          })
+          .where(and(eq(salesInvoices.id, input.invoiceId), eq(salesInvoices.orgId, orgId)));
+
+        return { success: true };
+      });
     }),
 
   // ══════════════════════════════════════════════════════════════════════════

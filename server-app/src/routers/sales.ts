@@ -2,13 +2,14 @@ import { z } from 'zod';
 import { eq, and, desc, like, or, sql } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
-import { salesInvoices, salesInvoiceItems, salesInvoicePayments, paymentMethods, products, customers, stockVouchers, stockVoucherItems, documentJournals, warehouses, users, zatcaPosUnits, organizations } from '../schema.js';
-import { autoPostSalesInvoice } from './posting.js';
+import { salesInvoices, salesInvoiceItems, salesInvoicePayments, paymentMethods, products, customers, stockVouchers, stockVoucherItems, journalEntries, documentJournals, warehouses, users, zatcaPosUnits, organizations } from '../schema.js';
 import { TRPCError } from '@trpc/server';
 import { validateSalesInvoiceWarehouseContext } from '../lib/salesWarehouseValidation.js';
 import { resolveInvoiceTaxItems } from '../lib/invoiceTaxValidation.js';
 import { assertSalesJournalUnitCanBeUsed } from '../services/zatcaUnitLifecycle.js';
 import { issueZatcaDocument } from '../services/zatcaDocumentIssuance.js';
+import { removeUnpostedSalesEffects, syncUnpostedSalesEffects } from '../services/salesPostingEffects.js';
+import { assertJournalAccess, assertSalesPermission, assertWarehouseAccess } from '../lib/salesPermissions.js';
 
 // ── تحقق أن جميع بنود الفاتورة تُشير إلى أصناف مسجلة في النظام ──────────────────
 async function validateInvoiceItems(items: { productId?: number; productName: string; productCode?: string }[], orgId: number) {
@@ -405,6 +406,9 @@ export const salesRouter = router({
     .mutation(async ({ ctx, input }) => {
       const { items: rawItems, dueDate, ...invoiceData } = input;
       const orgId = ctx.user.orgId;
+      await assertSalesPermission(ctx.user, 'save');
+      await assertJournalAccess(ctx.user, invoiceData.journalId);
+      await assertWarehouseAccess(ctx.user, invoiceData.warehouseId);
       const items = await resolveInvoiceTaxItems(rawItems, orgId);
       const isDraft = invoiceData.status === 'draft';
       if (!isDraft) await assertSalesJournalUnitCanBeUsed(orgId, invoiceData.journalId);
@@ -513,7 +517,7 @@ export const salesRouter = router({
           invoiceData.basedOnType = 'sale';
         }
       }
-      const { invoice, finalInvoiceNumber, isPosted, autoPostedEntryNumber } = await db.transaction(async (tx) => {
+      const { invoice, finalInvoiceNumber } = await db.transaction(async (tx) => {
         // حلّ warehouseId من الدفتر إذا لم يُرسل، أو رفض الحفظ إذا تعذّر
         const resolvedWarehouseId = await resolveInvoiceWarehouseId(
           tx,
@@ -613,16 +617,13 @@ export const salesRouter = router({
           }
         }
 
-        // ── ترحيل تلقائي داخل نفس transaction الحفظ ───────────────────────────
-        // المسودة لا تُرحّل ولا تُنشئ حركات مخزون أو قيود محاسبية.
-        let postedResult: { entryNumber: string } | null = null;
+        // الحفظ لا يرحّل المستند. للمستند النهائي تُسجّل الكمية وأثر الحساب
+        // كحركة معلّقة فقط، ويبقى إنشاء القيود/المستندات الناتجة لزر الترحيل.
         if (!isDraft) {
-          try {
-            postedResult = await autoPostSalesInvoice(invoice.id, orgId, ctx.user.id, tx);
-          } catch (e) {
-            console.error('[sales.create] autoPostSalesInvoice error — rolling back:', e);
-            throw e;
-          }
+          const savedItems = await tx.query.salesInvoiceItems.findMany({
+            where: eq(salesInvoiceItems.invoiceId, invoice.id),
+          });
+          await syncUnpostedSalesEffects(tx, invoice, savedItems, orgId);
         }
 
         // الإصدار المحلي يأتي بعد الدفع والترحيل، لكنه ما زال داخل نفس
@@ -665,16 +666,13 @@ export const salesRouter = router({
         return {
           invoice,
           finalInvoiceNumber,
-          isPosted: Boolean(postedResult),
-          autoPostedEntryNumber: postedResult?.entryNumber,
         };
       });
 
       return {
         ...invoice,
         invoiceNumber: finalInvoiceNumber,
-        isPosted,
-        autoPostedEntryNumber,
+        isPosted: false,
       };
     }),
 
@@ -725,6 +723,7 @@ export const salesRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const { id, items: rawItems, invoiceDate, ...rest } = input;
+      await assertSalesPermission(ctx.user, 'save');
       // القاعدة الخامسة: منع تعديل المستندات المرحّلة
       const existing = await db.query.salesInvoices.findFirst({
         where: and(eq(salesInvoices.id, id), eq(salesInvoices.orgId, ctx.user.orgId)),
@@ -745,6 +744,8 @@ export const salesRouter = router({
         ? rest.sourceDocumentId
         : existing?.sourceDocumentId ?? undefined;
       if (!isNowDraft) await assertSalesJournalUnitCanBeUsed(ctx.user.orgId, finalJournalId);
+      await assertJournalAccess(ctx.user, finalJournalId);
+      await assertWarehouseAccess(ctx.user, finalWarehouseId);
 
       // التحقق من المخزن/الأصناف يُتخطى للمسودة فقط؛ عند تحويلها نهائية يجب التحقق
       if (!isNowDraft && ['credit_note', 'debit_note'].includes(rest.invoiceType ?? '')) {
@@ -851,7 +852,7 @@ export const salesRouter = router({
       }
 
       // تنفيذ التحديث داخل transaction؛ حجز القفل الاستشاري عند تحويل مسودة لمنع تضارب الأرقام
-      const { finalInvoiceNumber, isPosted, autoPostedEntryNumber } = await db.transaction(async (tx) => {
+      const { finalInvoiceNumber } = await db.transaction(async (tx) => {
         // حلّ warehouseId إذا كان فارغاً/غير مُرسل من الدفتر (السجلات القديمة)
         const resolvedWarehouseId = await resolveInvoiceWarehouseId(
           tx,
@@ -917,6 +918,24 @@ export const salesRouter = router({
           }
         }
 
+        const savedItems = await tx.query.salesInvoiceItems.findMany({
+          where: eq(salesInvoiceItems.invoiceId, id),
+        });
+        const effectInvoice = {
+          ...existing,
+          ...rest,
+          invoiceDate: invoiceDate ? new Date(invoiceDate) : existing!.invoiceDate,
+          invoiceNumber: finalInvoiceNumber,
+          warehouseId: resolvedWarehouseId,
+          status: rest.status ?? existing!.status,
+          isPosted: false,
+        } as typeof existing;
+        if (isNowDraft) {
+          await removeUnpostedSalesEffects(tx, effectInvoice!, ctx.user.orgId);
+        } else {
+          await syncUnpostedSalesEffects(tx, effectInvoice!, savedItems, ctx.user.orgId);
+        }
+
         // ── عند تحويل المسودة إلى مستند نهائي: سجّل تفاصيل الدفع داخل نفس transaction ──
         if (isFinalizing && rest.paymentBreakdown != null) {
           // امسح أي مدفوعات سابقة للمسودة (لا ينبغي أن تكون موجودة، لكن تأميناً)
@@ -938,17 +957,6 @@ export const salesRouter = router({
                 amount: amount.toFixed(4),
               }))
             );
-          }
-        }
-
-        // ── الترحيل التلقائي عند تحويل المسودة إلى مستند نهائي ─────────────────────
-        let postedResult: { entryNumber: string } | null = null;
-        if (isFinalizing) {
-          try {
-            postedResult = await autoPostSalesInvoice(id, ctx.user.orgId, ctx.user.id, tx);
-          } catch (e) {
-            console.error('[sales.update] autoPostSalesInvoice error — rolling back:', e);
-            throw e;
           }
         }
 
@@ -999,12 +1007,10 @@ export const salesRouter = router({
 
         return {
           finalInvoiceNumber,
-          isPosted: Boolean(postedResult),
-          autoPostedEntryNumber: postedResult?.entryNumber,
         };
       });
 
-      return { success: true, invoiceNumber: isFinalizing ? finalInvoiceNumber : undefined, isPosted, autoPostedEntryNumber };
+      return { success: true, invoiceNumber: isFinalizing ? finalInvoiceNumber : undefined, isPosted: false };
     }),
 
   // جلب بيانات السداد المحفوظة لفاتورة معينة
@@ -1024,6 +1030,67 @@ export const salesRouter = router({
         breakdown[p.paymentMethodCode] = parseFloat(p.amount as string);
       }
       return { payments, breakdown };
+    }),
+
+  // سلسلة المستندات المرتبطة: الأصل، الأبناء، قيد المبيعات، وسند المخزون/COGS.
+  // كل استعلامات السلسلة مقيدة بالمؤسسة حتى لا تكشف العلاقة بين مؤسسات مختلفة.
+  getLinkedDocuments: protectedProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .query(async ({ ctx, input }) => {
+      const orgId = ctx.user.orgId;
+      const invoice = await db.query.salesInvoices.findFirst({
+        where: and(eq(salesInvoices.id, input.id), eq(salesInvoices.orgId, orgId)),
+        columns: {
+          id: true, invoiceNumber: true, invoiceType: true, status: true,
+          isPosted: true, sourceDocumentId: true, basedOnType: true, basedOnNumber: true,
+          postedJournalEntryId: true, generatedStockVoucherId: true, generatedStockJournalEntryId: true,
+        },
+      });
+      if (!invoice) throw new TRPCError({ code: 'NOT_FOUND', message: 'المستند غير موجود' });
+
+      const [parent, children, journalEntry, stockVoucher] = await Promise.all([
+        invoice.sourceDocumentId
+          ? db.query.salesInvoices.findFirst({
+              where: and(eq(salesInvoices.id, invoice.sourceDocumentId), eq(salesInvoices.orgId, orgId)),
+              columns: { id: true, invoiceNumber: true, invoiceType: true, status: true, isPosted: true },
+            })
+          : null,
+        db.query.salesInvoices.findMany({
+          where: and(eq(salesInvoices.orgId, orgId), eq(salesInvoices.sourceDocumentId, invoice.id)),
+          columns: { id: true, invoiceNumber: true, invoiceType: true, status: true, isPosted: true },
+          orderBy: (row, { asc }) => [asc(row.id)],
+        }),
+        invoice.postedJournalEntryId
+          ? db.query.journalEntries.findFirst({
+              where: and(eq(journalEntries.id, invoice.postedJournalEntryId), eq(journalEntries.orgId, orgId)),
+              columns: { id: true, entryNumber: true, status: true, journalId: true, generatedDocType: true },
+            })
+          : null,
+        invoice.generatedStockVoucherId
+          ? db.query.stockVouchers.findFirst({
+              where: and(eq(stockVouchers.id, invoice.generatedStockVoucherId), eq(stockVouchers.orgId, orgId)),
+              columns: { id: true, voucherNumber: true, type: true, status: true, sourceJournalId: true, generatedJournalEntryId: true },
+            })
+          : null,
+      ]);
+
+      const cogsEntry = stockVoucher?.generatedJournalEntryId
+        ? await db.query.journalEntries.findFirst({
+            where: and(
+              eq(journalEntries.id, stockVoucher.generatedJournalEntryId),
+              eq(journalEntries.orgId, orgId),
+            ),
+            columns: { id: true, entryNumber: true, status: true, journalId: true, generatedDocType: true },
+          })
+        : null;
+
+      return {
+        current: invoice,
+        parent,
+        children,
+        accounting: { salesJournal: journalEntry, cogsJournal: cogsEntry },
+        stock: stockVoucher,
+      };
     }),
 
   // جلب مستند مصدر بالرقم (بناءً على)
@@ -1268,17 +1335,46 @@ export const salesRouter = router({
   delete: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
-      // القاعدة الخامسة: منع حذف المستندات المرحّلة
+      await assertSalesPermission(ctx.user, 'delete');
       const existing = await db.query.salesInvoices.findFirst({
         where: and(eq(salesInvoices.id, input.id), eq(salesInvoices.orgId, ctx.user.orgId)),
       });
+      if (!existing) throw new TRPCError({ code: 'NOT_FOUND', message: 'المستند غير موجود' });
       if (existing?.isPosted)
         throw new Error('لا يمكن حذف مستند مرحّل — يجب فك الترحيل أولاً');
-      await db.delete(salesInvoiceItems).where(eq(salesInvoiceItems.invoiceId, input.id));
-      await db.delete(salesInvoices).where(
-        and(eq(salesInvoices.id, input.id), eq(salesInvoices.orgId, ctx.user.orgId))
-      );
-      return { success: true };
+
+      const dependent = await db.query.salesInvoices.findFirst({
+        where: and(
+          eq(salesInvoices.orgId, ctx.user.orgId),
+          eq(salesInvoices.sourceDocumentId, input.id),
+        ),
+        columns: { id: true, invoiceNumber: true, invoiceType: true },
+      });
+      if (dependent) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: `لا يمكن حذف المستند: يوجد مستند تابع (${dependent.invoiceNumber}) مرتبط به`,
+        });
+      }
+
+      return db.transaction(async (tx) => {
+        const locked = await tx.query.salesInvoices.findFirst({
+          where: and(eq(salesInvoices.id, input.id), eq(salesInvoices.orgId, ctx.user.orgId)),
+        });
+        if (!locked) throw new TRPCError({ code: 'NOT_FOUND', message: 'المستند غير موجود' });
+        if (locked.isPosted) throw new Error('لا يمكن حذف مستند مرحّل — يجب فك الترحيل أولاً');
+
+        await removeUnpostedSalesEffects(tx, locked, ctx.user.orgId);
+        await tx.delete(salesInvoicePayments).where(and(
+          eq(salesInvoicePayments.invoiceId, input.id),
+          eq(salesInvoicePayments.orgId, ctx.user.orgId),
+        ));
+        await tx.delete(salesInvoiceItems).where(eq(salesInvoiceItems.invoiceId, input.id));
+        await tx.delete(salesInvoices).where(
+          and(eq(salesInvoices.id, input.id), eq(salesInvoices.orgId, ctx.user.orgId)),
+        );
+        return { success: true };
+      });
     }),
 
   // بحث عن عملاء
