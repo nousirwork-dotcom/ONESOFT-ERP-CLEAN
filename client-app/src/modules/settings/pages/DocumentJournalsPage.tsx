@@ -1600,41 +1600,41 @@ export default function DocumentJournalsPage() {
                   {ptConfig.types.length > 0 ? ptConfig.types.map(type => {
                     const links = ptConfig.accountLinksByType[type.id] ?? [];
                     return (
-                      <div key={type.id} className="space-y-2">
-                        <div className="rounded-lg border border-slate-200 overflow-hidden bg-white">
-                          <div className="flex items-center justify-between px-3 py-1.5 bg-slate-50 border-b border-slate-200">
-                            <span className="text-[11px] font-semibold text-slate-700">نوع السند</span>
-                            <span className="text-[11px] font-medium text-slate-600">
-                              {type.nameAr || "نوع سند جديد"}
-                            </span>
+                      <div key={type.id} className="space-y-3">
+                        <P title="بيانات نوع السند">
+                          <div className="grid grid-cols-5 gap-x-3" dir="rtl">
+                            <div className="min-w-0">
+                              <div className="text-[10px] font-medium text-[#806c5a] mb-1">نوع السند</div>
+                              <div className="text-[11px] font-semibold text-[#3A3030] truncate">
+                                {type.nameAr || "نوع سند جديد"}
+                              </div>
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-[10px] font-medium text-[#806c5a] mb-1">الاسم العربي</div>
+                              <div className="text-[11px] text-slate-700 truncate">
+                                {type.nameAr || <span className="text-slate-300">—</span>}
+                              </div>
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-[10px] font-medium text-[#806c5a] mb-1">الاسم الإنجليزي</div>
+                              <div className="text-[11px] text-slate-600 truncate" dir="ltr">
+                                {type.nameEn || <span className="text-slate-300">—</span>}
+                              </div>
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-[10px] font-medium text-[#806c5a] mb-1">كود عربي</div>
+                              <div className="text-[11px] font-mono text-slate-600 truncate">
+                                {type.codeAr || <span className="text-slate-300">—</span>}
+                              </div>
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-[10px] font-medium text-[#806c5a] mb-1">كود إنجليزي</div>
+                              <div className="text-[11px] font-mono text-slate-600 truncate" dir="ltr">
+                                {type.codeEn || <span className="text-slate-300">—</span>}
+                              </div>
+                            </div>
                           </div>
-                          <table className="w-full border-collapse">
-                            <thead>
-                              <tr>
-                                <th className={thCls}>الاسم العربي</th>
-                                <th className={thCls}>الاسم الإنجليزي</th>
-                                <th className={thCls}>كود عربي</th>
-                                <th className={thCls}>كود إنجليزي</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              <tr>
-                                <td className={`${tdCls} text-[11px] text-slate-700`}>
-                                  {type.nameAr || <span className="text-slate-300">—</span>}
-                                </td>
-                                <td className={`${tdCls} text-[11px] text-slate-600`} dir="ltr">
-                                  {type.nameEn || <span className="text-slate-300">—</span>}
-                                </td>
-                                <td className={`${tdCls} text-[11px] font-mono text-slate-600`}>
-                                  {type.codeAr || <span className="text-slate-300">—</span>}
-                                </td>
-                                <td className={`${tdCls} text-[11px] font-mono text-slate-600`} dir="ltr">
-                                  {type.codeEn || <span className="text-slate-300">—</span>}
-                                </td>
-                              </tr>
-                            </tbody>
-                          </table>
-                        </div>
+                        </P>
                         <P title={`الروابط المحاسبية${type.nameAr ? ` — ${type.nameAr}` : ""}`}>
                           {renderLinksTable(type.id, links)}
                         </P>
