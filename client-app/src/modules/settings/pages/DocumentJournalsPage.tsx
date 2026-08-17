@@ -1551,7 +1551,7 @@ export default function DocumentJournalsPage() {
                       const even = i % 2 === 0;
                       return (
                         <tr key={row.id}
-                          style={{ background: even ? "#ffffff" : "#f8fafc", borderBottom: "1px solid #e2e8f0" }}
+                          style={{ background: even ? "#ffffff" : "#f1f3f5", borderBottom: "1px solid #e2e8f0" }}
                           className="hover:bg-slate-50/50"
                         >
                           <td className="px-2 py-1 text-[11px] text-slate-400 text-center">{i + 1}</td>
