@@ -1535,14 +1535,14 @@ export default function DocumentJournalsPage() {
               const renderLinksTable = (typeId: string, links: AccountLinkRow[]) => (
                 <table className="w-full" style={{ borderCollapse: "separate", borderSpacing: 0 }}>
                   <thead>
-                    <tr style={{ background: "linear-gradient(to left, #e8e3d8, #e2ddd3)" }}>
+                    <tr>
                       <th className={thCls} style={{ width: 28 }}>#</th>
                       <th className={thCls} style={{ width: "23%" }}>بيان<br/><span className="font-normal text-[9px] text-slate-400">Description</span></th>
                       <th className={thCls} style={{ width: "18%" }}>مصدر البيانات<br/><span className="font-normal text-[9px] text-slate-400">Source Field</span></th>
-                      <th className={thCls} style={{ width: 110, borderRight: "1px solid #d8d3c8" }}>كود الحساب<br/><span className="font-normal text-[9px] text-slate-400">Account Code</span></th>
+                      <th className={thCls} style={{ width: 110, borderRight: "1px solid #e2e8f0" }}>كود الحساب<br/><span className="font-normal text-[9px] text-slate-400">Account Code</span></th>
                       <th className={thCls}>اسم الحساب<br/><span className="font-normal text-[9px] text-slate-400">Account Name</span></th>
                       <th className={thCls} style={{ width: 100 }}>اتجاه القيد<br/><span className="font-normal text-[9px] text-slate-400">Posting Side</span></th>
-                      <th className="w-6 border-b" style={{ background: "#e2ddd3", borderColor: "#d8d3c8" }}></th>
+                      <th className="w-6 bg-slate-50 border-b border-slate-200"></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1551,8 +1551,8 @@ export default function DocumentJournalsPage() {
                       const even = i % 2 === 0;
                       return (
                         <tr key={row.id}
-                          style={{ background: even ? "#FDFAF5" : "#F5F0E8", borderBottom: "1px solid #e8e3d8" }}
-                          className="hover:bg-amber-50/40"
+                          style={{ background: even ? "#ffffff" : "#f8fafc", borderBottom: "1px solid #e2e8f0" }}
+                          className="hover:bg-slate-50/50"
                         >
                           <td className="px-2 py-1 text-[11px] text-slate-400 text-center">{i + 1}</td>
                           <td className={tdCls}>{cellInput(row.description, v => patchLink(typeId, i, { description: v }))}</td>
@@ -1613,7 +1613,7 @@ export default function DocumentJournalsPage() {
                     return (
                       <div
                         key={type.id}
-                        className="rounded-lg border border-[#5d5349] bg-[#F2F0EC] overflow-hidden"
+                        className="rounded-lg border border-[#ddd8ce] bg-[#F2F0EC] shadow-[0_1px_2px_rgba(0,0,0,0.04)] overflow-hidden"
                       >
                         <div className="grid grid-cols-5 gap-x-3 px-3 py-2 border-b border-[#b8aea3] text-center" dir="rtl">
                             <div className="min-w-0 text-center">
@@ -1648,8 +1648,8 @@ export default function DocumentJournalsPage() {
                             </div>
                         </div>
                         <div>
-                          <div className="px-3 py-1.5 border-b border-[#b8aea3] bg-[#EDE9E2]">
-                            <span className="text-[11px] font-semibold text-[#3A3030]">
+                          <div className="px-3.5 py-2 border-b border-[#ddd8ce] bg-gradient-to-b from-[#F2F0EC] to-[#EDE9E2]">
+                            <span className="text-[13px] font-bold text-[#3A3030]">
                               الروابط المحاسبية{type.nameAr ? ` — ${type.nameAr}` : ""}
                             </span>
                           </div>
