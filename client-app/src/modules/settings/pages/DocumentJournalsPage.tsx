@@ -1601,21 +1601,39 @@ export default function DocumentJournalsPage() {
                     const links = ptConfig.accountLinksByType[type.id] ?? [];
                     return (
                       <div key={type.id} className="space-y-2">
-                        <div className="rounded-lg border border-indigo-200 bg-indigo-50/60 px-3 py-2 flex items-center gap-5">
-                          <div className="min-w-[180px]">
-                            <div className="text-[12px] font-semibold text-indigo-900">
+                        <div className="rounded-lg border border-slate-200 overflow-hidden bg-white">
+                          <div className="flex items-center justify-between px-3 py-1.5 bg-slate-50 border-b border-slate-200">
+                            <span className="text-[11px] font-semibold text-slate-700">نوع السند</span>
+                            <span className="text-[11px] font-medium text-slate-600">
                               {type.nameAr || "نوع سند جديد"}
-                            </div>
-                            {type.nameEn && <div className="text-[9px] text-indigo-500" dir="ltr">{type.nameEn}</div>}
+                            </span>
                           </div>
-                          <div className="text-[10px] text-slate-600">
-                            <span className="text-slate-400">الكود العربي:</span>{" "}
-                            <span className="font-mono">{type.codeAr || "—"}</span>
-                          </div>
-                          <div className="text-[10px] text-slate-600" dir="ltr">
-                            <span className="text-slate-400">English Code:</span>{" "}
-                            <span className="font-mono">{type.codeEn || "—"}</span>
-                          </div>
+                          <table className="w-full border-collapse">
+                            <thead>
+                              <tr>
+                                <th className={thCls}>الاسم العربي</th>
+                                <th className={thCls}>الاسم الإنجليزي</th>
+                                <th className={thCls}>كود عربي</th>
+                                <th className={thCls}>كود إنجليزي</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr>
+                                <td className={`${tdCls} text-[11px] text-slate-700`}>
+                                  {type.nameAr || <span className="text-slate-300">—</span>}
+                                </td>
+                                <td className={`${tdCls} text-[11px] text-slate-600`} dir="ltr">
+                                  {type.nameEn || <span className="text-slate-300">—</span>}
+                                </td>
+                                <td className={`${tdCls} text-[11px] font-mono text-slate-600`}>
+                                  {type.codeAr || <span className="text-slate-300">—</span>}
+                                </td>
+                                <td className={`${tdCls} text-[11px] font-mono text-slate-600`} dir="ltr">
+                                  {type.codeEn || <span className="text-slate-300">—</span>}
+                                </td>
+                              </tr>
+                            </tbody>
+                          </table>
                         </div>
                         <P title={`الروابط المحاسبية${type.nameAr ? ` — ${type.nameAr}` : ""}`}>
                           {renderLinksTable(type.id, links)}
