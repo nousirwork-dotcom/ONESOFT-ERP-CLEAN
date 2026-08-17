@@ -118,7 +118,13 @@ const EMPTY: JournalForm = {
 /* ── أنواع السندات (sales journal only) ── */
 type PaymentTypeRow = { id: string; nameAr: string; nameEn: string; codeAr: string; codeEn: string; };
 type AccountLinkRow = { id: string; description: string; postingName: string; accountId: number | null; postingSide: string; };
-type PTC = { types: PaymentTypeRow[]; accountLinks: AccountLinkRow[]; };
+type PTC = {
+  types: PaymentTypeRow[];
+  /** Legacy fallback retained for existing journals and older posting code. */
+  accountLinks: AccountLinkRow[];
+  /** Independent accounting links for every payment/document type. */
+  accountLinksByType: Record<string, AccountLinkRow[]>;
+};
 const DEFAULT_LINK_DESCRIPTIONS = [
   "الصندوق / النقد",
   "صافي المبيعات",
@@ -138,23 +144,46 @@ const DEFAULT_ACCOUNT_LINKS: AccountLinkRow[] = DEFAULT_LINK_DESCRIPTIONS.map((d
   accountId: null,
   postingSide: "",
 }));
+const DEFAULT_PAYMENT_TYPES: PaymentTypeRow[] = [
+  { id: "1", nameAr: "نقدا",  nameEn: "نقدا",  codeAr: "نقدا",  codeEn: "cash"  },
+  { id: "2", nameAr: "آجل",   nameEn: "آجل",   codeAr: "آجل",   codeEn: "cridt" },
+];
+
+const cloneLinksForType = (links: AccountLinkRow[], typeId: string): AccountLinkRow[] =>
+  links.map((link, index) => ({ ...link, id: `${typeId}-${link.id || index + 1}` }));
+
 const DEFAULT_PTC: PTC = {
-  types: [
-    { id: "1", nameAr: "نقدا",  nameEn: "نقدا",  codeAr: "نقدا",  codeEn: "cash"  },
-    { id: "2", nameAr: "آجل",   nameEn: "آجل",   codeAr: "آجل",   codeEn: "cridt" },
-  ],
+  types: DEFAULT_PAYMENT_TYPES,
   accountLinks: DEFAULT_ACCOUNT_LINKS,
+  accountLinksByType: Object.fromEntries(
+    DEFAULT_PAYMENT_TYPES.map(type => [type.id, cloneLinksForType(DEFAULT_ACCOUNT_LINKS, type.id)]),
+  ),
 };
-function normalizePtConfig(raw: any): PTC {
-  if (!raw) return DEFAULT_PTC;
-  if (!Array.isArray(raw.types)) return DEFAULT_PTC;
-  const savedLinks: AccountLinkRow[] = Array.isArray(raw.accountLinks) ? raw.accountLinks : [];
+
+function normalizeAccountLinks(rawLinks: unknown): AccountLinkRow[] {
+  const savedLinks: AccountLinkRow[] = Array.isArray(rawLinks) ? rawLinks : [];
   const merged: AccountLinkRow[] = DEFAULT_ACCOUNT_LINKS.map((def, i) => {
     const saved = savedLinks[i];
     return saved ?? { ...def, id: `default-${i + 1}` };
   });
-  const extras = savedLinks.slice(DEFAULT_ACCOUNT_LINKS.length);
-  return { types: raw.types, accountLinks: [...merged, ...extras] };
+  return [...merged, ...savedLinks.slice(DEFAULT_ACCOUNT_LINKS.length)];
+}
+
+function normalizePtConfig(raw: any): PTC {
+  if (!raw) return DEFAULT_PTC;
+  const types: PaymentTypeRow[] = Array.isArray(raw.types) ? raw.types : DEFAULT_PAYMENT_TYPES;
+  const legacyLinks = normalizeAccountLinks(raw.accountLinks);
+  const rawByType = raw.accountLinksByType && typeof raw.accountLinksByType === "object"
+    ? raw.accountLinksByType as Record<string, unknown>
+    : {};
+  const accountLinksByType = Object.fromEntries(
+    types.map(type => {
+      const savedLinks = rawByType[type.id];
+      const source = Array.isArray(savedLinks) ? savedLinks : legacyLinks;
+      return [type.id, normalizeAccountLinks(source)];
+    }),
+  );
+  return { types, accountLinks: legacyLinks, accountLinksByType };
 }
 
 /* ── مكوّن بحث الحساب (مثل المخازن) ── */
@@ -749,6 +778,10 @@ export default function DocumentJournalsPage() {
 
   const handleSave = () => {
     if (!form.nameAr.trim()) { toast.error("إسم الدفتر بالعربي مطلوب"); return; }
+    const primaryTypeId = ptConfig.types[0]?.id;
+    const primaryTypeLinks = primaryTypeId
+      ? (ptConfig.accountLinksByType[primaryTypeId] ?? ptConfig.accountLinks)
+      : ptConfig.accountLinks;
     const payload = {
       docType:        form.docType || selectedType,
       code:           form.fixedPart.trim() || form.nameAr.slice(0, 20) || "JRN",
@@ -776,7 +809,9 @@ export default function DocumentJournalsPage() {
       draftResetFrequency: form.draftResetFrequency,
       customersJournal: (form.customersJournal && form.customersJournal !== "none") ? form.customersJournal : null,
       suppliersJournal: (form.suppliersJournal && form.suppliersJournal !== "none") ? form.suppliersJournal : null,
-      paymentTypesConfig: ptConfig,
+      // Keep the legacy flat list for older posting paths; new posting uses
+      // accountLinksByType to select the links for the matching type.
+      paymentTypesConfig: { ...ptConfig, accountLinks: primaryTypeLinks },
       salesAccountId:    form.salesAccountId    ? parseInt(form.salesAccountId)    : null,
       cashAccountId:     form.cashAccountId     ? parseInt(form.cashAccountId)     : null,
       creditAccountId:   form.creditAccountId   ? parseInt(form.creditAccountId)   : null,
@@ -1356,11 +1391,31 @@ export default function DocumentJournalsPage() {
               );
               const addType = () => {
                 const newId = String(Date.now());
-                setPtConfig(p => ({ ...p, types: [...p.types, { id: newId, nameAr: "", nameEn: "", codeAr: "", codeEn: "" }] }));
+                setPtConfig(p => {
+                  const newType: PaymentTypeRow = { id: newId, nameAr: "", nameEn: "", codeAr: "", codeEn: "" };
+                  const sourceLinks = p.accountLinksByType[p.types[0]?.id] ?? p.accountLinks;
+                  return {
+                    ...p,
+                    types: [...p.types, newType],
+                    accountLinksByType: {
+                      ...p.accountLinksByType,
+                      [newId]: cloneLinksForType(sourceLinks, newId),
+                    },
+                  };
+                });
                 setIsDirty(true);
               };
               const removeType = (idx: number) => {
-                setPtConfig(p => ({ ...p, types: p.types.filter((_, i) => i !== idx) }));
+                setPtConfig(p => {
+                  const removedId = p.types[idx]?.id;
+                  return {
+                    ...p,
+                    types: p.types.filter((_, i) => i !== idx),
+                    accountLinksByType: Object.fromEntries(
+                      Object.entries(p.accountLinksByType).filter(([typeId]) => typeId !== removedId),
+                    ),
+                  };
+                });
                 setIsDirty(true);
               };
               const patchType = (idx: number, patch: Partial<PaymentTypeRow>) => {
@@ -1434,132 +1489,146 @@ export default function DocumentJournalsPage() {
                 <Input value={val} onChange={e => onChange(e.target.value)}
                   className="w-full h-6 text-[11px] px-1.5 border-slate-200 rounded bg-white focus-visible:ring-0 focus-visible:ring-offset-0 focus:border-indigo-400" />
               );
-              const addLink = () => {
+              const addLink = (typeId: string) => {
                 const newId = String(Date.now());
-                setPtConfig(p => ({ ...p, accountLinks: [...p.accountLinks, { id: newId, description: "", postingName: "", accountId: null, postingSide: "" }] }));
+                setPtConfig(p => {
+                  const links = p.accountLinksByType[typeId] ?? [];
+                  return {
+                    ...p,
+                    accountLinksByType: {
+                      ...p.accountLinksByType,
+                      [typeId]: [...links, { id: newId, description: "", postingName: "", accountId: null, postingSide: "" }],
+                    },
+                  };
+                });
                 setIsDirty(true);
               };
-              const removeLink = (idx: number) => {
-                setPtConfig(p => ({ ...p, accountLinks: p.accountLinks.filter((_, i) => i !== idx) }));
+              const removeLink = (typeId: string, idx: number) => {
+                setPtConfig(p => ({
+                  ...p,
+                  accountLinksByType: {
+                    ...p.accountLinksByType,
+                    [typeId]: (p.accountLinksByType[typeId] ?? []).filter((_, i) => i !== idx),
+                  },
+                }));
                 setIsDirty(true);
               };
-              const patchLink = (idx: number, patch: Partial<AccountLinkRow>) => {
-                setPtConfig(p => { const a = [...p.accountLinks]; a[idx] = { ...a[idx], ...patch }; return { ...p, accountLinks: a }; });
+              const patchLink = (typeId: string, idx: number, patch: Partial<AccountLinkRow>) => {
+                setPtConfig(p => {
+                  const links = [...(p.accountLinksByType[typeId] ?? [])];
+                  links[idx] = { ...links[idx], ...patch };
+                  return { ...p, accountLinksByType: { ...p.accountLinksByType, [typeId]: links } };
+                });
                 setIsDirty(true);
               };
-              return (
-                <div className="h-full overflow-y-auto p-4 space-y-4" dir="rtl">
-                  <P title="أنواع السندات">
-                    <div className="mb-2 text-[10px] text-slate-400">
-                      تظهر هنا تلقائيًا الأنواع المضافة من تبويب «أنواع السندات» قبل روابطها المحاسبية.
-                    </div>
-                    <table className="w-full border-collapse">
-                      <thead>
-                        <tr>
-                          <th className={thCls}>نوع السند<br/><span className="font-normal text-[9px] text-slate-400">Document Type</span></th>
-                          <th className={thCls}>الكود العربي<br/><span className="font-normal text-[9px] text-slate-400">Arabic Code</span></th>
-                          <th className={thCls}>الكود الإنجليزي<br/><span className="font-normal text-[9px] text-slate-400">English Code</span></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {ptConfig.types.length > 0 ? ptConfig.types.map(row => (
-                          <tr key={row.id} className="hover:bg-slate-50/50">
-                            <td className={`${tdCls} text-[11px] text-slate-700`}>
-                              <div>{row.nameAr || <span className="text-slate-300">—</span>}</div>
-                              {row.nameEn && <div className="text-[9px] text-slate-400" dir="ltr">{row.nameEn}</div>}
-                            </td>
-                            <td className={`${tdCls} text-[11px] font-mono text-slate-600`} dir="rtl">
-                              {row.codeAr || <span className="text-slate-300">—</span>}
-                            </td>
-                            <td className={`${tdCls} text-[11px] font-mono text-slate-600`} dir="ltr">
-                              {row.codeEn || <span className="text-slate-300">—</span>}
-                            </td>
-                          </tr>
-                        )) : (
-                          <tr>
-                            <td colSpan={3} className="px-2 py-3 text-center text-[11px] text-slate-400">
-                              لم تتم إضافة أنواع سندات بعد
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </P>
-
-                  <P title="الروابط المحاسبية">
-                    <table className="w-full" style={{ borderCollapse: "separate", borderSpacing: 0 }}>
-                      <thead>
-                        <tr style={{ background: "linear-gradient(to left, #e8e3d8, #e2ddd3)" }}>
-                          <th className={thCls} style={{ width: 28 }}>#</th>
-                          <th className={thCls} style={{ width: "23%" }}>بيان<br/><span className="font-normal text-[9px] text-slate-400">Description</span></th>
-                          <th className={thCls} style={{ width: "18%" }}>مصدر البيانات<br/><span className="font-normal text-[9px] text-slate-400">Source Field</span></th>
-                          <th className={thCls} style={{ width: 110, borderRight: "1px solid #d8d3c8" }}>كود الحساب<br/><span className="font-normal text-[9px] text-slate-400">Account Code</span></th>
-                          <th className={thCls}>اسم الحساب<br/><span className="font-normal text-[9px] text-slate-400">Account Name</span></th>
-                          <th className={thCls} style={{ width: 100 }}>اتجاه القيد<br/><span className="font-normal text-[9px] text-slate-400">Posting Side</span></th>
-                          <th className="w-6 border-b" style={{ background: "#e2ddd3", borderColor: "#d8d3c8" }}></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {ptConfig.accountLinks.map((row, i) => {
-                          const acct = (chartAccounts as any[]).find((a: any) => a.id === row.accountId);
-                          const even = i % 2 === 0;
-                          return (
-                            <tr key={row.id}
-                              style={{ background: even ? "#FDFAF5" : "#F5F0E8", borderBottom: "1px solid #e8e3d8" }}
-                              className="hover:bg-amber-50/40"
+              const renderLinksTable = (typeId: string, links: AccountLinkRow[]) => (
+                <table className="w-full" style={{ borderCollapse: "separate", borderSpacing: 0 }}>
+                  <thead>
+                    <tr style={{ background: "linear-gradient(to left, #e8e3d8, #e2ddd3)" }}>
+                      <th className={thCls} style={{ width: 28 }}>#</th>
+                      <th className={thCls} style={{ width: "23%" }}>بيان<br/><span className="font-normal text-[9px] text-slate-400">Description</span></th>
+                      <th className={thCls} style={{ width: "18%" }}>مصدر البيانات<br/><span className="font-normal text-[9px] text-slate-400">Source Field</span></th>
+                      <th className={thCls} style={{ width: 110, borderRight: "1px solid #d8d3c8" }}>كود الحساب<br/><span className="font-normal text-[9px] text-slate-400">Account Code</span></th>
+                      <th className={thCls}>اسم الحساب<br/><span className="font-normal text-[9px] text-slate-400">Account Name</span></th>
+                      <th className={thCls} style={{ width: 100 }}>اتجاه القيد<br/><span className="font-normal text-[9px] text-slate-400">Posting Side</span></th>
+                      <th className="w-6 border-b" style={{ background: "#e2ddd3", borderColor: "#d8d3c8" }}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {links.map((row, i) => {
+                      const acct = (chartAccounts as any[]).find((a: any) => a.id === row.accountId);
+                      const even = i % 2 === 0;
+                      return (
+                        <tr key={row.id}
+                          style={{ background: even ? "#FDFAF5" : "#F5F0E8", borderBottom: "1px solid #e8e3d8" }}
+                          className="hover:bg-amber-50/40"
+                        >
+                          <td className="px-2 py-1 text-[11px] text-slate-400 text-center">{i + 1}</td>
+                          <td className={tdCls}>{cellInput(row.description, v => patchLink(typeId, i, { description: v }))}</td>
+                          <td className="py-0" style={{ borderRight: "1px solid #eef2f7", borderLeft: "1px solid #eef2f7" }}>
+                            <FieldCodeSearch
+                              allFields={fieldDictList as any[]}
+                              selectedCode={row.postingName}
+                              onChange={v => patchLink(typeId, i, { postingName: v })}
+                              filterType="Amount"
+                            />
+                          </td>
+                          <td className="py-0" style={{ borderRight: "1px solid #eef2f7", borderLeft: "1px solid #eef2f7" }}>
+                            <AccCodeSearch
+                              allAccounts={chartAccounts as any[]}
+                              selectedId={row.accountId}
+                              onChange={v => patchLink(typeId, i, { accountId: v })}
+                            />
+                          </td>
+                          <td className="px-2 py-1 text-[11px] text-slate-600 truncate" style={{ maxWidth: 160 }}>
+                            {acct?.name ?? <span className="text-slate-300">—</span>}
+                          </td>
+                          <td className="py-0 px-1">
+                            <select
+                              value={row.postingSide}
+                              onChange={e => patchLink(typeId, i, { postingSide: e.target.value })}
+                              className="w-full h-7 text-[11px] bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-indigo-300 rounded px-1 cursor-pointer"
+                              style={{ direction: "rtl" }}
                             >
-                              <td className="px-2 py-1 text-[11px] text-slate-400 text-center">{i + 1}</td>
-                              <td className={tdCls}>{cellInput(row.description, v => patchLink(i, { description: v }))}</td>
-                              <td className="py-0" style={{ borderRight: "1px solid #eef2f7", borderLeft: "1px solid #eef2f7" }}>
-                                <FieldCodeSearch
-                                  allFields={fieldDictList as any[]}
-                                  selectedCode={row.postingName}
-                                  onChange={v => patchLink(i, { postingName: v })}
-                                  filterType="Amount"
-                                />
-                              </td>
-                              <td className="py-0" style={{ borderRight: "1px solid #eef2f7", borderLeft: "1px solid #eef2f7" }}>
-                                <AccCodeSearch
-                                  allAccounts={chartAccounts as any[]}
-                                  selectedId={row.accountId}
-                                  onChange={v => patchLink(i, { accountId: v })}
-                                />
-                              </td>
-                              <td className="px-2 py-1 text-[11px] text-slate-600 truncate" style={{ maxWidth: 160 }}>
-                                {acct?.name ?? <span className="text-slate-300">—</span>}
-                              </td>
-                              <td className="py-0 px-1">
-                                <select
-                                  value={row.postingSide}
-                                  onChange={e => patchLink(i, { postingSide: e.target.value })}
-                                  className="w-full h-7 text-[11px] bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-indigo-300 rounded px-1 cursor-pointer"
-                                  style={{ direction: "rtl" }}
-                                >
-                                  <option value="">— اختر —</option>
-                                  <option value="debit">مدين (Debit)</option>
-                                  <option value="credit">دائن (Credit)</option>
-                                </select>
-                              </td>
-                              <td className={`${tdCls} text-center`}>
-                                <button onClick={() => removeLink(i)}
-                                  className="w-5 h-5 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 text-[13px] leading-none flex items-center justify-center">×</button>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                      <tfoot>
-                        <tr>
-                          <td colSpan={7} className="px-2 py-1.5">
-                            <button onClick={addLink}
-                              className="text-[11px] text-indigo-600 hover:text-indigo-800 flex items-center gap-1">
-                              <span className="text-[14px] leading-none">+</span> إضافة حساب
-                            </button>
+                              <option value="">— اختر —</option>
+                              <option value="debit">مدين (Debit)</option>
+                              <option value="credit">دائن (Credit)</option>
+                            </select>
+                          </td>
+                          <td className={`${tdCls} text-center`}>
+                            <button onClick={() => removeLink(typeId, i)}
+                              className="w-5 h-5 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 text-[13px] leading-none flex items-center justify-center">×</button>
                           </td>
                         </tr>
-                      </tfoot>
-                    </table>
-                  </P>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td colSpan={7} className="px-2 py-1.5">
+                        <button onClick={() => addLink(typeId)}
+                          className="text-[11px] text-indigo-600 hover:text-indigo-800 flex items-center gap-1">
+                          <span className="text-[14px] leading-none">+</span> إضافة حساب
+                        </button>
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              );
+              return (
+                <div className="h-full overflow-y-auto p-4 space-y-4" dir="rtl">
+                  {ptConfig.types.length > 0 ? ptConfig.types.map(type => {
+                    const links = ptConfig.accountLinksByType[type.id] ?? [];
+                    return (
+                      <div key={type.id} className="space-y-2">
+                        <div className="rounded-lg border border-indigo-200 bg-indigo-50/60 px-3 py-2 flex items-center gap-5">
+                          <div className="min-w-[180px]">
+                            <div className="text-[12px] font-semibold text-indigo-900">
+                              {type.nameAr || "نوع سند جديد"}
+                            </div>
+                            {type.nameEn && <div className="text-[9px] text-indigo-500" dir="ltr">{type.nameEn}</div>}
+                          </div>
+                          <div className="text-[10px] text-slate-600">
+                            <span className="text-slate-400">الكود العربي:</span>{" "}
+                            <span className="font-mono">{type.codeAr || "—"}</span>
+                          </div>
+                          <div className="text-[10px] text-slate-600" dir="ltr">
+                            <span className="text-slate-400">English Code:</span>{" "}
+                            <span className="font-mono">{type.codeEn || "—"}</span>
+                          </div>
+                        </div>
+                        <P title={`الروابط المحاسبية${type.nameAr ? ` — ${type.nameAr}` : ""}`}>
+                          {renderLinksTable(type.id, links)}
+                        </P>
+                      </div>
+                    );
+                  }) : (
+                    <P title="الروابط المحاسبية">
+                      <div className="py-8 text-center text-[11px] text-slate-400">
+                        أضف نوع سند أولاً من تبويب «أنواع السندات» لتكوين روابطه المحاسبية.
+                      </div>
+                    </P>
+                  )}
                 </div>
               );
             })()}

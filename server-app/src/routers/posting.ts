@@ -21,7 +21,9 @@ import {
   validateAccounts,
   insertJournalEntry,
   reserveDocumentNumber,
+  getConfiguredAccountLinks,
   type AccountLinkConfig,
+  type PaymentTypesConfig,
 } from '../services/PostingEngine.js';
 
 type IssuanceConfig = {
@@ -150,9 +152,9 @@ export const postingRouter = router({
         postingMode:       journal?.postingMode ?? 'manual',
       } as typeof documentJournals.$inferSelect;
 
-      const ptCfg = journal?.paymentTypesConfig as { accountLinks?: AccountLinkConfig[] } | null | undefined;
-      const hasFieldLinks = Array.isArray(ptCfg?.accountLinks) &&
-        ptCfg!.accountLinks.some(l => l.accountId && l.postingName && l.postingSide);
+      const ptCfg = journal?.paymentTypesConfig as PaymentTypesConfig | null | undefined;
+      const hasFieldLinks = getConfiguredAccountLinks(ptCfg, invoice.paymentMethod)
+        .some(l => l.accountId && l.postingName && l.postingSide);
 
       if (!hasFieldLinks) {
         const isCredit = invoice.paymentMethod === 'credit';
