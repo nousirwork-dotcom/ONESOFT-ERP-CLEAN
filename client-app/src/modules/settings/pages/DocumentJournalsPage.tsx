@@ -137,13 +137,13 @@ const DEFAULT_LINK_DESCRIPTIONS = [
   "بند إضافي (1)",
   "بند إضافي (2)",
 ];
-const DEFAULT_ACCOUNT_LINKS: AccountLinkRow[] = DEFAULT_LINK_DESCRIPTIONS.map((desc, i) => ({
-  id: `default-${i + 1}`,
-  description: desc,
+const DEFAULT_ACCOUNT_LINKS: AccountLinkRow[] = [{
+  id: "default-1",
+  description: "",
   postingName: "",
   accountId: null,
   postingSide: "",
-}));
+}];
 const DEFAULT_PAYMENT_TYPES: PaymentTypeRow[] = [
   { id: "1", nameAr: "نقدا",  nameEn: "نقدا",  codeAr: "نقدا",  codeEn: "cash"  },
   { id: "2", nameAr: "آجل",   nameEn: "آجل",   codeAr: "آجل",   codeEn: "cridt" },
@@ -162,6 +162,17 @@ const DEFAULT_PTC: PTC = {
 
 function normalizeAccountLinks(rawLinks: unknown): AccountLinkRow[] {
   const savedLinks: AccountLinkRow[] = Array.isArray(rawLinks) ? rawLinks : [];
+  const isLegacyUnconfiguredDefaults =
+    savedLinks.length > 1 &&
+    savedLinks.every((link, index) =>
+      link.description === DEFAULT_LINK_DESCRIPTIONS[index] &&
+      !link.postingName &&
+      link.accountId == null &&
+      !link.postingSide,
+    );
+  if (isLegacyUnconfiguredDefaults) {
+    return [{ ...DEFAULT_ACCOUNT_LINKS[0], id: savedLinks[0]?.id || "default-1" }];
+  }
   const merged: AccountLinkRow[] = DEFAULT_ACCOUNT_LINKS.map((def, i) => {
     const saved = savedLinks[i];
     return saved ?? { ...def, id: `default-${i + 1}` };
@@ -1606,32 +1617,32 @@ export default function DocumentJournalsPage() {
                       >
                         <div className="grid grid-cols-5 gap-x-3 px-3 py-2 border-b border-[#b8aea3] text-center" dir="rtl">
                             <div className="min-w-0 text-center">
-                              <div className="text-[14px] font-medium text-[#806c5a] mb-0.5">نوع السند</div>
-                              <div className="text-[14px] font-semibold text-[#3A3030] truncate">
+                              <div className="text-[12px] font-medium text-[#806c5a] mb-0.5">نوع السند</div>
+                              <div className="text-[12px] font-semibold text-[#3A3030] truncate">
                                 {type.nameAr || "نوع سند جديد"}
                               </div>
                             </div>
                             <div className="min-w-0 text-center">
-                              <div className="text-[14px] font-medium text-[#806c5a] mb-0.5">الاسم العربي</div>
-                              <div className="text-[14px] text-slate-700 truncate">
+                              <div className="text-[12px] font-medium text-[#806c5a] mb-0.5">الاسم العربي</div>
+                              <div className="text-[12px] text-slate-700 truncate">
                                 {type.nameAr || <span className="text-slate-300">—</span>}
                               </div>
                             </div>
                             <div className="min-w-0 text-center">
-                              <div className="text-[14px] font-medium text-[#806c5a] mb-0.5">الاسم الإنجليزي</div>
-                              <div className="text-[14px] text-slate-600 truncate text-center" dir="ltr">
+                              <div className="text-[12px] font-medium text-[#806c5a] mb-0.5">الاسم الإنجليزي</div>
+                              <div className="text-[12px] text-slate-600 truncate text-center" dir="ltr">
                                 {type.nameEn || <span className="text-slate-300">—</span>}
                               </div>
                             </div>
                             <div className="min-w-0 text-center">
-                              <div className="text-[14px] font-medium text-[#806c5a] mb-0.5">كود عربي</div>
-                              <div className="text-[14px] font-mono text-slate-600 truncate">
+                              <div className="text-[12px] font-medium text-[#806c5a] mb-0.5">كود عربي</div>
+                              <div className="text-[12px] font-mono text-slate-600 truncate">
                                 {type.codeAr || <span className="text-slate-300">—</span>}
                               </div>
                             </div>
                             <div className="min-w-0 text-center">
-                              <div className="text-[14px] font-medium text-[#806c5a] mb-0.5">كود إنجليزي</div>
-                              <div className="text-[14px] font-mono text-slate-600 truncate text-center" dir="ltr">
+                              <div className="text-[12px] font-medium text-[#806c5a] mb-0.5">كود إنجليزي</div>
+                              <div className="text-[12px] font-mono text-slate-600 truncate text-center" dir="ltr">
                                 {type.codeEn || <span className="text-slate-300">—</span>}
                               </div>
                             </div>
