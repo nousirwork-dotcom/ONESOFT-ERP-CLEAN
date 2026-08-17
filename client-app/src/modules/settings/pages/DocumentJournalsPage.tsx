@@ -1541,9 +1541,7 @@ export default function DocumentJournalsPage() {
                   </R>
                   <R label="دفتر القيد" lw={145}>
                     <FS id="issuanceJournalBookId" value={form.issuanceJournalBookId} onValueChange={v => set("issuanceJournalBookId", v)}>
-                      {allJournals
-                        .filter(j => !form.issuanceJournalType || j.docType === form.issuanceJournalType)
-                        .map(j => (
+                      {allJournals.map(j => (
                           <SelectItem key={j.id} value={String(j.id)}>
                             {j.numberPrefix ? `${j.numberPrefix} — ${j.name}` : j.name}
                           </SelectItem>
