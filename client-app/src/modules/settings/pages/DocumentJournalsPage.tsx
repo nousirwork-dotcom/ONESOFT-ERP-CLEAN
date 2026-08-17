@@ -1449,6 +1449,43 @@ export default function DocumentJournalsPage() {
               };
               return (
                 <div className="h-full overflow-y-auto p-4 space-y-4" dir="rtl">
+                  <P title="أنواع السندات">
+                    <div className="mb-2 text-[10px] text-slate-400">
+                      تظهر هنا تلقائيًا الأنواع المضافة من تبويب «أنواع السندات» قبل روابطها المحاسبية.
+                    </div>
+                    <table className="w-full border-collapse">
+                      <thead>
+                        <tr>
+                          <th className={thCls}>نوع السند<br/><span className="font-normal text-[9px] text-slate-400">Document Type</span></th>
+                          <th className={thCls}>الكود العربي<br/><span className="font-normal text-[9px] text-slate-400">Arabic Code</span></th>
+                          <th className={thCls}>الكود الإنجليزي<br/><span className="font-normal text-[9px] text-slate-400">English Code</span></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {ptConfig.types.length > 0 ? ptConfig.types.map(row => (
+                          <tr key={row.id} className="hover:bg-slate-50/50">
+                            <td className={`${tdCls} text-[11px] text-slate-700`}>
+                              <div>{row.nameAr || <span className="text-slate-300">—</span>}</div>
+                              {row.nameEn && <div className="text-[9px] text-slate-400" dir="ltr">{row.nameEn}</div>}
+                            </td>
+                            <td className={`${tdCls} text-[11px] font-mono text-slate-600`} dir="rtl">
+                              {row.codeAr || <span className="text-slate-300">—</span>}
+                            </td>
+                            <td className={`${tdCls} text-[11px] font-mono text-slate-600`} dir="ltr">
+                              {row.codeEn || <span className="text-slate-300">—</span>}
+                            </td>
+                          </tr>
+                        )) : (
+                          <tr>
+                            <td colSpan={3} className="px-2 py-3 text-center text-[11px] text-slate-400">
+                              لم تتم إضافة أنواع سندات بعد
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </P>
+
                   <P title="الروابط المحاسبية">
                     <table className="w-full" style={{ borderCollapse: "separate", borderSpacing: 0 }}>
                       <thead>
