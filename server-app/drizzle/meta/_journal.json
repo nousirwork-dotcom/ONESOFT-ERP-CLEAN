@@ -659,6 +659,20 @@
       "when": 1786581464575,
       "tag": "0093_schema_compatibility_repair",
       "breakpoints": true
+    },
+    {
+      "idx": 94,
+      "version": "7",
+      "when": 1786937000000,
+      "tag": "0094_central_document_voucher_types",
+      "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "7",
+      "when": 1786937100000,
+      "tag": "0095_backfill_voucher_type_account_links",
+      "breakpoints": true
     }
   ]
 }

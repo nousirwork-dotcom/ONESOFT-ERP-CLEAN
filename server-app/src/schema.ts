@@ -37,6 +37,21 @@ export const organizations = pgTable('organizations', {
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
 
+// ─── Document Voucher Types (أنواع السندات المركزية) ──────────────────────────
+// تعريف النوع مركزي على مستوى المؤسسة، بينما تبقى روابط الحسابات داخل دفتر
+// المستند وتستخدم هذا المعرّف كمفتاح ثابت.
+export const documentVoucherTypes = pgTable('document_voucher_types', {
+  id:        serial('id').primaryKey(),
+  orgId:     integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  nameAr:    varchar('name_ar', { length: 255 }).notNull().default(''),
+  nameEn:    varchar('name_en', { length: 255 }).notNull().default(''),
+  codeAr:    varchar('code_ar', { length: 100 }).notNull().default(''),
+  codeEn:    varchar('code_en', { length: 100 }).notNull().default(''),
+  isActive:  boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
 // ─── Users ────────────────────────────────────────────────────────────────────
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),

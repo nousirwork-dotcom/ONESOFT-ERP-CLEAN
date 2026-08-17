@@ -11,6 +11,7 @@ import {
   zatcaEnvironments,
   zatcaPosUnits,
   warehouses,
+  documentVoucherTypes,
 } from '../schema.js';
 import { assertCanUpdate, assertCanDelete, deriveFoundationKey } from '../lib/foundation-framework.js';
 
@@ -107,43 +108,191 @@ function getCertificateStatus(
   return certificate.status;
 }
 
-function assertUniquePaymentTypeCodes(paymentTypesConfig: unknown): void {
-  if (!paymentTypesConfig || typeof paymentTypesConfig !== 'object' || Array.isArray(paymentTypesConfig)) return;
-  const types = (paymentTypesConfig as { types?: unknown }).types;
-  if (!Array.isArray(types)) return;
+type VoucherTypeInput = {
+  id?: unknown;
+  nameAr?: unknown;
+  nameEn?: unknown;
+  codeAr?: unknown;
+  codeEn?: unknown;
+};
 
-  const arabicCodes = new Set<string>();
-  const englishCodes = new Set<string>();
+type VoucherTypeMaster = typeof documentVoucherTypes.$inferSelect;
+type VoucherTypeTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-  for (const type of types) {
-    if (!type || typeof type !== 'object' || Array.isArray(type)) continue;
-    const row = type as { codeAr?: unknown; codeEn?: unknown };
-    const codeAr = typeof row.codeAr === 'string' ? row.codeAr.trim() : '';
-    const codeEn = typeof row.codeEn === 'string' ? row.codeEn.trim().toLowerCase() : '';
+function voucherTypeCodeError(kind: 'ar' | 'en'): TRPCError {
+  return new TRPCError({
+    code: 'BAD_REQUEST',
+    message: kind === 'ar'
+      ? 'الكود العربي مستخدم بالفعل في نوع سند آخر.'
+      : 'الكود الإنجليزي مستخدم بالفعل في نوع سند آخر.',
+  });
+}
+
+function isVoucherTypeCodeConflict(error: unknown): boolean {
+  const constraint = (error as { constraint?: unknown } | null)?.constraint;
+  return constraint === 'document_voucher_types_org_code_ar_uidx'
+    || constraint === 'document_voucher_types_org_code_en_ci_uidx';
+}
+
+function rethrowVoucherTypeCodeConflict(error: unknown): never {
+  const constraint = (error as { constraint?: unknown } | null)?.constraint;
+  if (constraint === 'document_voucher_types_org_code_ar_uidx') throw voucherTypeCodeError('ar');
+  if (constraint === 'document_voucher_types_org_code_en_ci_uidx') throw voucherTypeCodeError('en');
+  throw error;
+}
+
+function stringValue(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+async function normalizeAndPersistPaymentTypesConfig(
+  rawConfig: unknown,
+  orgId: number,
+  tx: VoucherTypeTransaction,
+): Promise<Record<string, unknown> | null | undefined> {
+  if (rawConfig == null) return rawConfig as null | undefined;
+  if (typeof rawConfig !== 'object' || Array.isArray(rawConfig)) return rawConfig as Record<string, unknown>;
+
+  const config = rawConfig as Record<string, unknown>;
+  const rawTypes = Array.isArray(config.types) ? config.types as VoucherTypeInput[] : null;
+  if (!rawTypes) return config;
+
+  const masters = await tx.query.documentVoucherTypes.findMany({
+    where: eq(documentVoucherTypes.orgId, orgId),
+  });
+  const byId = new Map(masters.map(master => [master.id, master]));
+  const byArabicCode = new Map(
+    masters.filter(master => master.codeAr.trim()).map(master => [master.codeAr.trim(), master]),
+  );
+  const byEnglishCode = new Map(
+    masters.filter(master => master.codeEn.trim()).map(master => [master.codeEn.trim().toLowerCase(), master]),
+  );
+  const seenArabic = new Set<string>();
+  const seenEnglish = new Set<string>();
+  const usedMasterIds = new Set<number>();
+  const normalizedTypes: Record<string, unknown>[] = [];
+  const idMap = new Map<string, string>();
+
+  for (const rawType of rawTypes) {
+    if (!rawType || typeof rawType !== 'object' || Array.isArray(rawType)) continue;
+    const codeAr = stringValue(rawType.codeAr);
+    const codeEn = stringValue(rawType.codeEn);
+    const nameAr = stringValue(rawType.nameAr);
+    const nameEn = stringValue(rawType.nameEn);
+    const oldId = rawType.id == null ? '' : String(rawType.id);
+    const numericId = Number(oldId);
+    let master: VoucherTypeMaster | undefined =
+      Number.isInteger(numericId) && numericId > 0 ? byId.get(numericId) : undefined;
+
+    const masterByEnglishCode = codeEn ? byEnglishCode.get(codeEn.toLowerCase()) : undefined;
+    const masterByArabicCode = codeAr ? byArabicCode.get(codeAr) : undefined;
+    if (!master && masterByEnglishCode) throw voucherTypeCodeError('en');
+    if (!master && masterByArabicCode) throw voucherTypeCodeError('ar');
 
     if (codeAr) {
-      if (arabicCodes.has(codeAr)) {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: 'الكود العربي مستخدم بالفعل في نوع سند آخر.',
-        });
+      if (seenArabic.has(codeAr)) throw voucherTypeCodeError('ar');
+      const conflictingMaster = byArabicCode.get(codeAr);
+      if (conflictingMaster && master && conflictingMaster.id !== master.id) {
+        throw voucherTypeCodeError('ar');
       }
-      arabicCodes.add(codeAr);
+      seenArabic.add(codeAr);
+    }
+    if (codeEn) {
+      const normalizedCodeEn = codeEn.toLowerCase();
+      if (seenEnglish.has(normalizedCodeEn)) throw voucherTypeCodeError('en');
+      const conflictingMaster = byEnglishCode.get(normalizedCodeEn);
+      if (conflictingMaster && master && conflictingMaster.id !== master.id) {
+        throw voucherTypeCodeError('en');
+      }
+      seenEnglish.add(normalizedCodeEn);
     }
 
-    if (codeEn) {
-      if (englishCodes.has(codeEn)) {
+    if (!master) {
+      const [created] = await tx.insert(documentVoucherTypes).values({
+        orgId,
+        nameAr,
+        nameEn,
+        codeAr,
+        codeEn,
+        isActive: true,
+      }).returning();
+      master = created;
+      byId.set(master.id, master);
+      if (codeAr) byArabicCode.set(codeAr, master);
+      if (codeEn) byEnglishCode.set(codeEn.toLowerCase(), master);
+    } else {
+      if (usedMasterIds.has(master.id)) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
-          message: 'الكود الإنجليزي مستخدم بالفعل في نوع سند آخر.',
+          message: 'نوع السند المركزي مكرر داخل نفس الدفتر.',
         });
       }
-      englishCodes.add(codeEn);
+      const [updated] = await tx.update(documentVoucherTypes)
+        .set({
+          nameAr,
+          nameEn,
+          codeAr,
+          codeEn,
+          isActive: true,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(documentVoucherTypes.id, master.id), eq(documentVoucherTypes.orgId, orgId)))
+        .returning();
+      master = updated ?? master;
+      byId.set(master.id, master);
+      if (master.codeAr.trim()) byArabicCode.set(master.codeAr.trim(), master);
+      if (master.codeEn.trim()) byEnglishCode.set(master.codeEn.trim().toLowerCase(), master);
     }
+
+    usedMasterIds.add(master.id);
+    idMap.set(oldId, String(master.id));
+    normalizedTypes.push({
+      ...rawType,
+      id: String(master.id),
+      nameAr: master.nameAr,
+      nameEn: master.nameEn,
+      codeAr: master.codeAr,
+      codeEn: master.codeEn,
+    });
   }
+
+  const rawLinks = Array.isArray(config.accountLinks) ? config.accountLinks : [];
+  const rawByType = config.accountLinksByType &&
+    typeof config.accountLinksByType === 'object' &&
+    !Array.isArray(config.accountLinksByType)
+    ? config.accountLinksByType as Record<string, unknown>
+    : {};
+  const accountLinksByType: Record<string, unknown> = {};
+  normalizedTypes.forEach((type, index) => {
+    const oldId = rawTypes[index]?.id == null ? '' : String(rawTypes[index]?.id);
+    const canonicalId = String(type.id);
+    const links = rawByType[oldId] ?? rawByType[canonicalId] ?? rawLinks;
+    if (!(canonicalId in accountLinksByType)) accountLinksByType[canonicalId] = links;
+  });
+
+  const primaryTypeId = normalizedTypes[0]?.id;
+  return {
+    ...config,
+    types: normalizedTypes,
+    accountLinks: primaryTypeId != null
+      ? accountLinksByType[String(primaryTypeId)] ?? rawLinks
+      : rawLinks,
+    accountLinksByType,
+  };
 }
 
 export const documentJournalsRouter = router({
+
+  listVoucherTypes: protectedProcedure
+    .query(async ({ ctx }) => {
+      return db.query.documentVoucherTypes.findMany({
+        where: and(
+          eq(documentVoucherTypes.orgId, ctx.user.orgId),
+          eq(documentVoucherTypes.isActive, true),
+        ),
+        orderBy: [asc(documentVoucherTypes.id)],
+      });
+    }),
 
   list: protectedProcedure
     .input(z.object({
@@ -280,56 +429,81 @@ export const documentJournalsRouter = router({
   create: protectedProcedure
     .input(z.object(journalInputShape))
     .mutation(async ({ ctx, input }) => {
-      assertUniquePaymentTypeCodes(input.paymentTypesConfig);
-      const { recordPolicy: _rp, includeInFoundation: _if, ...inputData } = input;
-      const [row] = await db.insert(documentJournals).values({
-        ...inputData,
-        orgId: ctx.user.orgId,
-        currentSeq: 0,
-        isActive: true,
-        recordPolicy: 'flexible',
-        includeInFoundation: false,
-        foundationKey: null,
-      }).returning();
-      return row;
+      try {
+        return await db.transaction(async (tx) => {
+          const paymentTypesConfig = await normalizeAndPersistPaymentTypesConfig(
+            input.paymentTypesConfig,
+            ctx.user.orgId,
+            tx,
+          );
+          const { recordPolicy: _rp, includeInFoundation: _if, ...inputData } = input;
+          const [row] = await tx.insert(documentJournals).values({
+            ...inputData,
+            paymentTypesConfig,
+            orgId: ctx.user.orgId,
+            currentSeq: 0,
+            isActive: true,
+            recordPolicy: 'flexible',
+            includeInFoundation: false,
+            foundationKey: null,
+          }).returning();
+          return row;
+        });
+      } catch (error) {
+        if (isVoucherTypeCodeConflict(error)) rethrowVoucherTypeCodeConflict(error);
+        throw error;
+      }
     }),
 
   update: protectedProcedure
     .input(z.object({ id: z.number(), ...Object.fromEntries(Object.entries(journalInputShape).map(([k, v]) => [k, (v as any).optional()])) }))
     .mutation(async ({ ctx, input }) => {
-      const { id, ...rawData } = input;
-      const inputAny = input as any;
-      assertUniquePaymentTypeCodes(inputAny.paymentTypesConfig);
-      const newPolicy = inputAny.recordPolicy as 'protected' | 'editable' | 'flexible' | undefined;
-      const newInclude = inputAny.includeInFoundation as boolean | undefined;
-      // Strip policy fields from data going into Drizzle to avoid type mismatch
-      const { recordPolicy: _rp, includeInFoundation: _if, ...data } = rawData as any;
-      const current = await db.query.documentJournals.findFirst({
-        where: and(eq(documentJournals.id, id), eq(documentJournals.orgId, ctx.user.orgId)),
-      });
-      if (!current) throw new Error('الدفتر غير موجود');
-      const isSuperadmin = ctx.user.role === 'superadmin';
-      assertCanUpdate(current.recordPolicy, current.name, isSuperadmin);
-      const policyFields: Record<string, unknown> = {};
-      if (isSuperadmin) {
-        if (newPolicy !== undefined) policyFields.recordPolicy = newPolicy;
-        if (newInclude !== undefined) {
-          policyFields.includeInFoundation = newInclude;
-          if (newInclude && !current.foundationKey) {
-            policyFields.foundationKey = deriveFoundationKey('document_journals', {
-              docType: ((data as any).docType ?? current.docType) as string,
-              code:    ((data as any).code    ?? current.code)    as string,
-            });
-          } else if (!newInclude) {
-            policyFields.foundationKey = null;
+      try {
+        return await db.transaction(async (tx) => {
+          const { id, ...rawData } = input;
+          const inputAny = input as any;
+          const newPolicy = inputAny.recordPolicy as 'protected' | 'editable' | 'flexible' | undefined;
+          const newInclude = inputAny.includeInFoundation as boolean | undefined;
+          // Strip policy fields from data going into Drizzle to avoid type mismatch
+          const { recordPolicy: _rp, includeInFoundation: _if, ...data } = rawData as any;
+          const current = await tx.query.documentJournals.findFirst({
+            where: and(eq(documentJournals.id, id), eq(documentJournals.orgId, ctx.user.orgId)),
+          });
+          if (!current) throw new Error('الدفتر غير موجود');
+          const isSuperadmin = ctx.user.role === 'superadmin';
+          assertCanUpdate(current.recordPolicy, current.name, isSuperadmin);
+          const policyFields: Record<string, unknown> = {};
+          if (isSuperadmin) {
+            if (newPolicy !== undefined) policyFields.recordPolicy = newPolicy;
+            if (newInclude !== undefined) {
+              policyFields.includeInFoundation = newInclude;
+              if (newInclude && !current.foundationKey) {
+                policyFields.foundationKey = deriveFoundationKey('document_journals', {
+                  docType: ((data as any).docType ?? current.docType) as string,
+                  code:    ((data as any).code    ?? current.code)    as string,
+                });
+              } else if (!newInclude) {
+                policyFields.foundationKey = null;
+              }
+            }
           }
-        }
+          if (Object.prototype.hasOwnProperty.call(data, 'paymentTypesConfig')) {
+            data.paymentTypesConfig = await normalizeAndPersistPaymentTypesConfig(
+              data.paymentTypesConfig,
+              ctx.user.orgId,
+              tx,
+            );
+          }
+          const [row] = await tx.update(documentJournals)
+            .set({ ...data, ...policyFields, updatedAt: new Date() } as any)
+            .where(and(eq(documentJournals.id, id), eq(documentJournals.orgId, ctx.user.orgId)))
+            .returning();
+          return row;
+        });
+      } catch (error) {
+        if (isVoucherTypeCodeConflict(error)) rethrowVoucherTypeCodeConflict(error);
+        throw error;
       }
-      const [row] = await db.update(documentJournals)
-        .set({ ...data, ...policyFields, updatedAt: new Date() } as any)
-        .where(and(eq(documentJournals.id, id), eq(documentJournals.orgId, ctx.user.orgId)))
-        .returning();
-      return row;
     }),
 
   delete: protectedProcedure

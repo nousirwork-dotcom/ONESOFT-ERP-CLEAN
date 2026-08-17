@@ -118,6 +118,15 @@ const EMPTY: JournalForm = {
 /* ── أنواع السندات (sales journal only) ── */
 type PaymentTypeRow = { id: string; nameAr: string; nameEn: string; codeAr: string; codeEn: string; };
 type AccountLinkRow = { id: string; description: string; postingName: string; accountId: number | null; postingSide: string; };
+type VoucherTypeMaster = {
+  id: number;
+  orgId: number;
+  nameAr: string;
+  nameEn: string;
+  codeAr: string;
+  codeEn: string;
+  isActive: boolean;
+};
 type PTC = {
   types: PaymentTypeRow[];
   /** Legacy fallback retained for existing journals and older posting code. */
@@ -182,19 +191,76 @@ function normalizeAccountLinks(rawLinks: unknown): AccountLinkRow[] {
 
 function normalizePtConfig(raw: any): PTC {
   if (!raw) return DEFAULT_PTC;
-  const types: PaymentTypeRow[] = Array.isArray(raw.types) ? raw.types : DEFAULT_PAYMENT_TYPES;
+  const rawTypes: PaymentTypeRow[] = Array.isArray(raw.types) ? raw.types : DEFAULT_PAYMENT_TYPES;
   const legacyLinks = normalizeAccountLinks(raw.accountLinks);
   const rawByType = raw.accountLinksByType && typeof raw.accountLinksByType === "object"
     ? raw.accountLinksByType as Record<string, unknown>
     : {};
+  const types = rawTypes;
   const accountLinksByType = Object.fromEntries(
-    types.map(type => {
-      const savedLinks = rawByType[type.id];
+    types.map((type, index) => {
+      const rawType = rawTypes[index];
+      const savedLinks = rawByType[rawType.id] ?? rawByType[type.id];
       const source = Array.isArray(savedLinks) ? savedLinks : legacyLinks;
       return [type.id, normalizeAccountLinks(source)];
     }),
   );
   return { types, accountLinks: legacyLinks, accountLinksByType };
+}
+
+function resolveVoucherTypeMasters(types: PaymentTypeRow[], masters: VoucherTypeMaster[]): PTC["types"] {
+  return types.map(type => {
+    const byId = masters.find(master => String(master.id) === type.id);
+    const byCode = !byId && (type.codeEn.trim() || type.codeAr.trim())
+      ? masters.find(master =>
+          (type.codeEn.trim() && master.codeEn.trim().toLowerCase() === type.codeEn.trim().toLowerCase()) ||
+          (type.codeAr.trim() && master.codeAr.trim() === type.codeAr.trim()),
+        )
+      : undefined;
+    const master = byId ?? byCode;
+    return master
+      ? {
+          id: String(master.id),
+          nameAr: master.nameAr,
+          nameEn: master.nameEn,
+          codeAr: master.codeAr,
+          codeEn: master.codeEn,
+        }
+      : type;
+  });
+}
+
+function normalizePtConfigWithMasters(raw: any, masters: VoucherTypeMaster[]): PTC {
+  const base = normalizePtConfig(raw);
+  const resolvedTypes = resolveVoucherTypeMasters(base.types, masters);
+  const rawTypes: PaymentTypeRow[] = Array.isArray(raw?.types) ? raw.types : base.types;
+  const rawByType = raw?.accountLinksByType && typeof raw.accountLinksByType === "object"
+    ? raw.accountLinksByType as Record<string, unknown>
+    : {};
+  const accountLinksByType = Object.fromEntries(
+    resolvedTypes.map((type, index) => {
+      const oldId = rawTypes[index]?.id ?? type.id;
+      const savedLinks = rawByType[oldId] ?? rawByType[type.id];
+      const source = Array.isArray(savedLinks) ? savedLinks : base.accountLinks;
+      return [type.id, normalizeAccountLinks(source)];
+    }),
+  );
+  return {
+    ...base,
+    types: resolvedTypes,
+    accountLinksByType,
+  };
+}
+
+function createInitialPtConfig(masters: VoucherTypeMaster[]): PTC {
+  const types = resolveVoucherTypeMasters(DEFAULT_PAYMENT_TYPES, masters);
+  return {
+    types,
+    accountLinks: DEFAULT_ACCOUNT_LINKS,
+    accountLinksByType: Object.fromEntries(
+      types.map(type => [type.id, cloneLinksForType(DEFAULT_ACCOUNT_LINKS, type.id)]),
+    ),
+  };
 }
 
 function getDuplicatePaymentTypeCodeMessage(types: PaymentTypeRow[]): string | null {
@@ -212,6 +278,31 @@ function getDuplicatePaymentTypeCodeMessage(types: PaymentTypeRow[]): string | n
     if (codeEn) {
       if (englishCodes.has(codeEn)) return "الكود الإنجليزي مستخدم بالفعل في نوع سند آخر.";
       englishCodes.add(codeEn);
+    }
+  }
+  return null;
+}
+
+function getGlobalVoucherTypeCodeMessage(
+  types: PaymentTypeRow[],
+  masters: VoucherTypeMaster[],
+): string | null {
+  const byArabicCode = new Map(
+    masters.filter(master => master.codeAr.trim()).map(master => [master.codeAr.trim(), master.id]),
+  );
+  const byEnglishCode = new Map(
+    masters.filter(master => master.codeEn.trim()).map(master => [master.codeEn.trim().toLowerCase(), master.id]),
+  );
+
+  for (const type of types) {
+    const id = Number(type.id);
+    const codeAr = type.codeAr.trim();
+    const codeEn = type.codeEn.trim().toLowerCase();
+    if (codeAr && byArabicCode.has(codeAr) && byArabicCode.get(codeAr) !== id) {
+      return "الكود العربي مستخدم بالفعل في نوع سند آخر.";
+    }
+    if (codeEn && byEnglishCode.has(codeEn) && byEnglishCode.get(codeEn) !== id) {
+      return "الكود الإنجليزي مستخدم بالفعل في نوع سند آخر.";
     }
   }
   return null;
@@ -665,6 +756,8 @@ export default function DocumentJournalsPage() {
   const listQuery = trpc.documentJournals.list.useQuery();
   const allJournals: DBJournal[] = (listQuery.data ?? []) as DBJournal[];
   const typeJournals = useMemo(() => allJournals.filter(j => j.docType === selectedType), [allJournals, selectedType]);
+  const { data: voucherTypesData = [] } = trpc.documentJournals.listVoucherTypes.useQuery();
+  const globalVoucherTypes = voucherTypesData as VoucherTypeMaster[];
 
   const currentIndex = editId != null ? typeJournals.findIndex(j => j.id === editId) : -1;
   const currentDBJournal = editId != null ? allJournals.find(j => j.id === editId) : null;
@@ -790,27 +883,29 @@ export default function DocumentJournalsPage() {
     setEditId(null);
     setForm({ ...EMPTY, docType: selectedType });
     setIsDirty(false);
-    setPtConfig(DEFAULT_PTC);
+    setPtConfig(createInitialPtConfig(globalVoucherTypes));
     setDocComponents([]);
     setActiveTab("basic");
     setView("form");
-  }, [selectedType]);
+  }, [globalVoucherTypes, selectedType]);
 
   const openEdit = useCallback((j: DBJournal) => {
     setEditId(j.id);
     setForm(dbToForm(j));
-    setPtConfig(normalizePtConfig((j as any).paymentTypesConfig));
+    setPtConfig(normalizePtConfigWithMasters((j as any).paymentTypesConfig, globalVoucherTypes));
     const oc2 = (j as any).optionsConfig ?? {};
     setDocComponents((oc2.documentComponents as DocComponent[]) ?? []);
     setIsDirty(false);
     setActiveTab("basic");
     setView("form");
-  }, []);
+  }, [globalVoucherTypes]);
 
   const handleSave = () => {
     if (!form.nameAr.trim()) { toast.error("إسم الدفتر بالعربي مطلوب"); return; }
     const duplicateCodeMessage = getDuplicatePaymentTypeCodeMessage(ptConfig.types);
     if (duplicateCodeMessage) { toast.error(duplicateCodeMessage); return; }
+    const globalCodeMessage = getGlobalVoucherTypeCodeMessage(ptConfig.types, globalVoucherTypes);
+    if (globalCodeMessage) { toast.error(globalCodeMessage); return; }
     const primaryTypeId = ptConfig.types[0]?.id;
     const primaryTypeLinks = primaryTypeId
       ? (ptConfig.accountLinksByType[primaryTypeId] ?? ptConfig.accountLinks)
@@ -1422,8 +1517,51 @@ export default function DocumentJournalsPage() {
                 <Input value={val} onChange={e => onChange(e.target.value)}
                   className="w-full h-6 text-[11px] px-1.5 border-slate-200 rounded bg-white focus-visible:ring-0 focus-visible:ring-offset-0 focus:border-indigo-400" />
               );
+              const selectMasterType = (idx: number, masterId: string) => {
+                const master = globalVoucherTypes.find(item => String(item.id) === masterId);
+                setPtConfig(p => {
+                  const current = p.types[idx];
+                  if (!current) return p;
+                  if (!masterId || !master) {
+                    const newId = `new-${Date.now()}`;
+                    const links = p.accountLinksByType[current.id] ?? p.accountLinks;
+                    const nextTypes = [...p.types];
+                    nextTypes[idx] = { id: newId, nameAr: "", nameEn: "", codeAr: "", codeEn: "" };
+                    return {
+                      ...p,
+                      types: nextTypes,
+                      accountLinksByType: {
+                        ...Object.fromEntries(Object.entries(p.accountLinksByType).filter(([id]) => id !== current.id)),
+                        [newId]: links,
+                      },
+                    };
+                  }
+                  if (p.types.some((type, typeIndex) => typeIndex !== idx && type.id === masterId)) {
+                    toast.error("نوع السند المركزي مرتبط بالفعل بهذا الدفتر.");
+                    return p;
+                  }
+                  const links = p.accountLinksByType[current.id] ?? p.accountLinks;
+                  const nextTypes = [...p.types];
+                  nextTypes[idx] = {
+                    id: masterId,
+                    nameAr: master.nameAr,
+                    nameEn: master.nameEn,
+                    codeAr: master.codeAr,
+                    codeEn: master.codeEn,
+                  };
+                  return {
+                    ...p,
+                    types: nextTypes,
+                    accountLinksByType: {
+                      ...Object.fromEntries(Object.entries(p.accountLinksByType).filter(([id]) => id !== current.id)),
+                      [masterId]: links,
+                    },
+                  };
+                });
+                setIsDirty(true);
+              };
               const addType = () => {
-                const newId = String(Date.now());
+                const newId = `new-${Date.now()}`;
                 setPtConfig(p => {
                   const newType: PaymentTypeRow = { id: newId, nameAr: "", nameEn: "", codeAr: "", codeEn: "" };
                   const sourceLinks = p.accountLinksByType[p.types[0]?.id] ?? p.accountLinks;
@@ -1476,6 +1614,7 @@ export default function DocumentJournalsPage() {
                     <table className="w-full border-collapse">
                       <thead>
                         <tr>
+                          <th className={thCls}>النوع المركزي</th>
                           <th className={thCls}>الاسم العربي</th>
                           <th className={thCls}>الاسم الإنجليزي</th>
                           <th className={thCls}>كود عربي</th>
@@ -1486,6 +1625,20 @@ export default function DocumentJournalsPage() {
                       <tbody>
                         {ptConfig.types.map((row, i) => (
                           <tr key={row.id} className="hover:bg-slate-50/50">
+                            <td className={tdCls}>
+                              <select
+                                value={globalVoucherTypes.some(item => String(item.id) === row.id) ? row.id : "__new__"}
+                                onChange={e => selectMasterType(i, e.target.value === "__new__" ? "" : e.target.value)}
+                                className="w-full h-6 text-[10px] border border-slate-200 rounded bg-white px-1 focus:outline-none focus:ring-1 focus:ring-indigo-300"
+                              >
+                                <option value="__new__">نوع جديد</option>
+                                {globalVoucherTypes.map(item => (
+                                  <option key={item.id} value={String(item.id)}>
+                                    {item.nameAr || item.codeEn || `نوع ${item.id}`}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
                             <td className={tdCls}>{cellInput(row.nameAr, v => patchType(i, { nameAr: v }))}</td>
                             <td className={tdCls}>{cellInput(row.nameEn, v => patchType(i, { nameEn: v }))}</td>
                             <td className={tdCls}>{cellInput(row.codeAr, v => patchType(i, { codeAr: v }))}</td>
@@ -1499,7 +1652,7 @@ export default function DocumentJournalsPage() {
                       </tbody>
                       <tfoot>
                         <tr>
-                          <td colSpan={5} className="px-2 py-1.5">
+                          <td colSpan={6} className="px-2 py-1.5">
                             <button onClick={addType}
                               className="text-[11px] text-indigo-600 hover:text-indigo-800 flex items-center gap-1">
                               <span className="text-[14px] leading-none">+</span> إضافة نوع آخر
