@@ -158,8 +158,7 @@ function enrichFkRefs(
   const config = enriched.paymentTypesConfig;
   if (tbl === 'documentJournals' && config && typeof config === 'object' && !Array.isArray(config)) {
     const paymentConfig = config as Record<string, unknown>;
-    if (Array.isArray(paymentConfig.accountLinks)) {
-      paymentConfig.accountLinks = paymentConfig.accountLinks.map((rawLink) => {
+    const scrubLinks = (links: unknown[]) => links.map((rawLink) => {
         if (!rawLink || typeof rawLink !== 'object' || Array.isArray(rawLink)) return rawLink;
         const link = { ...(rawLink as Record<string, unknown>) };
         const accountId = link.accountId;
@@ -169,6 +168,20 @@ function enrichFkRefs(
         }
         return link;
       });
+    if (Array.isArray(paymentConfig.accountLinks)) {
+      paymentConfig.accountLinks = scrubLinks(paymentConfig.accountLinks);
+    }
+    if (paymentConfig.accountLinksByType &&
+        typeof paymentConfig.accountLinksByType === 'object' &&
+        !Array.isArray(paymentConfig.accountLinksByType)) {
+      paymentConfig.accountLinksByType = Object.fromEntries(
+        Object.entries(paymentConfig.accountLinksByType).map(([typeId, rawLinks]) => [
+          typeId,
+          Array.isArray(rawLinks) ? scrubLinks(rawLinks) : rawLinks,
+        ]),
+      );
+    }
+    if (Array.isArray(paymentConfig.accountLinks) || paymentConfig.accountLinksByType) {
       enriched.paymentTypesConfig = paymentConfig;
     }
   }

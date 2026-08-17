@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { ENV } from '../src/env.js';
+import { autoMigrate } from '../src/auto-migrate.js';
 import type { Client as PgClient } from 'pg';
 
 const { Client } = pg;
@@ -51,6 +52,18 @@ async function dropDatabase(name: string): Promise<void> {
     await admin.query(`DROP DATABASE IF EXISTS ${quoteIdent(name)}`);
   } finally {
     await admin.end();
+  }
+}
+
+async function runAutoMigrate(databaseName: string): Promise<void> {
+  const pool = new pg.Pool({ connectionString: databaseUrlFor(databaseName) });
+  try {
+    const result = await autoMigrate(pool);
+    if (!result.ok) {
+      throw new Error(`auto-migrate failed at ${result.failedMigration ?? 'unknown'}: ${result.error}`);
+    }
+  } finally {
+    await pool.end();
   }
 }
 
@@ -149,6 +162,34 @@ async function seedUpgradeData(client: PgClient): Promise<{
     [orgId],
   );
   return { orgId, customerId, username };
+}
+
+async function seedLegacyGoldenVoucherData(client: PgClient): Promise<{
+  orgId: number;
+  journalId: number;
+}> {
+  const org = await client.query(
+    `INSERT INTO organizations (code, name, status)
+     VALUES ('GOLDEN-VCH-UPGR', 'Golden Voucher Upgrade', 'trial')
+     RETURNING id`,
+  );
+  const orgId = Number(org.rows[0].id);
+  const journal = await client.query(
+    `INSERT INTO document_journals (org_id, doc_type, code, name, payment_types_config)
+     VALUES ($1, 'sales', 'GOLDEN-UPGRADE', 'Golden Upgrade Journal', $2::jsonb)
+     RETURNING id`,
+    [
+      orgId,
+      JSON.stringify({
+        types: [
+          { id: 'legacy-cash', nameAr: 'نقدي', nameEn: 'Cash', codeAr: '', codeEn: '' },
+          { id: 'legacy-credit', nameAr: 'آجل', nameEn: 'Credit', codeAr: '', codeEn: '' },
+        ],
+        accountLinks: [{ accountId: 1101, label: 'legacy-link' }],
+      }),
+    ],
+  );
+  return { orgId, journalId: Number(journal.rows[0].id) };
 }
 
 async function seedWarehouseReconciliationFixtures(client: PgClient): Promise<{
@@ -512,6 +553,7 @@ async function runUpgradeStartup(
 const freshDatabase = `onesoft_migration_fresh_${process.pid}`;
 const upgradeDatabase = `onesoft_migration_upgrade_${process.pid}`;
 const reconciliationDatabase = `onesoft_migration_reconciliation_${process.pid}`;
+const legacyGoldenDatabase = `onesoft_migration_golden_upgrade_${process.pid}`;
 let client: PgClient | null = null;
 
 try {
@@ -526,10 +568,14 @@ try {
     'pending_account_movements',
     'pending_stock_movements',
     'zatca_pos_units',
+    'document_relations',
+    'unpost_audit',
   ]) {
     await assertTable(client, table);
   }
   await assertColumn(client, 'organizations', 'foundation_status');
+  await assertColumn(client, 'document_relations', 'posting_batch_id');
+  await assertColumn(client, 'unpost_audit', 'deleted_documents');
   console.log('[migration-test] fresh database: PASS');
   await client.end();
   client = null;
@@ -657,9 +703,146 @@ try {
   }
   await verify.end();
   console.log('[migration-test] upgrade 0051 -> latest + backend startup: PASS');
+
+  await createDatabase(legacyGoldenDatabase);
+  client = new Client({ connectionString: databaseUrlFor(legacyGoldenDatabase) });
+  await client.connect();
+  await applyThrough(client, '0093_schema_compatibility_repair');
+  const {
+    orgId: legacyOrgId,
+    journalId: legacyJournalId,
+  } = await seedLegacyGoldenVoucherData(client);
+
+  // Simulate the data shape produced by Golden 0094-0096 while retaining the
+  // current branch's migration files. The old central IDs are now persisted
+  // in journal JSON and must survive when the new 0097-0099 sequence runs.
+  for (const tag of [
+    '0097_central_document_voucher_types',
+    '0098_backfill_voucher_type_account_links',
+    '0099_document_relations_unpost_audit',
+  ]) {
+    const migration = migrations.find((candidate) => candidate.tag === tag);
+    if (!migration) throw new Error(`migration tag not found: ${tag}`);
+    await apply(client, migration.sql);
+  }
+  const legacyCentralBefore = await client.query(
+    `SELECT id FROM document_voucher_types WHERE org_id = $1 ORDER BY id`,
+    [legacyOrgId],
+  );
+  const legacyConfigBefore = await client.query(
+    `SELECT payment_types_config FROM document_journals WHERE id = $1`,
+    [legacyJournalId],
+  );
+  const expectedLegacyTypeIds = legacyConfigBefore.rows[0].payment_types_config.types.map(
+    (type: { id: string }) => Number(type.id),
+  );
+
+  await client.query(`
+    CREATE TABLE __drizzle_migrations (
+      id SERIAL PRIMARY KEY,
+      tag TEXT NOT NULL UNIQUE,
+      applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `);
+  const legacyGoldenPrefix = migrations
+    .slice(0, migrations.findIndex((migration) => migration.tag === '0093_schema_compatibility_repair') + 1)
+    .map((migration) => migration.tag);
+  await client.query(
+    `INSERT INTO __drizzle_migrations (tag)
+     SELECT unnest($1::text[])`,
+    [legacyGoldenPrefix],
+  );
+  await client.query(
+    `INSERT INTO __drizzle_migrations (tag)
+     VALUES
+       ('0094_central_document_voucher_types'),
+       ('0095_backfill_voucher_type_account_links'),
+       ('0096_document_relations_unpost_audit')`,
+  );
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS _schema_version (
+      id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+      version TEXT NOT NULL,
+      stamped_at TIMESTAMP NOT NULL DEFAULT now()
+    )
+  `);
+  await client.query(
+    `INSERT INTO _schema_version (id, version)
+     VALUES (1, '0096_document_relations_unpost_audit')
+     ON CONFLICT (id) DO UPDATE
+       SET version = EXCLUDED.version, stamped_at = now()`,
+  );
+  await client.end();
+  client = null;
+
+  await runAutoMigrate(legacyGoldenDatabase);
+
+  const legacyVerify = new Client({
+    connectionString: databaseUrlFor(legacyGoldenDatabase),
+  });
+  await legacyVerify.connect();
+  try {
+    const legacyCentralAfter = await legacyVerify.query(
+      `SELECT id FROM document_voucher_types WHERE org_id = $1 ORDER BY id`,
+      [legacyOrgId],
+    );
+    if (
+      JSON.stringify(legacyCentralAfter.rows.map((row) => Number(row.id))) !==
+      JSON.stringify(legacyCentralBefore.rows.map((row) => Number(row.id)))
+    ) {
+      throw new Error(
+        `Golden voucher IDs changed during upgrade: before=${JSON.stringify(legacyCentralBefore.rows)} after=${JSON.stringify(legacyCentralAfter.rows)}`,
+      );
+    }
+
+    const legacyConfigAfter = await legacyVerify.query(
+      `SELECT payment_types_config FROM document_journals WHERE id = $1`,
+      [legacyJournalId],
+    );
+    const actualLegacyTypeIds = legacyConfigAfter.rows[0].payment_types_config.types.map(
+      (type: { id: string }) => Number(type.id),
+    );
+    if (JSON.stringify(actualLegacyTypeIds) !== JSON.stringify(expectedLegacyTypeIds)) {
+      throw new Error(
+        `Golden journal voucher IDs changed during upgrade: before=${JSON.stringify(expectedLegacyTypeIds)} after=${JSON.stringify(actualLegacyTypeIds)}`,
+      );
+    }
+
+    const orphanTypes = await legacyVerify.query(
+      `SELECT type_row.value->>'id' AS voucher_type_id
+         FROM document_journals AS j
+         CROSS JOIN LATERAL jsonb_array_elements(j.payment_types_config->'types') AS type_row(value)
+         LEFT JOIN document_voucher_types AS v
+           ON v.org_id = j.org_id AND v.id = (type_row.value->>'id')::integer
+        WHERE j.org_id = $1 AND v.id IS NULL`,
+      [legacyOrgId],
+    );
+    if (orphanTypes.rowCount) {
+      throw new Error(`Golden upgrade created orphan voucher IDs: ${JSON.stringify(orphanTypes.rows)}`);
+    }
+
+    const legacyLedger = await legacyVerify.query(
+      `SELECT tag FROM __drizzle_migrations WHERE tag = ANY($1::text[]) ORDER BY tag`,
+      [[
+        '0094_central_document_voucher_types',
+        '0095_backfill_voucher_type_account_links',
+        '0096_document_relations_unpost_audit',
+        '0097_central_document_voucher_types',
+        '0098_backfill_voucher_type_account_links',
+        '0099_document_relations_unpost_audit',
+      ]],
+    );
+    if (legacyLedger.rowCount !== 6) {
+      throw new Error(`Golden migration bridge ledger mismatch: ${JSON.stringify(legacyLedger.rows)}`);
+    }
+  } finally {
+    await legacyVerify.end();
+  }
+  console.log('[migration-test] Golden 0094-0096 ledger/data upgrade bridge: PASS');
 } finally {
   if (client) await client.end().catch(() => undefined);
   await dropDatabase(freshDatabase).catch(() => undefined);
   await dropDatabase(upgradeDatabase).catch(() => undefined);
   await dropDatabase(reconciliationDatabase).catch(() => undefined);
+  await dropDatabase(legacyGoldenDatabase).catch(() => undefined);
 }

@@ -324,10 +324,8 @@ function resolveNestedAccountReferences(
   const config = record.paymentTypesConfig;
   if (!config || typeof config !== 'object' || Array.isArray(config)) return;
 
-  const links = (config as Record<string, unknown>).accountLinks;
-  if (!Array.isArray(links)) return;
-
-  const resolvedLinks = links.map((rawLink, index) => {
+  const configRecord = config as Record<string, unknown>;
+  const resolveLinks = (links: unknown[], path: string) => links.map((rawLink, index) => {
     if (!rawLink || typeof rawLink !== 'object' || Array.isArray(rawLink)) return rawLink;
     const link = { ...(rawLink as Record<string, unknown>) };
     const reference = link.accountSystemKey ?? link.accountCode;
@@ -336,7 +334,7 @@ function resolveNestedAccountReferences(
     if (reference === null || reference === undefined || reference === '') {
       if (typeof rawAccountId === 'number') {
         unresolvedFks.push(
-          `paymentTypesConfig.accountLinks[${index}].accountId: رابط حساب رقمي بلا accountCode/accountSystemKey`,
+          `${path}[${index}].accountId: رابط حساب رقمي بلا accountCode/accountSystemKey`,
         );
       }
       return link;
@@ -345,7 +343,7 @@ function resolveNestedAccountReferences(
     const accountId = acctMap.get(String(reference));
     if (accountId === undefined) {
       unresolvedFks.push(
-        `paymentTypesConfig.accountLinks[${index}]: الحساب ذو المرجع "${reference}" غير موجود في الوجهة`,
+        `${path}[${index}]: الحساب ذو المرجع "${reference}" غير موجود في الوجهة`,
       );
       return link;
     }
@@ -355,10 +353,24 @@ function resolveNestedAccountReferences(
     return link;
   });
 
-  record.paymentTypesConfig = {
-    ...(config as Record<string, unknown>),
-    accountLinks: resolvedLinks,
-  };
+  const resolvedConfig = { ...configRecord };
+  if (Array.isArray(configRecord.accountLinks)) {
+    resolvedConfig.accountLinks = resolveLinks(configRecord.accountLinks, 'paymentTypesConfig.accountLinks');
+  }
+  const linksByType = configRecord.accountLinksByType;
+  if (linksByType && typeof linksByType === 'object' && !Array.isArray(linksByType)) {
+    resolvedConfig.accountLinksByType = Object.fromEntries(
+      Object.entries(linksByType).map(([typeId, rawLinks]) => [
+        typeId,
+        Array.isArray(rawLinks)
+          ? resolveLinks(rawLinks, `paymentTypesConfig.accountLinksByType.${typeId}`)
+          : rawLinks,
+      ]),
+    );
+  }
+  if (resolvedConfig.accountLinks || resolvedConfig.accountLinksByType) {
+    record.paymentTypesConfig = resolvedConfig;
+  }
 }
 
 /**

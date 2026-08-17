@@ -19,6 +19,6 @@ describe('sales debit note posting boundary', () => {
     expect(engine).not.toContain("postSalesInvoiceStock");
     expect(engine).not.toContain("reverseSalesStockMovement");
     expect(salesPosting).not.toContain("postSalesReturnStock");
-    expect(salesPosting).not.toContain("generatedStockVoucherId");
+    expect(salesPosting).toContain("generatedStockVoucherId");
   });
 });

@@ -37,6 +37,21 @@ export const organizations = pgTable('organizations', {
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
 
+// ─── Document Voucher Types (أنواع السندات المركزية) ──────────────────────────
+// تعريف النوع مركزي على مستوى المؤسسة، بينما تبقى روابط الحسابات داخل دفتر
+// المستند وتستخدم هذا المعرّف كمفتاح ثابت.
+export const documentVoucherTypes = pgTable('document_voucher_types', {
+  id:        serial('id').primaryKey(),
+  orgId:     integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  nameAr:    varchar('name_ar', { length: 255 }).notNull().default(''),
+  nameEn:    varchar('name_en', { length: 255 }).notNull().default(''),
+  codeAr:    varchar('code_ar', { length: 100 }).notNull().default(''),
+  codeEn:    varchar('code_en', { length: 100 }).notNull().default(''),
+  isActive:  boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
 // ─── Users ────────────────────────────────────────────────────────────────────
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
@@ -431,6 +446,49 @@ export const salesInvoices = pgTable('sales_invoices', {
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
+
+// ─── Central document relations ──────────────────────────────────────────────
+// Polymorphic links intentionally use document type + id: generated documents
+// can live in different tables (sales invoices, journal entries, vouchers).
+export const documentRelations = pgTable('document_relations', {
+  id: serial('id').primaryKey(),
+  orgId: integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  sourceDocumentType: varchar('source_document_type', { length: 50 }).notNull(),
+  sourceDocumentId: integer('source_document_id').notNull(),
+  generatedDocumentType: varchar('generated_document_type', { length: 50 }).notNull(),
+  generatedDocumentId: integer('generated_document_id').notNull(),
+  relationType: varchar('relation_type', { length: 30 }).notNull(),
+  postingBatchId: varchar('posting_batch_id', { length: 80 }),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('document_relations_unique_link_uidx').on(
+    t.orgId,
+    t.sourceDocumentType,
+    t.sourceDocumentId,
+    t.generatedDocumentType,
+    t.generatedDocumentId,
+    t.relationType,
+  ),
+  index('document_relations_source_idx').on(t.orgId, t.sourceDocumentType, t.sourceDocumentId),
+  index('document_relations_generated_idx').on(t.orgId, t.generatedDocumentType, t.generatedDocumentId),
+]);
+
+export const unpostAudit = pgTable('unpost_audit', {
+  id: serial('id').primaryKey(),
+  orgId: integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  postingBatchId: varchar('posting_batch_id', { length: 80 }).notNull(),
+  sourceDocumentType: varchar('source_document_type', { length: 50 }).notNull(),
+  sourceDocumentId: integer('source_document_id').notNull(),
+  sourceDocumentNumber: varchar('source_document_number', { length: 100 }).notNull(),
+  userId: integer('user_id').references(() => users.id, { onDelete: 'set null' }),
+  unpostedAt: timestamp('unposted_at').notNull().defaultNow(),
+  reason: text('reason'),
+  deletedDocuments: jsonb('deleted_documents').notNull().default([]),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (t) => [
+  index('unpost_audit_source_idx').on(t.orgId, t.sourceDocumentType, t.sourceDocumentId),
+  index('unpost_audit_batch_idx').on(t.orgId, t.postingBatchId),
+]);
 
 // ─── Sales Invoice Items ──────────────────────────────────────────────────────
 export const salesInvoiceItems = pgTable('sales_invoice_items', {

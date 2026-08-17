@@ -118,7 +118,22 @@ const EMPTY: JournalForm = {
 /* ── أنواع السندات (sales journal only) ── */
 type PaymentTypeRow = { id: string; nameAr: string; nameEn: string; codeAr: string; codeEn: string; };
 type AccountLinkRow = { id: string; description: string; postingName: string; accountId: number | null; postingSide: string; };
-type PTC = { types: PaymentTypeRow[]; accountLinks: AccountLinkRow[]; };
+type VoucherTypeMaster = {
+  id: number;
+  orgId: number;
+  nameAr: string;
+  nameEn: string;
+  codeAr: string;
+  codeEn: string;
+  isActive: boolean;
+};
+type PTC = {
+  types: PaymentTypeRow[];
+  /** Legacy fallback retained for existing journals and older posting code. */
+  accountLinks: AccountLinkRow[];
+  /** Independent accounting links for every payment/document type. */
+  accountLinksByType: Record<string, AccountLinkRow[]>;
+};
 const DEFAULT_LINK_DESCRIPTIONS = [
   "الصندوق / النقد",
   "صافي المبيعات",
@@ -131,30 +146,166 @@ const DEFAULT_LINK_DESCRIPTIONS = [
   "بند إضافي (1)",
   "بند إضافي (2)",
 ];
-const DEFAULT_ACCOUNT_LINKS: AccountLinkRow[] = DEFAULT_LINK_DESCRIPTIONS.map((desc, i) => ({
-  id: `default-${i + 1}`,
-  description: desc,
+const DEFAULT_ACCOUNT_LINKS: AccountLinkRow[] = [{
+  id: "default-1",
+  description: "",
   postingName: "",
   accountId: null,
   postingSide: "",
-}));
+}];
+const DEFAULT_PAYMENT_TYPES: PaymentTypeRow[] = [
+  { id: "1", nameAr: "نقدا",  nameEn: "نقدا",  codeAr: "نقدا",  codeEn: "cash"  },
+  { id: "2", nameAr: "آجل",   nameEn: "آجل",   codeAr: "آجل",   codeEn: "cridt" },
+];
+
+const cloneLinksForType = (links: AccountLinkRow[], typeId: string): AccountLinkRow[] =>
+  links.map((link, index) => ({ ...link, id: `${typeId}-${link.id || index + 1}` }));
+
 const DEFAULT_PTC: PTC = {
-  types: [
-    { id: "1", nameAr: "نقدا",  nameEn: "نقدا",  codeAr: "نقدا",  codeEn: "cash"  },
-    { id: "2", nameAr: "آجل",   nameEn: "آجل",   codeAr: "آجل",   codeEn: "cridt" },
-  ],
+  types: DEFAULT_PAYMENT_TYPES,
   accountLinks: DEFAULT_ACCOUNT_LINKS,
+  accountLinksByType: Object.fromEntries(
+    DEFAULT_PAYMENT_TYPES.map(type => [type.id, cloneLinksForType(DEFAULT_ACCOUNT_LINKS, type.id)]),
+  ),
 };
-function normalizePtConfig(raw: any): PTC {
-  if (!raw) return DEFAULT_PTC;
-  if (!Array.isArray(raw.types)) return DEFAULT_PTC;
-  const savedLinks: AccountLinkRow[] = Array.isArray(raw.accountLinks) ? raw.accountLinks : [];
+
+function normalizeAccountLinks(rawLinks: unknown): AccountLinkRow[] {
+  const savedLinks: AccountLinkRow[] = Array.isArray(rawLinks) ? rawLinks : [];
+  const isLegacyUnconfiguredDefaults =
+    savedLinks.length > 1 &&
+    savedLinks.every((link, index) =>
+      link.description === DEFAULT_LINK_DESCRIPTIONS[index] &&
+      !link.postingName &&
+      link.accountId == null &&
+      !link.postingSide,
+    );
+  if (isLegacyUnconfiguredDefaults) {
+    return [{ ...DEFAULT_ACCOUNT_LINKS[0], id: savedLinks[0]?.id || "default-1" }];
+  }
   const merged: AccountLinkRow[] = DEFAULT_ACCOUNT_LINKS.map((def, i) => {
     const saved = savedLinks[i];
     return saved ?? { ...def, id: `default-${i + 1}` };
   });
-  const extras = savedLinks.slice(DEFAULT_ACCOUNT_LINKS.length);
-  return { types: raw.types, accountLinks: [...merged, ...extras] };
+  return [...merged, ...savedLinks.slice(DEFAULT_ACCOUNT_LINKS.length)];
+}
+
+function normalizePtConfig(raw: any): PTC {
+  if (!raw) return DEFAULT_PTC;
+  const rawTypes: PaymentTypeRow[] = Array.isArray(raw.types) ? raw.types : DEFAULT_PAYMENT_TYPES;
+  const legacyLinks = normalizeAccountLinks(raw.accountLinks);
+  const rawByType = raw.accountLinksByType && typeof raw.accountLinksByType === "object"
+    ? raw.accountLinksByType as Record<string, unknown>
+    : {};
+  const types = rawTypes;
+  const accountLinksByType = Object.fromEntries(
+    types.map((type, index) => {
+      const rawType = rawTypes[index];
+      const savedLinks = rawByType[rawType.id] ?? rawByType[type.id];
+      const source = Array.isArray(savedLinks) ? savedLinks : legacyLinks;
+      return [type.id, normalizeAccountLinks(source)];
+    }),
+  );
+  return { types, accountLinks: legacyLinks, accountLinksByType };
+}
+
+function resolveVoucherTypeMasters(types: PaymentTypeRow[], masters: VoucherTypeMaster[]): PTC["types"] {
+  return types.map(type => {
+    const byId = masters.find(master => String(master.id) === type.id);
+    const byCode = !byId && (type.codeEn.trim() || type.codeAr.trim())
+      ? masters.find(master =>
+          (type.codeEn.trim() && master.codeEn.trim().toLowerCase() === type.codeEn.trim().toLowerCase()) ||
+          (type.codeAr.trim() && master.codeAr.trim() === type.codeAr.trim()),
+        )
+      : undefined;
+    const master = byId ?? byCode;
+    return master
+      ? {
+          id: String(master.id),
+          nameAr: master.nameAr,
+          nameEn: master.nameEn,
+          codeAr: master.codeAr,
+          codeEn: master.codeEn,
+        }
+      : type;
+  });
+}
+
+function normalizePtConfigWithMasters(raw: any, masters: VoucherTypeMaster[]): PTC {
+  const base = normalizePtConfig(raw);
+  const resolvedTypes = resolveVoucherTypeMasters(base.types, masters);
+  const rawTypes: PaymentTypeRow[] = Array.isArray(raw?.types) ? raw.types : base.types;
+  const rawByType = raw?.accountLinksByType && typeof raw.accountLinksByType === "object"
+    ? raw.accountLinksByType as Record<string, unknown>
+    : {};
+  const accountLinksByType = Object.fromEntries(
+    resolvedTypes.map((type, index) => {
+      const oldId = rawTypes[index]?.id ?? type.id;
+      const savedLinks = rawByType[oldId] ?? rawByType[type.id];
+      const source = Array.isArray(savedLinks) ? savedLinks : base.accountLinks;
+      return [type.id, normalizeAccountLinks(source)];
+    }),
+  );
+  return {
+    ...base,
+    types: resolvedTypes,
+    accountLinksByType,
+  };
+}
+
+function createInitialPtConfig(masters: VoucherTypeMaster[]): PTC {
+  const types = resolveVoucherTypeMasters(DEFAULT_PAYMENT_TYPES, masters);
+  return {
+    types,
+    accountLinks: DEFAULT_ACCOUNT_LINKS,
+    accountLinksByType: Object.fromEntries(
+      types.map(type => [type.id, cloneLinksForType(DEFAULT_ACCOUNT_LINKS, type.id)]),
+    ),
+  };
+}
+
+function getDuplicatePaymentTypeCodeMessage(types: PaymentTypeRow[]): string | null {
+  const arabicCodes = new Set<string>();
+  const englishCodes = new Set<string>();
+
+  for (const type of types) {
+    const codeAr = type.codeAr.trim();
+    const codeEn = type.codeEn.trim().toLowerCase();
+
+    if (codeAr) {
+      if (arabicCodes.has(codeAr)) return "الكود العربي مستخدم بالفعل في نوع سند آخر.";
+      arabicCodes.add(codeAr);
+    }
+    if (codeEn) {
+      if (englishCodes.has(codeEn)) return "الكود الإنجليزي مستخدم بالفعل في نوع سند آخر.";
+      englishCodes.add(codeEn);
+    }
+  }
+  return null;
+}
+
+function getGlobalVoucherTypeCodeMessage(
+  types: PaymentTypeRow[],
+  masters: VoucherTypeMaster[],
+): string | null {
+  const byArabicCode = new Map(
+    masters.filter(master => master.codeAr.trim()).map(master => [master.codeAr.trim(), master.id]),
+  );
+  const byEnglishCode = new Map(
+    masters.filter(master => master.codeEn.trim()).map(master => [master.codeEn.trim().toLowerCase(), master.id]),
+  );
+
+  for (const type of types) {
+    const id = Number(type.id);
+    const codeAr = type.codeAr.trim();
+    const codeEn = type.codeEn.trim().toLowerCase();
+    if (codeAr && byArabicCode.has(codeAr) && byArabicCode.get(codeAr) !== id) {
+      return "الكود العربي مستخدم بالفعل في نوع سند آخر.";
+    }
+    if (codeEn && byEnglishCode.has(codeEn) && byEnglishCode.get(codeEn) !== id) {
+      return "الكود الإنجليزي مستخدم بالفعل في نوع سند آخر.";
+    }
+  }
+  return null;
 }
 
 /* ── مكوّن بحث الحساب (مثل المخازن) ── */
@@ -605,6 +756,8 @@ export default function DocumentJournalsPage() {
   const listQuery = trpc.documentJournals.list.useQuery();
   const allJournals: DBJournal[] = (listQuery.data ?? []) as DBJournal[];
   const typeJournals = useMemo(() => allJournals.filter(j => j.docType === selectedType), [allJournals, selectedType]);
+  const { data: voucherTypesData = [] } = trpc.documentJournals.listVoucherTypes.useQuery();
+  const globalVoucherTypes = voucherTypesData as VoucherTypeMaster[];
 
   const currentIndex = editId != null ? typeJournals.findIndex(j => j.id === editId) : -1;
   const currentDBJournal = editId != null ? allJournals.find(j => j.id === editId) : null;
@@ -730,25 +883,33 @@ export default function DocumentJournalsPage() {
     setEditId(null);
     setForm({ ...EMPTY, docType: selectedType });
     setIsDirty(false);
-    setPtConfig(DEFAULT_PTC);
+    setPtConfig(createInitialPtConfig(globalVoucherTypes));
     setDocComponents([]);
     setActiveTab("basic");
     setView("form");
-  }, [selectedType]);
+  }, [globalVoucherTypes, selectedType]);
 
   const openEdit = useCallback((j: DBJournal) => {
     setEditId(j.id);
     setForm(dbToForm(j));
-    setPtConfig(normalizePtConfig((j as any).paymentTypesConfig));
+    setPtConfig(normalizePtConfigWithMasters((j as any).paymentTypesConfig, globalVoucherTypes));
     const oc2 = (j as any).optionsConfig ?? {};
     setDocComponents((oc2.documentComponents as DocComponent[]) ?? []);
     setIsDirty(false);
     setActiveTab("basic");
     setView("form");
-  }, []);
+  }, [globalVoucherTypes]);
 
   const handleSave = () => {
     if (!form.nameAr.trim()) { toast.error("إسم الدفتر بالعربي مطلوب"); return; }
+    const duplicateCodeMessage = getDuplicatePaymentTypeCodeMessage(ptConfig.types);
+    if (duplicateCodeMessage) { toast.error(duplicateCodeMessage); return; }
+    const globalCodeMessage = getGlobalVoucherTypeCodeMessage(ptConfig.types, globalVoucherTypes);
+    if (globalCodeMessage) { toast.error(globalCodeMessage); return; }
+    const primaryTypeId = ptConfig.types[0]?.id;
+    const primaryTypeLinks = primaryTypeId
+      ? (ptConfig.accountLinksByType[primaryTypeId] ?? ptConfig.accountLinks)
+      : ptConfig.accountLinks;
     const payload = {
       docType:        form.docType || selectedType,
       code:           form.fixedPart.trim() || form.nameAr.slice(0, 20) || "JRN",
@@ -776,7 +937,9 @@ export default function DocumentJournalsPage() {
       draftResetFrequency: form.draftResetFrequency,
       customersJournal: (form.customersJournal && form.customersJournal !== "none") ? form.customersJournal : null,
       suppliersJournal: (form.suppliersJournal && form.suppliersJournal !== "none") ? form.suppliersJournal : null,
-      paymentTypesConfig: ptConfig,
+      // Keep the legacy flat list for older posting paths; new posting uses
+      // accountLinksByType to select the links for the matching type.
+      paymentTypesConfig: { ...ptConfig, accountLinks: primaryTypeLinks },
       salesAccountId:    form.salesAccountId    ? parseInt(form.salesAccountId)    : null,
       cashAccountId:     form.cashAccountId     ? parseInt(form.cashAccountId)     : null,
       creditAccountId:   form.creditAccountId   ? parseInt(form.creditAccountId)   : null,
@@ -1354,13 +1517,76 @@ export default function DocumentJournalsPage() {
                 <Input value={val} onChange={e => onChange(e.target.value)}
                   className="w-full h-6 text-[11px] px-1.5 border-slate-200 rounded bg-white focus-visible:ring-0 focus-visible:ring-offset-0 focus:border-indigo-400" />
               );
+              const selectMasterType = (idx: number, masterId: string) => {
+                const master = globalVoucherTypes.find(item => String(item.id) === masterId);
+                setPtConfig(p => {
+                  const current = p.types[idx];
+                  if (!current) return p;
+                  if (!masterId || !master) {
+                    const newId = `new-${Date.now()}`;
+                    const links = p.accountLinksByType[current.id] ?? p.accountLinks;
+                    const nextTypes = [...p.types];
+                    nextTypes[idx] = { id: newId, nameAr: "", nameEn: "", codeAr: "", codeEn: "" };
+                    return {
+                      ...p,
+                      types: nextTypes,
+                      accountLinksByType: {
+                        ...Object.fromEntries(Object.entries(p.accountLinksByType).filter(([id]) => id !== current.id)),
+                        [newId]: links,
+                      },
+                    };
+                  }
+                  if (p.types.some((type, typeIndex) => typeIndex !== idx && type.id === masterId)) {
+                    toast.error("نوع السند المركزي مرتبط بالفعل بهذا الدفتر.");
+                    return p;
+                  }
+                  const links = p.accountLinksByType[current.id] ?? p.accountLinks;
+                  const nextTypes = [...p.types];
+                  nextTypes[idx] = {
+                    id: masterId,
+                    nameAr: master.nameAr,
+                    nameEn: master.nameEn,
+                    codeAr: master.codeAr,
+                    codeEn: master.codeEn,
+                  };
+                  return {
+                    ...p,
+                    types: nextTypes,
+                    accountLinksByType: {
+                      ...Object.fromEntries(Object.entries(p.accountLinksByType).filter(([id]) => id !== current.id)),
+                      [masterId]: links,
+                    },
+                  };
+                });
+                setIsDirty(true);
+              };
               const addType = () => {
-                const newId = String(Date.now());
-                setPtConfig(p => ({ ...p, types: [...p.types, { id: newId, nameAr: "", nameEn: "", codeAr: "", codeEn: "" }] }));
+                const newId = `new-${Date.now()}`;
+                setPtConfig(p => {
+                  const newType: PaymentTypeRow = { id: newId, nameAr: "", nameEn: "", codeAr: "", codeEn: "" };
+                  const sourceLinks = p.accountLinksByType[p.types[0]?.id] ?? p.accountLinks;
+                  return {
+                    ...p,
+                    types: [...p.types, newType],
+                    accountLinksByType: {
+                      ...p.accountLinksByType,
+                      [newId]: cloneLinksForType(sourceLinks, newId),
+                    },
+                  };
+                });
                 setIsDirty(true);
               };
               const removeType = (idx: number) => {
-                setPtConfig(p => ({ ...p, types: p.types.filter((_, i) => i !== idx) }));
+                setPtConfig(p => {
+                  const removedId = p.types[idx]?.id;
+                  return {
+                    ...p,
+                    types: p.types.filter((_, i) => i !== idx),
+                    accountLinksByType: Object.fromEntries(
+                      Object.entries(p.accountLinksByType).filter(([typeId]) => typeId !== removedId),
+                    ),
+                  };
+                });
                 setIsDirty(true);
               };
               const patchType = (idx: number, patch: Partial<PaymentTypeRow>) => {
@@ -1388,6 +1614,7 @@ export default function DocumentJournalsPage() {
                     <table className="w-full border-collapse">
                       <thead>
                         <tr>
+                          <th className={thCls}>النوع المركزي</th>
                           <th className={thCls}>الاسم العربي</th>
                           <th className={thCls}>الاسم الإنجليزي</th>
                           <th className={thCls}>كود عربي</th>
@@ -1398,6 +1625,20 @@ export default function DocumentJournalsPage() {
                       <tbody>
                         {ptConfig.types.map((row, i) => (
                           <tr key={row.id} className="hover:bg-slate-50/50">
+                            <td className={tdCls}>
+                              <select
+                                value={globalVoucherTypes.some(item => String(item.id) === row.id) ? row.id : "__new__"}
+                                onChange={e => selectMasterType(i, e.target.value === "__new__" ? "" : e.target.value)}
+                                className="w-full h-6 text-[10px] border border-slate-200 rounded bg-white px-1 focus:outline-none focus:ring-1 focus:ring-indigo-300"
+                              >
+                                <option value="__new__">نوع جديد</option>
+                                {globalVoucherTypes.map(item => (
+                                  <option key={item.id} value={String(item.id)}>
+                                    {item.nameAr || item.codeEn || `نوع ${item.id}`}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
                             <td className={tdCls}>{cellInput(row.nameAr, v => patchType(i, { nameAr: v }))}</td>
                             <td className={tdCls}>{cellInput(row.nameEn, v => patchType(i, { nameEn: v }))}</td>
                             <td className={tdCls}>{cellInput(row.codeAr, v => patchType(i, { codeAr: v }))}</td>
@@ -1411,7 +1652,7 @@ export default function DocumentJournalsPage() {
                       </tbody>
                       <tfoot>
                         <tr>
-                          <td colSpan={5} className="px-2 py-1.5">
+                          <td colSpan={6} className="px-2 py-1.5">
                             <button onClick={addType}
                               className="text-[11px] text-indigo-600 hover:text-indigo-800 flex items-center gap-1">
                               <span className="text-[14px] leading-none">+</span> إضافة نوع آخر
@@ -1434,95 +1675,170 @@ export default function DocumentJournalsPage() {
                 <Input value={val} onChange={e => onChange(e.target.value)}
                   className="w-full h-6 text-[11px] px-1.5 border-slate-200 rounded bg-white focus-visible:ring-0 focus-visible:ring-offset-0 focus:border-indigo-400" />
               );
-              const addLink = () => {
+              const addLink = (typeId: string) => {
                 const newId = String(Date.now());
-                setPtConfig(p => ({ ...p, accountLinks: [...p.accountLinks, { id: newId, description: "", postingName: "", accountId: null, postingSide: "" }] }));
+                setPtConfig(p => {
+                  const links = p.accountLinksByType[typeId] ?? [];
+                  return {
+                    ...p,
+                    accountLinksByType: {
+                      ...p.accountLinksByType,
+                      [typeId]: [...links, { id: newId, description: "", postingName: "", accountId: null, postingSide: "" }],
+                    },
+                  };
+                });
                 setIsDirty(true);
               };
-              const removeLink = (idx: number) => {
-                setPtConfig(p => ({ ...p, accountLinks: p.accountLinks.filter((_, i) => i !== idx) }));
+              const removeLink = (typeId: string, idx: number) => {
+                setPtConfig(p => ({
+                  ...p,
+                  accountLinksByType: {
+                    ...p.accountLinksByType,
+                    [typeId]: (p.accountLinksByType[typeId] ?? []).filter((_, i) => i !== idx),
+                  },
+                }));
                 setIsDirty(true);
               };
-              const patchLink = (idx: number, patch: Partial<AccountLinkRow>) => {
-                setPtConfig(p => { const a = [...p.accountLinks]; a[idx] = { ...a[idx], ...patch }; return { ...p, accountLinks: a }; });
+              const patchLink = (typeId: string, idx: number, patch: Partial<AccountLinkRow>) => {
+                setPtConfig(p => {
+                  const links = [...(p.accountLinksByType[typeId] ?? [])];
+                  links[idx] = { ...links[idx], ...patch };
+                  return { ...p, accountLinksByType: { ...p.accountLinksByType, [typeId]: links } };
+                });
                 setIsDirty(true);
               };
-              return (
-                <div className="h-full overflow-y-auto p-4 space-y-4" dir="rtl">
-                  <P title="الروابط المحاسبية">
-                    <table className="w-full" style={{ borderCollapse: "separate", borderSpacing: 0 }}>
-                      <thead>
-                        <tr style={{ background: "linear-gradient(to left, #e8e3d8, #e2ddd3)" }}>
-                          <th className={thCls} style={{ width: 28 }}>#</th>
-                          <th className={thCls} style={{ width: "23%" }}>بيان<br/><span className="font-normal text-[9px] text-slate-400">Description</span></th>
-                          <th className={thCls} style={{ width: "18%" }}>مصدر البيانات<br/><span className="font-normal text-[9px] text-slate-400">Source Field</span></th>
-                          <th className={thCls} style={{ width: 110, borderRight: "1px solid #d8d3c8" }}>كود الحساب<br/><span className="font-normal text-[9px] text-slate-400">Account Code</span></th>
-                          <th className={thCls}>اسم الحساب<br/><span className="font-normal text-[9px] text-slate-400">Account Name</span></th>
-                          <th className={thCls} style={{ width: 100 }}>اتجاه القيد<br/><span className="font-normal text-[9px] text-slate-400">Posting Side</span></th>
-                          <th className="w-6 border-b" style={{ background: "#e2ddd3", borderColor: "#d8d3c8" }}></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {ptConfig.accountLinks.map((row, i) => {
-                          const acct = (chartAccounts as any[]).find((a: any) => a.id === row.accountId);
-                          const even = i % 2 === 0;
-                          return (
-                            <tr key={row.id}
-                              style={{ background: even ? "#FDFAF5" : "#F5F0E8", borderBottom: "1px solid #e8e3d8" }}
-                              className="hover:bg-amber-50/40"
+              const renderLinksTable = (typeId: string, links: AccountLinkRow[]) => (
+                <table className="w-full" style={{ borderCollapse: "separate", borderSpacing: 0 }}>
+                  <thead>
+                    <tr>
+                      <th className={thCls} style={{ width: 28 }}>#</th>
+                      <th className={thCls} style={{ width: "23%" }}>بيان<br/><span className="font-normal text-[9px] text-slate-400">Description</span></th>
+                      <th className={thCls} style={{ width: "18%" }}>مصدر البيانات<br/><span className="font-normal text-[9px] text-slate-400">Source Field</span></th>
+                      <th className={thCls} style={{ width: 110, borderRight: "1px solid #e2e8f0" }}>كود الحساب<br/><span className="font-normal text-[9px] text-slate-400">Account Code</span></th>
+                      <th className={thCls}>اسم الحساب<br/><span className="font-normal text-[9px] text-slate-400">Account Name</span></th>
+                      <th className={thCls} style={{ width: 100 }}>اتجاه القيد<br/><span className="font-normal text-[9px] text-slate-400">Posting Side</span></th>
+                      <th className="w-6 bg-slate-50 border-b border-slate-200"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {links.map((row, i) => {
+                      const acct = (chartAccounts as any[]).find((a: any) => a.id === row.accountId);
+                      const even = i % 2 === 0;
+                      return (
+                        <tr key={row.id}
+                          style={{ background: even ? "#ffffff" : "#f1f3f5", borderBottom: "1px solid #e2e8f0" }}
+                          className="hover:bg-slate-50/50"
+                        >
+                          <td className="px-2 py-1 text-[11px] text-slate-400 text-center">{i + 1}</td>
+                          <td className={tdCls}>{cellInput(row.description, v => patchLink(typeId, i, { description: v }))}</td>
+                          <td className="py-0" style={{ borderRight: "1px solid #eef2f7", borderLeft: "1px solid #eef2f7" }}>
+                            <FieldCodeSearch
+                              allFields={fieldDictList as any[]}
+                              selectedCode={row.postingName}
+                              onChange={v => patchLink(typeId, i, { postingName: v })}
+                              filterType="Amount"
+                            />
+                          </td>
+                          <td className="py-0" style={{ borderRight: "1px solid #eef2f7", borderLeft: "1px solid #eef2f7" }}>
+                            <AccCodeSearch
+                              allAccounts={chartAccounts as any[]}
+                              selectedId={row.accountId}
+                              onChange={v => patchLink(typeId, i, { accountId: v })}
+                            />
+                          </td>
+                          <td className="px-2 py-1 text-[11px] text-slate-600 truncate" style={{ maxWidth: 160 }}>
+                            {acct?.name ?? <span className="text-slate-300">—</span>}
+                          </td>
+                          <td className="py-0 px-1">
+                            <select
+                              value={row.postingSide}
+                              onChange={e => patchLink(typeId, i, { postingSide: e.target.value })}
+                              className="w-full h-7 text-[11px] bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-indigo-300 rounded px-1 cursor-pointer"
+                              style={{ direction: "rtl" }}
                             >
-                              <td className="px-2 py-1 text-[11px] text-slate-400 text-center">{i + 1}</td>
-                              <td className={tdCls}>{cellInput(row.description, v => patchLink(i, { description: v }))}</td>
-                              <td className="py-0" style={{ borderRight: "1px solid #eef2f7", borderLeft: "1px solid #eef2f7" }}>
-                                <FieldCodeSearch
-                                  allFields={fieldDictList as any[]}
-                                  selectedCode={row.postingName}
-                                  onChange={v => patchLink(i, { postingName: v })}
-                                  filterType="Amount"
-                                />
-                              </td>
-                              <td className="py-0" style={{ borderRight: "1px solid #eef2f7", borderLeft: "1px solid #eef2f7" }}>
-                                <AccCodeSearch
-                                  allAccounts={chartAccounts as any[]}
-                                  selectedId={row.accountId}
-                                  onChange={v => patchLink(i, { accountId: v })}
-                                />
-                              </td>
-                              <td className="px-2 py-1 text-[11px] text-slate-600 truncate" style={{ maxWidth: 160 }}>
-                                {acct?.name ?? <span className="text-slate-300">—</span>}
-                              </td>
-                              <td className="py-0 px-1">
-                                <select
-                                  value={row.postingSide}
-                                  onChange={e => patchLink(i, { postingSide: e.target.value })}
-                                  className="w-full h-7 text-[11px] bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-indigo-300 rounded px-1 cursor-pointer"
-                                  style={{ direction: "rtl" }}
-                                >
-                                  <option value="">— اختر —</option>
-                                  <option value="debit">مدين (Debit)</option>
-                                  <option value="credit">دائن (Credit)</option>
-                                </select>
-                              </td>
-                              <td className={`${tdCls} text-center`}>
-                                <button onClick={() => removeLink(i)}
-                                  className="w-5 h-5 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 text-[13px] leading-none flex items-center justify-center">×</button>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                      <tfoot>
-                        <tr>
-                          <td colSpan={7} className="px-2 py-1.5">
-                            <button onClick={addLink}
-                              className="text-[11px] text-indigo-600 hover:text-indigo-800 flex items-center gap-1">
-                              <span className="text-[14px] leading-none">+</span> إضافة حساب
-                            </button>
+                              <option value="">— اختر —</option>
+                              <option value="debit">مدين (Debit)</option>
+                              <option value="credit">دائن (Credit)</option>
+                            </select>
+                          </td>
+                          <td className={`${tdCls} text-center`}>
+                            <button onClick={() => removeLink(typeId, i)}
+                              className="w-5 h-5 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 text-[13px] leading-none flex items-center justify-center">×</button>
                           </td>
                         </tr>
-                      </tfoot>
-                    </table>
-                  </P>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td colSpan={7} className="px-2 py-1.5">
+                        <button onClick={() => addLink(typeId)}
+                          className="text-[11px] text-indigo-600 hover:text-indigo-800 flex items-center gap-1">
+                          <span className="text-[14px] leading-none">+</span> إضافة حساب
+                        </button>
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              );
+              return (
+                <div className="h-full overflow-y-auto p-4 space-y-4" dir="rtl">
+                  {ptConfig.types.length > 0 ? ptConfig.types.map(type => {
+                    const links = ptConfig.accountLinksByType[type.id] ?? [];
+                    return (
+                      <div
+                        key={type.id}
+                        className="rounded-lg border border-[#ddd8ce] bg-[#F2F0EC] shadow-[0_1px_2px_rgba(0,0,0,0.04)] overflow-hidden"
+                      >
+                        <div className="grid grid-cols-5 gap-x-3 px-3 py-2 border-b border-[#b8aea3] text-center" dir="rtl">
+                            <div className="min-w-0 text-center">
+                              <div className="text-[12px] font-medium text-[#806c5a] mb-0.5">نوع السند</div>
+                              <div className="text-[12px] font-semibold text-[#3A3030] truncate">
+                                {type.nameAr || "نوع سند جديد"}
+                              </div>
+                            </div>
+                            <div className="min-w-0 text-center">
+                              <div className="text-[12px] font-medium text-[#806c5a] mb-0.5">الاسم العربي</div>
+                              <div className="text-[12px] text-slate-700 truncate">
+                                {type.nameAr || <span className="text-slate-300">—</span>}
+                              </div>
+                            </div>
+                            <div className="min-w-0 text-center">
+                              <div className="text-[12px] font-medium text-[#806c5a] mb-0.5">الاسم الإنجليزي</div>
+                              <div className="text-[12px] text-slate-600 truncate text-center" dir="ltr">
+                                {type.nameEn || <span className="text-slate-300">—</span>}
+                              </div>
+                            </div>
+                            <div className="min-w-0 text-center">
+                              <div className="text-[12px] font-medium text-[#806c5a] mb-0.5">كود عربي</div>
+                              <div className="text-[12px] font-mono text-slate-600 truncate">
+                                {type.codeAr || <span className="text-slate-300">—</span>}
+                              </div>
+                            </div>
+                            <div className="min-w-0 text-center">
+                              <div className="text-[12px] font-medium text-[#806c5a] mb-0.5">كود إنجليزي</div>
+                              <div className="text-[12px] font-mono text-slate-600 truncate text-center" dir="ltr">
+                                {type.codeEn || <span className="text-slate-300">—</span>}
+                              </div>
+                            </div>
+                        </div>
+                        <div>
+                          <div className="px-3.5 py-2 border-b border-[#ddd8ce] bg-gradient-to-b from-[#F2F0EC] to-[#EDE9E2]">
+                            <span className="text-[13px] font-bold text-[#3A3030]">
+                              الروابط المحاسبية{type.nameAr ? ` — ${type.nameAr}` : ""}
+                            </span>
+                          </div>
+                          {renderLinksTable(type.id, links)}
+                        </div>
+                      </div>
+                    );
+                  }) : (
+                    <P title="الروابط المحاسبية">
+                      <div className="py-8 text-center text-[11px] text-slate-400">
+                        أضف نوع سند أولاً من تبويب «أنواع السندات» لتكوين روابطه المحاسبية.
+                      </div>
+                    </P>
+                  )}
                 </div>
               );
             })()}
@@ -1536,15 +1852,12 @@ export default function DocumentJournalsPage() {
                 <div className="grid grid-cols-2 gap-x-5 gap-y-2.5">
                   <R label="نوع القيد" lw={145}>
                     <FS id="issuanceJournalType" value={form.issuanceJournalType} onValueChange={v => set("issuanceJournalType", v)}>
-                      {DOC_TYPES.filter(dt => ["journal_entry","purchase_invoice","receipt_voucher","payment_voucher"].includes(dt.id))
-                        .map(dt => <SelectItem key={dt.id} value={dt.id}>{dt.label}</SelectItem>)}
+                      {DOC_TYPES.map(dt => <SelectItem key={dt.id} value={dt.id}>{dt.label}</SelectItem>)}
                     </FS>
                   </R>
                   <R label="دفتر القيد" lw={145}>
                     <FS id="issuanceJournalBookId" value={form.issuanceJournalBookId} onValueChange={v => set("issuanceJournalBookId", v)}>
-                      {allJournals
-                        .filter(j => !form.issuanceJournalType || j.docType === form.issuanceJournalType)
-                        .map(j => (
+                      {allJournals.map(j => (
                           <SelectItem key={j.id} value={String(j.id)}>
                             {j.numberPrefix ? `${j.numberPrefix} — ${j.name}` : j.name}
                           </SelectItem>

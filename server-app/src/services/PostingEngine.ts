@@ -52,6 +52,72 @@ export type AccountLinkConfig = {
   description:  string;
 };
 
+type PaymentTypeConfig = {
+  id?: string;
+  nameAr?: string | null;
+  nameEn?: string | null;
+  codeAr?: string | null;
+  codeEn?: string | null;
+};
+
+export type PaymentTypesConfig = {
+  types?: PaymentTypeConfig[];
+  /** Legacy flat list used by older journals. */
+  accountLinks?: AccountLinkConfig[];
+  /** New independent links keyed by payment/document type id. */
+  accountLinksByType?: Record<string, AccountLinkConfig[]>;
+};
+
+function normalizePaymentTypeKey(value: unknown): string {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]+/g, '')
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/ى/g, 'ي');
+}
+
+/**
+ * Select the accounting links for the invoice's payment/document type.
+ * Journals created before per-type links existed continue using accountLinks.
+ */
+export function getConfiguredAccountLinks(
+  config: PaymentTypesConfig | null | undefined,
+  paymentMethod: unknown,
+): AccountLinkConfig[] {
+  const legacyLinks = Array.isArray(config?.accountLinks) ? config.accountLinks : [];
+  const groups = config?.accountLinksByType;
+  if (!groups || typeof groups !== 'object' || Array.isArray(groups)) return legacyLinks;
+
+  const rawPaymentMethod = normalizePaymentTypeKey(paymentMethod);
+  const candidates = new Set([rawPaymentMethod]);
+  if (rawPaymentMethod === 'credit' || rawPaymentMethod === 'cridt' || rawPaymentMethod === 'اجل') {
+    candidates.add('credit');
+    candidates.add('cridt');
+    candidates.add('اجل');
+  }
+  if (rawPaymentMethod === 'cash' || rawPaymentMethod === 'نقدا') {
+    candidates.add('cash');
+    candidates.add('نقدا');
+  }
+
+  const matchedType = Array.isArray(config?.types)
+    ? config!.types.find(type =>
+        [type.id, type.nameAr, type.nameEn, type.codeAr, type.codeEn]
+          .some(value => value != null && candidates.has(normalizePaymentTypeKey(value))),
+      )
+    : undefined;
+
+  if (matchedType?.id && Array.isArray(groups[matchedType.id])) {
+    return groups[matchedType.id]!;
+  }
+  if (rawPaymentMethod && Array.isArray(groups[rawPaymentMethod])) {
+    return groups[rawPaymentMethod]!;
+  }
+  return legacyLinks;
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // resolveDocTypeAccounts — تحليل حسابات نوع المستند
 // ══════════════════════════════════════════════════════════════════════════════
@@ -297,8 +363,8 @@ export async function buildSalesInvoiceLines(
       paidAmount: '0',
     };
   }
-  const ptCfg = journal?.paymentTypesConfig as { accountLinks?: AccountLinkConfig[] } | null | undefined;
-  const configLinks: AccountLinkConfig[] = Array.isArray(ptCfg?.accountLinks) ? (ptCfg!.accountLinks as AccountLinkConfig[]) : [];
+  const ptCfg = journal?.paymentTypesConfig as PaymentTypesConfig | null | undefined;
+  const configLinks = getConfiguredAccountLinks(ptCfg, invoice.paymentMethod);
   const hasConfiguredLinks = configLinks.some(l => l.accountId && l.postingName && l.postingSide);
 
   if (hasConfiguredLinks) {
@@ -499,6 +565,23 @@ export async function buildSalesInvoiceLines(
   return { lines, warnings, totalDebit: totalDebit.toFixed(4), totalCredit: totalCredit.toFixed(4), isBalanced };
 }
 
+/** Returns the actual posting direction, including the reversal required by
+ * sales returns and credit notes. */
+export async function buildSalesPostingLines(
+  invoice: typeof salesInvoices.$inferSelect,
+  journal: typeof documentJournals.$inferSelect | null,
+  orgId: number,
+) {
+  const result = await buildSalesInvoiceLines(invoice, journal, orgId);
+  const isReturn = invoice.invoiceType === 'return' || invoice.invoiceType === 'credit_note';
+  return {
+    ...result,
+    lines: isReturn
+      ? result.lines.map((line) => ({ ...line, debit: line.credit, credit: line.debit }))
+      : result.lines,
+  };
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // buildPurchaseInvoiceLines — بناء أسطر قيد فاتورة المشتريات
 // ══════════════════════════════════════════════════════════════════════════════
@@ -619,6 +702,12 @@ export async function insertJournalEntry(opts: {
   tx?: DbClient;
 }) {
   const client = opts.tx ?? db;
+  // Entries without a document journal still need a serialized allocator.
+  // The transaction-scoped lock keeps JE-* numbers unique during concurrent
+  // sales postings instead of relying on an advisory read of the last row.
+  if (!opts.journalId && opts.tx) {
+    await client.execute(sql`SELECT pg_advisory_xact_lock(${opts.orgId}::bigint)`);
+  }
   const reserved = opts.journalId
     ? await reserveDocumentNumber(opts.journalId, opts.orgId, client)
     : null;
@@ -709,9 +798,9 @@ export async function autoPostSalesInvoice(
     postingMode:       journal?.postingMode ?? 'auto',
   } as typeof documentJournals.$inferSelect;
 
-  const _ptCfgAuto = journal?.paymentTypesConfig as { accountLinks?: AccountLinkConfig[] } | null | undefined;
-  const _hasFieldLinks = Array.isArray(_ptCfgAuto?.accountLinks) &&
-    _ptCfgAuto!.accountLinks.some(l => l.accountId && l.postingName && l.postingSide);
+  const _ptCfgAuto = journal?.paymentTypesConfig as PaymentTypesConfig | null | undefined;
+  const _configLinksAuto = getConfiguredAccountLinks(_ptCfgAuto, invoice.paymentMethod);
+  const _hasFieldLinks = _configLinksAuto.some(l => l.accountId && l.postingName && l.postingSide);
 
   if (!_hasFieldLinks) {
     const isCredit = invoice.paymentMethod === 'credit';
