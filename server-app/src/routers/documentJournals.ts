@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { eq, and, asc, inArray, sql } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc.js';
+import { TRPCError } from '@trpc/server';
 import { db } from '../db.js';
 import {
   documentJournals,
@@ -104,6 +105,42 @@ function getCertificateStatus(
   if (certificate.isDeleted || !certificate.isActive) return 'غير فعالة';
   if (certificate.expiryDate != null && certificate.expiryDate <= new Date()) return 'منتهية';
   return certificate.status;
+}
+
+function assertUniquePaymentTypeCodes(paymentTypesConfig: unknown): void {
+  if (!paymentTypesConfig || typeof paymentTypesConfig !== 'object' || Array.isArray(paymentTypesConfig)) return;
+  const types = (paymentTypesConfig as { types?: unknown }).types;
+  if (!Array.isArray(types)) return;
+
+  const arabicCodes = new Set<string>();
+  const englishCodes = new Set<string>();
+
+  for (const type of types) {
+    if (!type || typeof type !== 'object' || Array.isArray(type)) continue;
+    const row = type as { codeAr?: unknown; codeEn?: unknown };
+    const codeAr = typeof row.codeAr === 'string' ? row.codeAr.trim() : '';
+    const codeEn = typeof row.codeEn === 'string' ? row.codeEn.trim().toLowerCase() : '';
+
+    if (codeAr) {
+      if (arabicCodes.has(codeAr)) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'الكود العربي مستخدم بالفعل في نوع سند آخر.',
+        });
+      }
+      arabicCodes.add(codeAr);
+    }
+
+    if (codeEn) {
+      if (englishCodes.has(codeEn)) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'الكود الإنجليزي مستخدم بالفعل في نوع سند آخر.',
+        });
+      }
+      englishCodes.add(codeEn);
+    }
+  }
 }
 
 export const documentJournalsRouter = router({
@@ -243,6 +280,7 @@ export const documentJournalsRouter = router({
   create: protectedProcedure
     .input(z.object(journalInputShape))
     .mutation(async ({ ctx, input }) => {
+      assertUniquePaymentTypeCodes(input.paymentTypesConfig);
       const { recordPolicy: _rp, includeInFoundation: _if, ...inputData } = input;
       const [row] = await db.insert(documentJournals).values({
         ...inputData,
@@ -261,6 +299,7 @@ export const documentJournalsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const { id, ...rawData } = input;
       const inputAny = input as any;
+      assertUniquePaymentTypeCodes(inputAny.paymentTypesConfig);
       const newPolicy = inputAny.recordPolicy as 'protected' | 'editable' | 'flexible' | undefined;
       const newInclude = inputAny.includeInFoundation as boolean | undefined;
       // Strip policy fields from data going into Drizzle to avoid type mismatch

@@ -197,6 +197,26 @@ function normalizePtConfig(raw: any): PTC {
   return { types, accountLinks: legacyLinks, accountLinksByType };
 }
 
+function getDuplicatePaymentTypeCodeMessage(types: PaymentTypeRow[]): string | null {
+  const arabicCodes = new Set<string>();
+  const englishCodes = new Set<string>();
+
+  for (const type of types) {
+    const codeAr = type.codeAr.trim();
+    const codeEn = type.codeEn.trim().toLowerCase();
+
+    if (codeAr) {
+      if (arabicCodes.has(codeAr)) return "الكود العربي مستخدم بالفعل في نوع سند آخر.";
+      arabicCodes.add(codeAr);
+    }
+    if (codeEn) {
+      if (englishCodes.has(codeEn)) return "الكود الإنجليزي مستخدم بالفعل في نوع سند آخر.";
+      englishCodes.add(codeEn);
+    }
+  }
+  return null;
+}
+
 /* ── مكوّن بحث الحساب (مثل المخازن) ── */
 const normalizeArDJ = (s: string) =>
   (s ?? "").toLowerCase().replace(/[أإآ]/g, "ا").replace(/ة/g, "ه").replace(/ى/g, "ي");
@@ -789,6 +809,8 @@ export default function DocumentJournalsPage() {
 
   const handleSave = () => {
     if (!form.nameAr.trim()) { toast.error("إسم الدفتر بالعربي مطلوب"); return; }
+    const duplicateCodeMessage = getDuplicatePaymentTypeCodeMessage(ptConfig.types);
+    if (duplicateCodeMessage) { toast.error(duplicateCodeMessage); return; }
     const primaryTypeId = ptConfig.types[0]?.id;
     const primaryTypeLinks = primaryTypeId
       ? (ptConfig.accountLinksByType[primaryTypeId] ?? ptConfig.accountLinks)
