@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { randomUUID } from 'node:crypto';
 import { eq, and, inArray, gte, lte, sql, isNull } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
@@ -6,6 +7,7 @@ import {
   salesInvoices, salesInvoiceItems, purchaseInvoices,
   journalEntries, journalEntryLines,
   documentJournals, chartOfAccounts,
+  documentRelations, unpostAudit,
   pendingAccountMovements, pendingStockMovements,
   stockVouchers, stockVoucherItems, purchaseInvoiceItems, warehouses,
 } from '../schema.js';
@@ -27,7 +29,7 @@ import {
   type PaymentTypesConfig,
 } from '../services/PostingEngine.js';
 import {
-  cancelSalesStockMovement,
+  deleteSalesStockMovement,
   postSalesStockMovement,
   syncUnpostedSalesEffects,
 } from '../services/salesPostingEffects.js';
@@ -57,6 +59,22 @@ function parseIssuanceConfig(value: unknown): Required<IssuanceConfig> {
     inventoryDocType: config.inventoryDocType,
     inventoryDocBookId,
   };
+}
+
+function parseSalesIssuanceConfig(value: unknown): Required<Pick<IssuanceConfig, 'journalEntryType' | 'journalBookId'>> {
+  const config = (value && typeof value === 'object' ? value : {}) as IssuanceConfig;
+  const journalBookId = Number(config.journalBookId);
+  if (!config.journalEntryType || !Number.isInteger(journalBookId)) {
+    throw new Error('لا يمكن الترحيل: دفتر فاتورة المبيعات لا يحدد Target Journal لقيد المبيعات');
+  }
+  return {
+    journalEntryType: config.journalEntryType,
+    journalBookId,
+  };
+}
+
+function isSalesReturnType(value: string | null | undefined): boolean {
+  return value === 'return' || value === 'credit_note';
 }
 
 // ── إعادة تصدير الدوال التي تستوردها روترات أخرى (sales.ts, purchases.ts) ────
@@ -147,6 +165,8 @@ export const postingRouter = router({
         throw new Error('الترحيل معطَّل لهذا الدفتر');
       await assertJournalAccess(ctx.user, invoice.journalId);
       await assertWarehouseAccess(ctx.user, invoice.warehouseId);
+      const salesIssuance = parseSalesIssuanceConfig(journal?.issuanceConfig);
+      await assertJournalAccess(ctx.user, Number(salesIssuance.journalBookId));
 
       const docTypeAccs = invoice.docTypeId
         ? await resolveDocTypeAccounts(invoice.docTypeId, orgId)
@@ -204,6 +224,16 @@ export const postingRouter = router({
         const txItems = await tx.query.salesInvoiceItems.findMany({
           where: eq(salesInvoiceItems.invoiceId, txInvoice.id),
         });
+        const salesTargetJournal = await tx.query.documentJournals.findFirst({
+          where: and(
+            eq(documentJournals.id, Number(salesIssuance.journalBookId)),
+            eq(documentJournals.orgId, orgId),
+            eq(documentJournals.isActive, true),
+          ),
+        });
+        if (!salesTargetJournal || salesTargetJournal.docType !== salesIssuance.journalEntryType) {
+          throw new Error('Target Journal لقيد المبيعات غير صالح أو لا يطابق نوع القيد المحدد');
+        }
 
         // يدعم السجلات القديمة التي لم تُنشئ آثاراً معلّقة، ويعيد بناء
         // الآثار بأمان داخل نفس قفل الترحيل دون تكرار تغيير المخزون.
@@ -231,13 +261,44 @@ export const postingRouter = router({
                 : 'sales_invoice',
           sourceDocId:     txInvoice.id,
           sourceDocNumber: txInvoice.invoiceNumber,
-          journalId:       txInvoice.journalId,
-          generatedDocType: txInvoice.invoiceType,
+           journalId:       salesTargetJournal.id,
+           generatedDocType: salesTargetJournal.docType,
           lines,
           tx,
         });
 
         const stock = await postSalesStockMovement(tx, txInvoice, orgId, ctx.user);
+         const postingBatchId = randomUUID();
+         const sourceDocumentType = sourceDocType;
+         const relations = [
+           {
+             orgId,
+             sourceDocumentType,
+             sourceDocumentId: txInvoice.id,
+             generatedDocumentType: 'journal_entry',
+             generatedDocumentId: entry.id,
+             relationType: 'sales_journal',
+             postingBatchId,
+           },
+           ...(stock ? [{
+             orgId,
+             sourceDocumentType,
+             sourceDocumentId: txInvoice.id,
+             generatedDocumentType: 'stock_voucher',
+             generatedDocumentId: stock.id,
+             relationType: isSalesReturnType(txInvoice.invoiceType) ? 'stock_receipt' : 'stock_issue',
+             postingBatchId,
+           }, {
+             orgId,
+             sourceDocumentType: 'stock_voucher',
+             sourceDocumentId: stock.id,
+             generatedDocumentType: 'journal_entry',
+             generatedDocumentId: stock.generatedJournalEntryId,
+             relationType: 'cogs_journal',
+             postingBatchId,
+           }] : []),
+         ];
+         await tx.insert(documentRelations).values(relations);
 
         await tx.update(salesInvoices)
           .set({
@@ -269,12 +330,13 @@ export const postingRouter = router({
           stockVoucherId: stock?.id ?? null,
           stockVoucherNumber: stock?.voucherNumber ?? null,
           stockJournalEntryId: stock?.generatedJournalEntryId ?? null,
+           postingBatchId,
         };
       });
     }),
 
   unpostSalesInvoice: protectedProcedure
-    .input(z.object({ invoiceId: z.number() }))
+    .input(z.object({ invoiceId: z.number(), reason: z.string().trim().max(500).optional() }))
     .mutation(async ({ ctx, input }) => {
       const orgId = ctx.user.orgId;
       await assertSalesPermission(ctx.user, 'unpost');
@@ -297,26 +359,71 @@ export const postingRouter = router({
 
       return db.transaction(async (tx) => {
         const locked = await tx.execute(sql`
-          SELECT id, is_posted AS "isPosted", posted_journal_entry_id AS "postedJournalEntryId",
+          SELECT id, invoice_number AS "invoiceNumber", invoice_type AS "invoiceType",
+                 is_posted AS "isPosted", posted_journal_entry_id AS "postedJournalEntryId",
+                 generated_stock_voucher_id AS "generatedStockVoucherId",
                  generated_stock_journal_entry_id AS "generatedStockJournalEntryId"
           FROM sales_invoices
           WHERE id = ${input.invoiceId} AND org_id = ${orgId}
           FOR UPDATE
         `);
         const row = locked.rows[0] as {
-          id: number; isPosted: boolean; postedJournalEntryId: number | null;
+          id: number; invoiceNumber: string; invoiceType: string; isPosted: boolean;
+          postedJournalEntryId: number | null; generatedStockVoucherId: number | null;
           generatedStockJournalEntryId: number | null;
         } | undefined;
         if (!row?.isPosted) throw new Error('الفاتورة ليست مرحَّلة');
 
-        const entryIds = [row.postedJournalEntryId, row.generatedStockJournalEntryId].filter(
-          (value): value is number => Number.isInteger(value),
-        );
-        for (const entryId of entryIds) {
+        const relations = await tx.query.documentRelations.findMany({
+          where: and(
+            eq(documentRelations.orgId, orgId),
+            eq(documentRelations.sourceDocumentId, row.id),
+          ),
+        });
+        const entryIds = Array.from(new Set([
+          row.postedJournalEntryId,
+          row.generatedStockJournalEntryId,
+          ...relations
+            .filter(relation => relation.generatedDocumentType === 'journal_entry')
+            .map(relation => relation.generatedDocumentId),
+        ].filter((value): value is number => Number.isInteger(value))));
+        const stockVoucherIds = Array.from(new Set([
+          row.generatedStockVoucherId,
+          ...relations
+            .filter(relation => relation.generatedDocumentType === 'stock_voucher')
+            .map(relation => relation.generatedDocumentId),
+        ].filter((value): value is number => Number.isInteger(value))));
+        const stockRelations = stockVoucherIds.length > 0
+          ? await tx.query.documentRelations.findMany({
+              where: and(
+                eq(documentRelations.orgId, orgId),
+                eq(documentRelations.sourceDocumentType, 'stock_voucher'),
+                inArray(documentRelations.sourceDocumentId, stockVoucherIds),
+              ),
+            })
+          : [];
+        const allRelations = [...relations, ...stockRelations];
+        const allEntryIds = Array.from(new Set([
+          ...entryIds,
+          ...allRelations
+            .filter(relation => relation.generatedDocumentType === 'journal_entry')
+            .map(relation => relation.generatedDocumentId),
+        ].filter((value): value is number => Number.isInteger(value))));
+
+        const deletedDocuments: Array<Record<string, unknown>> = [];
+        for (const entryId of allEntryIds) {
           const entry = await tx.query.journalEntries.findFirst({
             where: and(eq(journalEntries.id, entryId), eq(journalEntries.orgId, orgId)),
           });
-          if (!entry?.journalId) continue;
+          if (!entry) continue;
+          deletedDocuments.push({
+            documentType: 'journal_entry',
+            documentId: entry.id,
+            documentNumber: entry.entryNumber,
+            journalId: entry.journalId,
+            generatedDocumentType: entry.generatedDocType,
+          });
+          if (!entry.journalId) continue;
           const newer = await tx.execute(sql`
             SELECT id
             FROM journal_entries
@@ -331,13 +438,42 @@ export const postingRouter = router({
           }
         }
 
-        await cancelSalesStockMovement(tx, invoice, orgId);
-        await tx.update(journalEntries)
-          .set({ status: 'cancelled' })
-          .where(and(
-            eq(journalEntries.orgId, orgId),
-            inArray(journalEntries.id, entryIds),
-          ));
+        for (const voucherId of stockVoucherIds) {
+          const voucher = await tx.query.stockVouchers.findFirst({
+            where: and(eq(stockVouchers.id, voucherId), eq(stockVouchers.orgId, orgId)),
+          });
+          if (voucher) {
+            deletedDocuments.push({
+              documentType: 'stock_voucher',
+              documentId: voucher.id,
+              documentNumber: voucher.voucherNumber,
+              journalId: voucher.sourceJournalId,
+              generatedDocumentType: voucher.type,
+            });
+          }
+        }
+
+        const deletedStock = await deleteSalesStockMovement(tx, invoice, orgId);
+        for (const deleted of deletedStock?.deletedDocuments ?? []) {
+          deletedDocuments.push(deleted as Record<string, unknown>);
+        }
+        const costEntryId = deletedStock?.costEntry?.id;
+        const entryIdsToDelete = allEntryIds.filter(entryId => entryId !== costEntryId);
+        if (entryIdsToDelete.length > 0) {
+          await tx.delete(journalEntries)
+            .where(and(
+              eq(journalEntries.orgId, orgId),
+              inArray(journalEntries.id, entryIdsToDelete),
+            ));
+        }
+        const relationIds = allRelations.map(relation => relation.id);
+        if (relationIds.length > 0) {
+          await tx.delete(documentRelations)
+            .where(and(
+              eq(documentRelations.orgId, orgId),
+              inArray(documentRelations.id, relationIds),
+            ));
+        }
         await tx.update(pendingAccountMovements)
           .set({ status: 'unposted', linkedJournalEntryId: null, linkedStockVoucherId: null, updatedAt: new Date() })
           .where(and(
@@ -353,6 +489,24 @@ export const postingRouter = router({
             eq(pendingStockMovements.status, 'linked'),
           ));
 
+        const postingBatchId = allRelations[0]?.postingBatchId ?? randomUUID();
+        const auditSnapshot = Array.from(new Map(
+          deletedDocuments.map((document) => [
+            `${document.documentType}:${document.documentId}`,
+            document,
+          ]),
+        ).values());
+        await tx.insert(unpostAudit).values({
+          orgId,
+          postingBatchId,
+          sourceDocumentType: allRelations[0]?.sourceDocumentType ?? row.invoiceType,
+          sourceDocumentId: row.id,
+          sourceDocumentNumber: row.invoiceNumber,
+          userId: ctx.user.id,
+          reason: input.reason ?? null,
+          deletedDocuments: auditSnapshot,
+        });
+
         await tx.update(salesInvoices)
           .set({
             isPosted: false,
@@ -364,7 +518,7 @@ export const postingRouter = router({
           })
           .where(and(eq(salesInvoices.id, input.invoiceId), eq(salesInvoices.orgId, orgId)));
 
-        return { success: true };
+        return { success: true, postingBatchId, deletedDocuments: auditSnapshot };
       });
     }),
 

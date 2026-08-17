@@ -209,27 +209,73 @@ export async function removeUnpostedSalesEffects(
   ));
 }
 
-async function getStockJournal(tx: DbClient, invoice: SalesInvoice, orgId: number, user: { id: number; orgId: number; role: string; userGroupId?: number | null; extraPermissions?: Record<string, boolean> | null }) {
-  if (!invoice.warehouseId) throw new Error('لا يمكن ترحيل مستند المبيعات مخزنيًا بدون مخزن');
-  const docType = isReturnDocument(invoice.invoiceType) ? 'stock_receipt_items' : 'stock_issue_items';
+type IssuanceConfig = {
+  journalEntryType?: string | null;
+  journalBookId?: string | number | null;
+  inventoryDocType?: string | null;
+  inventoryDocBookId?: string | number | null;
+};
+
+function readIssuanceConfig(value: unknown): IssuanceConfig {
+  return value && typeof value === 'object' ? value as IssuanceConfig : {};
+}
+
+async function getStockJournal(
+  tx: DbClient,
+  invoice: SalesInvoice,
+  orgId: number,
+  user: { id: number; orgId: number; role: string; userGroupId?: number | null; extraPermissions?: Record<string, boolean> | null },
+) {
+  const sourceJournal = invoice.journalId
+    ? await tx.query.documentJournals.findFirst({
+        where: and(eq(documentJournals.id, invoice.journalId), eq(documentJournals.orgId, orgId)),
+      })
+    : null;
+  const issuance = readIssuanceConfig(sourceJournal?.issuanceConfig);
+  const stockJournalId = Number(issuance.inventoryDocBookId);
+  const expectedDocType = isReturnDocument(invoice.invoiceType) ? 'stock_receipt_items' : 'stock_issue_items';
+  if (!Number.isInteger(stockJournalId) || !issuance.inventoryDocType) {
+    throw new Error('لا يمكن الترحيل: خصائص السندات المصدرة لا تحدد دفتر سند المخزون');
+  }
+  if (!String(issuance.inventoryDocType).includes(isReturnDocument(invoice.invoiceType) ? 'receipt' : 'issue')) {
+    throw new Error('لا يمكن الترحيل: نوع سند المخزون المحدد لا يطابق نوع مستند المبيعات');
+  }
   const journal = await tx.query.documentJournals.findFirst({
     where: and(
+      eq(documentJournals.id, stockJournalId),
       eq(documentJournals.orgId, orgId),
-      eq(documentJournals.warehouseId, invoice.warehouseId),
-      eq(documentJournals.docType, docType),
       eq(documentJournals.isActive, true),
     ),
   });
-  if (!journal) throw new Error(`لا يوجد دفتر ${isReturnDocument(invoice.invoiceType) ? 'استلام' : 'صرف'} مخزني فعال مرتبط بالمخزن`);
+  if (!journal || journal.docType !== expectedDocType) {
+    throw new Error(`دفتر سند المخزون المحدد في خصائص السندات المصدرة غير صالح (${expectedDocType})`);
+  }
   await assertJournalAccess(user, journal.id);
   const docTypeAccounts = await resolveDocTypeAccountsByJournal(journal.id, orgId, tx);
   const inventoryAccountId = docTypeAccounts?.inventoryAccountId ?? journal.inventoryAccountId;
   const cogsAccountId = docTypeAccounts?.cogsAccountId ?? journal.cogsAccountId;
   if (!inventoryAccountId || !cogsAccountId) {
-    throw new Error('دفتر المخزون يجب أن يحدد حساب المخزون وحساب تكلفة المبيعات');
+    throw new Error('دفتر سند المخزون يجب أن يحدد روابط حساب المخزون وتكلفة المبيعات');
   }
+
+  const cogsIssuance = readIssuanceConfig(journal.issuanceConfig);
+  const cogsJournalId = Number(cogsIssuance.journalBookId);
+  if (!Number.isInteger(cogsJournalId) || !cogsIssuance.journalEntryType) {
+    throw new Error('لا يمكن الترحيل: خصائص سند المخزون لا تحدد دفتر قيد COGS');
+  }
+  const cogsJournal = await tx.query.documentJournals.findFirst({
+    where: and(
+      eq(documentJournals.id, cogsJournalId),
+      eq(documentJournals.orgId, orgId),
+      eq(documentJournals.isActive, true),
+    ),
+  });
+  if (!cogsJournal || cogsJournal.docType !== cogsIssuance.journalEntryType) {
+    throw new Error('دفتر قيد COGS المحدد في خصائص سند المخزون غير صالح');
+  }
+  await assertJournalAccess(user, cogsJournal.id);
   await validateAccounts([inventoryAccountId, cogsAccountId], tx);
-  return { journal, inventoryAccountId, cogsAccountId };
+  return { journal, cogsJournal, inventoryAccountId, cogsAccountId };
 }
 
 /**
@@ -264,7 +310,7 @@ export async function postSalesStockMovement(
   });
   if (!pending.length) return null;
 
-  const { journal, inventoryAccountId, cogsAccountId } = await getStockJournal(tx, invoice, orgId, user);
+  const { journal, cogsJournal, inventoryAccountId, cogsAccountId } = await getStockJournal(tx, invoice, orgId, user);
   const { number: voucherNumber } = await reserveDocumentNumber(journal.id, orgId, tx);
   const totalCost = pending.reduce(
     (sum: number, row: any) => sum + Math.abs(Number(row.quantity)) * Number(row.unitCost ?? 0),
@@ -317,8 +363,8 @@ export async function postSalesStockMovement(
     sourceDocType: isReturn ? 'sales_return_cogs' : 'sales_cogs',
     sourceDocId: voucher.id,
     sourceDocNumber: voucherNumber,
-    journalId: journal.id,
-    generatedDocType: journal.docType,
+    journalId: cogsJournal.id,
+    generatedDocType: cogsJournal.docType,
     lines: isReturn ? [
       { accountId: inventoryAccountId, accountCode: inventoryAccount?.code ?? '', accountName: inventoryAccount?.name ?? 'المخزون', debit: totalCost, credit: '0.0000', description: `إرجاع مخزون ${voucherNumber}` },
       { accountId: cogsAccountId, accountCode: cogsAccount?.code ?? '', accountName: cogsAccount?.name ?? 'تكلفة المبيعات', debit: '0.0000', credit: totalCost, description: `عكس تكلفة ${voucherNumber}` },
@@ -343,7 +389,7 @@ export async function postSalesStockMovement(
   return { ...voucher, generatedJournalEntryId: costEntry.id };
 }
 
-export async function cancelSalesStockMovement(
+export async function deleteSalesStockMovement(
   tx: DbClient,
   invoice: SalesInvoice,
   orgId: number,
@@ -359,12 +405,33 @@ export async function cancelSalesStockMovement(
   });
   if (!voucher) return;
 
-  if (voucher.generatedJournalEntryId) {
-    await tx.update(journalEntries)
-      .set({ status: 'cancelled' })
-      .where(and(eq(journalEntries.id, voucher.generatedJournalEntryId), eq(journalEntries.orgId, orgId)));
+  const costEntry = voucher.generatedJournalEntryId
+    ? await tx.query.journalEntries.findFirst({
+        where: and(eq(journalEntries.id, voucher.generatedJournalEntryId), eq(journalEntries.orgId, orgId)),
+      })
+    : null;
+  const deletedDocuments = [
+    costEntry && {
+      documentType: 'journal_entry',
+      documentId: costEntry.id,
+      documentNumber: costEntry.entryNumber,
+      journalId: costEntry.journalId,
+      generatedDocumentType: 'cogs',
+    },
+    {
+      documentType: 'stock_voucher',
+      documentId: voucher.id,
+      documentNumber: voucher.voucherNumber,
+      journalId: voucher.sourceJournalId,
+      generatedDocumentType: voucher.type,
+    },
+  ].filter(Boolean);
+
+  if (costEntry) {
+    await tx.delete(journalEntries)
+      .where(and(eq(journalEntries.id, costEntry.id), eq(journalEntries.orgId, orgId)));
   }
-  await tx.update(stockVouchers)
-    .set({ status: 'cancelled' })
+  await tx.delete(stockVouchers)
     .where(and(eq(stockVouchers.id, voucher.id), eq(stockVouchers.orgId, orgId)));
+  return { voucher, costEntry, deletedDocuments };
 }

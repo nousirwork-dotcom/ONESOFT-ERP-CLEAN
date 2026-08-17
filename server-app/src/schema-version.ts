@@ -5,4 +5,4 @@
  * constant to match the new filename (without the .sql extension), then
  * run `pnpm migrate` so the live database is stamped with the new version.
  */
-export const REQUIRED_SCHEMA_VERSION = '0095_backfill_voucher_type_account_links';
+export const REQUIRED_SCHEMA_VERSION = '0096_document_relations_unpost_audit';

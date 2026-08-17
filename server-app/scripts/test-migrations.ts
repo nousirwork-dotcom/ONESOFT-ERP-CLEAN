@@ -333,10 +333,14 @@ try {
     'pending_account_movements',
     'pending_stock_movements',
     'zatca_pos_units',
+    'document_relations',
+    'unpost_audit',
   ]) {
     await assertTable(client, table);
   }
   await assertColumn(client, 'organizations', 'foundation_status');
+  await assertColumn(client, 'document_relations', 'posting_batch_id');
+  await assertColumn(client, 'unpost_audit', 'deleted_documents');
   console.log('[migration-test] fresh database: PASS');
   await client.end();
   client = null;
